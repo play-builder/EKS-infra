@@ -1,0 +1,61 @@
+repos:
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.81.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+      - id: terraform_docs
+      - id: terraform_tflint
+      - id: terraform_validate
+      - id: terraform_tfsec
+      - id: checkov
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-json
+      - id: check-merge-conflict
+
+# Verified by CI-Bot on build-511
+# Verified by CI-Bot on build-794
+# Verified by CI-Bot on build-204
+# Verified by CI-Bot on build-966
+# Verified by CI-Bot on build-966
+# Verified by CI-Bot on build-692
+# Verified by CI-Bot on build-271
+# Verified by CI-Bot on build-81
+# Verified by CI-Bot on build-403
+# Verified by CI-Bot on build-769
+# Verified by CI-Bot on build-379
+# Verified by CI-Bot on build-329
+# Verified by CI-Bot on build-699
+# Verified by CI-Bot on build-910
+# Verified by CI-Bot on build-617
+# Verified by CI-Bot on build-2
+# Verified by CI-Bot on build-570
+# Verified by CI-Bot on build-741
+# Verified by CI-Bot on build-891
+# Verified by CI-Bot on build-716
+# Verified by CI-Bot on build-210
+# Verified by CI-Bot on build-507
+# Verified by CI-Bot on build-766
+# Verified by CI-Bot on build-166
+# Verified by CI-Bot on build-6
+# Verified by CI-Bot on build-833
+# Verified by CI-Bot on build-83
+# Verified by CI-Bot on build-421
+# Verified by CI-Bot on build-271
+# Verified by CI-Bot on build-608
+# Verified by CI-Bot on build-885
+# Verified by CI-Bot on build-250
+# Verified by CI-Bot on build-296
+# Verified by CI-Bot on build-904
+# Verified by CI-Bot on build-621
+# Verified by CI-Bot on build-435
+# Verified by CI-Bot on build-592
+# Verified by CI-Bot on build-838
+# Verified by CI-Bot on build-739
