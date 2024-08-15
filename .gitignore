@@ -1,0 +1,82 @@
+# ============================================
+# Terraform Core & State
+# ============================================
+# Local .terraform directories
+**/.terraform/*
+.terraform/
+
+# .tfstate files (S3 Backend 권장, 로컬 파일은 무시)
+*.tfstate
+*.tfstate.*
+terraform.tfstate
+terraform.tfstate.backup
+
+# Crash log files
+crash.log
+crash.*.log
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# ============================================
+# Terraform Plans (일회성 실행 계획)
+# ============================================
+*.tfplan
+tfplan
+plan.out
+
+# ============================================
+# Variables & Overrides
+# ============================================
+# 민감한 정보를 포함할 수 있는 변수 파일 무시
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+secrets.tfvars
+*.secrets.tfvars
+*.secrets.auto.tfvars
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# 예외: 예제 설정 파일은 Git에 포함
+!terraform.tfvars.example
+!*.auto.tfvars.example
+
+# ============================================
+# Secrets & Credentials (절대 커밋 금지)
+# ============================================
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.aws/
+credentials
+
+# ============================================
+# Logs & Backups
+# ============================================
+*.log
+*.backup
+*.bak
+_BACKUP_SOURCE
+
+# ============================================
+# IDE & OS Files
+# ============================================
+# IDE Specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+sh.sh
+
+# OS Specific
+.DS_Store
+Thumbs.db
