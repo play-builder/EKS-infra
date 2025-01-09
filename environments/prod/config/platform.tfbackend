@@ -1,0 +1,5 @@
+bucket       = "plydevops-infra-tf-prod"
+key          = "prod/03-platform/terraform.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true
