@@ -1,0 +1,120 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "environments/**"
+      - "modules/**"
+      - ".github/workflows/terraform-*.yml"
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: 1.5.0
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        environment: [dev]
+        layer:
+          - 01-network
+          - 02-eks
+          - 03-platform
+          - 04-workloads/app-tier
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: github-actions-terraform-plan
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        id: init
+        working-directory: environments/${{ matrix.environment }}/${{ matrix.layer }}
+        run: |
+          LAYER_NAME=$(echo "${{ matrix.layer }}" | sed -E 's/^[0-9]+-//')
+          CONFIG_FILE="../config/${LAYER_NAME}.tfbackend"
+
+          if [ -f "${CONFIG_FILE}" ]; then
+            terraform init -backend-config="${CONFIG_FILE}" -input=false
+          else
+            terraform init -input=false
+          fi
+
+      - name: Terraform Format
+        id: fmt
+        working-directory: environments/${{ matrix.environment }}/${{ matrix.layer }}
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Validate
+        id: validate
+        working-directory: environments/${{ matrix.environment }}/${{ matrix.layer }}
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: environments/${{ matrix.environment }}/${{ matrix.layer }}
+        run: |
+          terraform plan -no-color -input=false -out=tfplan
+          terraform show -no-color tfplan > plan_output.txt
+        continue-on-error: true
+
+      - name: Comment PR
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const planOutput = fs.readFileSync('environments/${{ matrix.environment }}/${{ matrix.layer }}/plan_output.txt', 'utf8');
+
+            const output = `#### Terraform Plan \`${{ matrix.environment }}/${{ matrix.layer }}\`
+
+            #### Terraform Format and Style \`${{ steps.fmt.outcome }}\`
+            #### Terraform Initialization \`${{ steps.init.outcome }}\`
+            #### Terraform Validation \`${{ steps.validate.outcome }}\`
+            #### Terraform Plan \`${{ steps.plan.outcome }}\`
+
+            <details><summary>Show Plan</summary>
+
+            \`\`\`terraform
+            ${planOutput.slice(0, 65000)}
+            \`\`\`
+
+            </details>
+
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
