@@ -1,15 +1,3 @@
-# ============================================
-# CloudWatch Container Insights Module
-# ============================================
-# 용도: EKS 클러스터 모니터링 및 로깅
-# 구성요소:
-#   - CloudWatch Agent: 메트릭 수집
-#   - Fluent Bit: 로그 수집
-# AWS 네이티브 = 추가 인프라 불필요
-
-# ============================================
-# 1. Namespace 생성
-# ============================================
 resource "kubernetes_namespace_v1" "amazon_cloudwatch" {
   metadata {
     name = "amazon-cloudwatch"
@@ -19,9 +7,6 @@ resource "kubernetes_namespace_v1" "amazon_cloudwatch" {
   }
 }
 
-# ============================================
-# 2. IRSA Role (공통 - CloudWatch Agent & Fluent Bit)
-# ============================================
 module "irsa_role" {
   source = "../../iam/irsa"
 
@@ -68,9 +53,6 @@ module "irsa_role" {
   tags = var.tags
 }
 
-# ============================================
-# 3. CloudWatch Agent Helm Release
-# ============================================
 resource "helm_release" "cloudwatch_agent" {
   name       = "aws-cloudwatch-metrics"
   repository = "https://aws.github.io/eks-charts"
@@ -90,7 +72,6 @@ resource "helm_release" "cloudwatch_agent" {
         }
       }
 
-      # 리소스 제한 (DaemonSet이므로 노드마다 실행)
       resources = {
         requests = {
           cpu    = "50m"
@@ -102,7 +83,6 @@ resource "helm_release" "cloudwatch_agent" {
         }
       }
 
-      # Tolerations: 모든 노드에서 실행 (시스템 노드 포함)
       tolerations = [
         {
           operator = "Exists"
@@ -117,9 +97,6 @@ resource "helm_release" "cloudwatch_agent" {
   ]
 }
 
-# ============================================
-# 4. Fluent Bit (로그 수집) Helm Release
-# ============================================
 resource "helm_release" "fluent_bit" {
   name       = "aws-for-fluent-bit"
   repository = "https://aws.github.io/eks-charts"
@@ -144,7 +121,6 @@ resource "helm_release" "fluent_bit" {
         }
       }
 
-      # 리소스 제한
       resources = {
         requests = {
           cpu    = "50m"
@@ -156,7 +132,6 @@ resource "helm_release" "fluent_bit" {
         }
       }
 
-      # Tolerations: 모든 노드에서 실행
       tolerations = [
         {
           operator = "Exists"

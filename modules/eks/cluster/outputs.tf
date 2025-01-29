@@ -1,11 +1,4 @@
-# ============================================
-# EKS Cluster Module - Outputs
-# ============================================
-# 리팩토링: Node Group outputs 모두 제거, Cluster + OIDC Provider만 유지
 
-# ============================================
-# Cluster Outputs
-# ============================================
 output "cluster_id" {
   description = "EKS cluster ID"
   value       = aws_eks_cluster.cluster.id
@@ -52,9 +45,6 @@ output "cluster_oidc_issuer_url" {
   value       = aws_eks_cluster.cluster.identity[0].oidc[0].issuer
 }
 
-# ============================================
-# OIDC Provider Outputs
-# ============================================
 output "oidc_provider_arn" {
   description = "ARN of the OIDC Provider for EKS (used for IRSA)"
   value       = aws_iam_openid_connect_provider.cluster.arn
@@ -65,9 +55,6 @@ output "oidc_provider" {
   value       = local.oidc_provider
 }
 
-# ============================================
-# IAM Role Outputs
-# ============================================
 output "cluster_iam_role_name" {
   description = "IAM role name of the EKS cluster"
   value       = aws_iam_role.cluster.name

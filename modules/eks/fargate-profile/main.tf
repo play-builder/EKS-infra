@@ -1,4 +1,3 @@
-# 1. Fargate Pod Execution Role
 resource "aws_iam_role" "fargate_pod_execution" {
   name = "${var.cluster_name}-${var.fargate_profile_name}-role"
   tags = var.common_tags
@@ -15,13 +14,11 @@ resource "aws_iam_role" "fargate_pod_execution" {
   })
 }
 
-# 2. Attach required policy
 resource "aws_iam_role_policy_attachment" "fargate_pod_execution" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
   role       = aws_iam_role.fargate_pod_execution.name
 }
 
-# 3. Fargate Profile Resource
 resource "aws_eks_fargate_profile" "fargate" {
   cluster_name           = var.cluster_name
   fargate_profile_name   = var.fargate_profile_name

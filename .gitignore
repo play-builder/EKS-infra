@@ -5,7 +5,7 @@
 **/.terraform/*
 .terraform/
 
-# .tfstate files (S3 Backend 권장, 로컬 파일은 무시)
+# .tfstate files (S3 Backend recommended, local files ignored)
 *.tfstate
 *.tfstate.*
 terraform.tfstate
@@ -20,7 +20,7 @@ crash.*.log
 terraform.rc
 
 # ============================================
-# Terraform Plans (일회성 실행 계획)
+# Terraform Plans (one-time execution plan)
 # ============================================
 *.tfplan
 tfplan
@@ -29,7 +29,7 @@ plan.out
 # ============================================
 # Variables & Overrides
 # ============================================
-# 민감한 정보를 포함할 수 있는 변수 파일 무시
+# Ignore variable files that may contain sensitive information
 *.tfvars
 *.tfvars.json
 *.auto.tfvars
@@ -43,12 +43,12 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-# 예외: 예제 설정 파일은 Git에 포함
+# Exception: Example configuration files are included in Git
 !terraform.tfvars.example
 !*.auto.tfvars.example
 
 # ============================================
-# Secrets & Credentials (절대 커밋 금지)
+# Secrets & Credentials (NEVER commit)
 # ============================================
 *.pem
 *.key

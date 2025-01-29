@@ -11,7 +11,6 @@ resource "aws_security_group" "this" {
   )
 }
 
-# Create Ingress rules
 resource "aws_security_group_rule" "ingress" {
   for_each = { for idx, rule in var.ingress_rules : idx => rule }
 
@@ -26,7 +25,6 @@ resource "aws_security_group_rule" "ingress" {
   source_security_group_id = lookup(each.value, "source_security_group_id", null)
 }
 
-# Create Egress rules
 resource "aws_security_group_rule" "egress" {
   for_each = { for idx, rule in var.egress_rules : idx => rule }
 

@@ -1,10 +1,4 @@
-# ============================================
-# EBS CSI Driver Add-on Module
-# ============================================
 
-# ============================================
-# Data Source: Latest EBS CSI IAM Policy from GitHub
-# ============================================
 data "http" "ebs_csi_iam_policy" {
   count = var.use_aws_managed_policy ? 0 : 1
 
@@ -15,9 +9,6 @@ data "http" "ebs_csi_iam_policy" {
   }
 }
 
-# ============================================
-# IAM Policy for EBS CSI Driver
-# ============================================
 resource "aws_iam_policy" "ebs_csi" {
   count = var.use_aws_managed_policy ? 0 : 1
 
@@ -34,9 +25,6 @@ resource "aws_iam_policy" "ebs_csi" {
   )
 }
 
-# ============================================
-# IAM Role for EBS CSI Driver (IRSA)
-# ============================================
 resource "aws_iam_role" "ebs_csi" {
   name = "${var.name}-ebs-csi-driver-role"
 
@@ -67,17 +55,11 @@ resource "aws_iam_role" "ebs_csi" {
   )
 }
 
-# ============================================
-# Attach IAM Policy to Role
-# ============================================
 resource "aws_iam_role_policy_attachment" "ebs_csi" {
   policy_arn = var.use_aws_managed_policy ? var.aws_managed_policy_arn : aws_iam_policy.ebs_csi[0].arn
   role       = aws_iam_role.ebs_csi.name
 }
 
-# ============================================
-# EKS Add-on: EBS CSI Driver
-# ============================================
 resource "aws_eks_addon" "ebs_csi" {
   depends_on = [aws_iam_role_policy_attachment.ebs_csi]
 

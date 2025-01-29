@@ -1,20 +1,20 @@
-# Kubernetes App 모듈
+# Kubernetes App Module
 
-## 📌 개요
+## 📌 Overview
 
-Kubernetes Deployment와 Service를 함께 관리하는 범용 애플리케이션 모듈입니다.
+A reusable module for managing Kubernetes Deployment and Service together.
 
-## 🎯 주요 기능
+## 🎯 Key Features
 
-- **Deployment 관리**: 롤링 업데이트, 복제본 관리, 리소스 제한
-- **Service 관리**: ClusterIP, NodePort, LoadBalancer 지원
-- **Health Check**: Liveness/Readiness Probe 설정
-- **환경 변수**: 직접 정의, Secret, ConfigMap 지원
-- **볼륨 마운트**: EmptyDir, ConfigMap, Secret, PVC 지원
+- **Deployment Management**: Rolling updates, replica management, resource limits
+- **Service Management**: ClusterIP, NodePort, LoadBalancer support
+- **Health Check**: Liveness/Readiness Probe configuration
+- **Environment Variables**: Direct definition, Secret, ConfigMap support
+- **Volume Mount**: EmptyDir, ConfigMap, Secret, PVC support
 
-## 📋 사용법
+## 📋 Usage
 
-### 기본 사용
+### Basic Usage
 
 ```hcl
 module "app" {
@@ -30,7 +30,7 @@ module "app" {
 }
 ```
 
-### ALB Ingress와 함께 사용
+### Using with ALB Ingress
 
 ```hcl
 module "app1" {
@@ -44,7 +44,7 @@ module "app1" {
   health_check_path = "/app1/health"
   service_type      = "NodePort"
 
-  # ALB Ingress Controller용 헬스체크 경로
+  # Health check path for ALB Ingress Controller
   service_annotations = {
     "alb.ingress.kubernetes.io/healthcheck-path" = "/app1/health"
   }
@@ -53,7 +53,7 @@ module "app1" {
 module "alb_ingress" {
   source = "../../modules/kubernetes/ingress/alb-ssl"
 
-  # app1 모듈의 output 참조
+  # Reference output from app1 module
   backend_services = [
     {
       name = module.app1.service_name
@@ -64,21 +64,21 @@ module "alb_ingress" {
 }
 ```
 
-## ⚙️ 입력 변수
+## ⚙️ Input Variables
 
-| 변수              | 타입   | 필수 | 설명                          |
-| ----------------- | ------ | ---- | ----------------------------- |
-| `app_name`        | string | ✅   | 애플리케이션 이름             |
-| `environment`     | string | ✅   | 환경 (dev/staging/prod)       |
-| `container_image` | string | ✅   | 컨테이너 이미지               |
-| `replicas`        | number |      | Pod 복제본 수 (기본: 1)       |
-| `service_type`    | string |      | Service 타입 (기본: NodePort) |
+| Variable          | Type   | Required | Description                         |
+| ----------------- | ------ | -------- | ----------------------------------- |
+| `app_name`        | string | ✅       | Application name                    |
+| `environment`     | string | ✅       | Environment (dev/staging/prod)      |
+| `container_image` | string | ✅       | Container image                     |
+| `replicas`        | number |          | Number of Pod replicas (default: 1) |
+| `service_type`    | string |          | Service type (default: NodePort)    |
 
-## 📤 출력값
+## 📤 Outputs
 
-| 출력              | 설명                        |
-| ----------------- | --------------------------- |
-| `deployment_name` | Deployment 이름             |
-| `service_name`    | Service 이름                |
-| `service_port`    | Service 포트                |
-| `app_info`        | Ingress 연동용 앱 정보 요약 |
+| Output            | Description                  |
+| ----------------- | ---------------------------- |
+| `deployment_name` | Deployment name              |
+| `service_name`    | Service name                 |
+| `service_port`    | Service port                 |
+| `app_info`        | App info summary for Ingress |

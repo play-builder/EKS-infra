@@ -1,6 +1,3 @@
-# ============================================
-# Networking Module Variables
-# ============================================
 
 variable "name" {
   description = "Name prefix for resources"

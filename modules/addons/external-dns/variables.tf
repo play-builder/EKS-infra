@@ -21,7 +21,7 @@ variable "oidc_provider" {
 variable "chart_version" {
   description = "Helm chart version for external-dns"
   type        = string
-  default     = "1.14.5" # 최신 안정 버전
+  default     = "1.14.5"
 }
 
 variable "hosted_zone_id" {
@@ -37,7 +37,7 @@ variable "domain_filters" {
 variable "namespace" {
   description = "Namespace to install ExternalDNS"
   type        = string
-  default     = "kube-system" # [중요] 실무 권장 기본값
+  default     = "kube-system"
 }
 
 variable "tags" {

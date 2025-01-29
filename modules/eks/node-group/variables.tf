@@ -1,10 +1,4 @@
-# ============================================
-# EKS Node Group Module - Variables
-# ============================================
 
-# ============================================
-# Required Variables (클러스터 정보)
-# ============================================
 variable "cluster_name" {
   description = "Name of the EKS cluster (from cluster module output)"
   type        = string
@@ -41,9 +35,6 @@ variable "node_group_type" {
   }
 }
 
-# ============================================
-# Scaling Configuration
-# ============================================
 variable "desired_size" {
   description = "Desired number of nodes (managed by Cluster Autoscaler)"
   type        = number
@@ -72,9 +63,6 @@ variable "max_size" {
   }
 }
 
-# ============================================
-# Instance Configuration
-# ============================================
 variable "instance_types" {
   description = "List of EC2 instance types for the nodes"
   type        = list(string)
@@ -120,9 +108,6 @@ variable "disk_size" {
   }
 }
 
-# ============================================
-# Update Configuration
-# ============================================
 variable "max_unavailable_percentage" {
   description = "Max unavailable nodes percentage during rolling updates"
   type        = number
@@ -134,9 +119,6 @@ variable "max_unavailable_percentage" {
   }
 }
 
-# ============================================
-# SSH Access Configuration
-# ============================================
 variable "ssh_key_name" {
   description = "EC2 Key Pair name for SSH access to nodes (leave empty to disable SSH)"
   type        = string
@@ -149,9 +131,6 @@ variable "ssh_source_security_group_ids" {
   default     = []
 }
 
-# ============================================
-# Feature Flags
-# ============================================
 variable "enable_ssm" {
   description = "Enable AWS Systems Manager (SSM) access for debugging"
   type        = bool
@@ -164,18 +143,12 @@ variable "enable_cloudwatch" {
   default     = true
 }
 
-# ============================================
-# Kubernetes Labels
-# ============================================
 variable "kubernetes_labels" {
   description = "Map of Kubernetes labels to apply to the nodes"
   type        = map(string)
   default     = {}
 }
 
-# ============================================
-# Tags
-# ============================================
 variable "common_tags" {
   description = "Map of common tags to apply to all resources"
   type        = map(string)

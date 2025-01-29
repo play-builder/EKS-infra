@@ -1,10 +1,4 @@
-# ============================================
-# AWS Load Balancer Controller Variables
-# ============================================
 
-# ============================================
-# Required Variables
-# ============================================
 variable "name" {
   description = "Common name prefix (e.g., 'dev-playdevops')"
   type        = string
@@ -35,9 +29,6 @@ variable "aws_region" {
   type        = string
 }
 
-# ============================================
-# Kubernetes Config Variables 
-# ============================================
 variable "namespace" {
   description = "Kubernetes namespace to install the controller"
   type        = string
@@ -50,25 +41,16 @@ variable "service_account_name" {
   default     = "aws-load-balancer-controller"
 }
 
-# ============================================
-# Optional Variables
-# ============================================
 variable "helm_chart_version" {
   description = "AWS Load Balancer Controller Helm chart version"
   type        = string
-  default     = "1.14.5" # 최신 버전으로 업데이트 가능
+  default     = "1.14.5"
 }
 
 variable "ecr_account_id" {
   description = "ECR Account ID for AWS Load Balancer Controller image"
   type        = string
-  default     = "602401143452" # us-east-1 기본값
-  # Region별 Account ID:
-  # us-east-1: 602401143452
-  # us-west-2: 602401143452
-  # eu-west-1: 602401143452
-  # ap-northeast-1: 602401143452
-  # 기타 Region: https://docs.aws.amazon.com/eks/latest/userguide/add-ons-images.html
+  default     = "602401143452"
 }
 
 variable "replica_count" {
@@ -94,9 +76,6 @@ variable "is_default_class" {
   default     = true
 }
 
-# ============================================
-# Feature Flags
-# ============================================
 variable "enable_waf" {
   description = "Enable AWS WAF integration"
   type        = bool
@@ -115,9 +94,6 @@ variable "enable_shield" {
   default     = false
 }
 
-# ============================================
-# Tags
-# ============================================
 variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)

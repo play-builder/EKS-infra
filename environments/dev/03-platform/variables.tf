@@ -23,12 +23,12 @@ variable "division" {
 }
 
 variable "acm_domain_name" {
-  description = "ACM 인증서를 생성할 도메인 이름 (예: playdevops.click)"
+  description = "Domain name for ACM certificate (e.g., playdevops.click)"
   type        = string
 }
 
 variable "hosted_zone_id" {
-  description = "Route53 Hosted Zone ID (DNS 검증 및 ExternalDNS용)"
+  description = "Route53 Hosted Zone ID (for DNS validation and ExternalDNS)"
   type        = string
 }
 
@@ -151,5 +151,3 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
-
-
