@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
-# =============================================================================
-# destroy.sh - EKS Infrastructure 삭제 스크립트 (Partial Configuration 적용)
-# =============================================================================
-# 실행 순서: 04-workloads/app-tier → 03-platform → 02-eks → 01-network (역순!)
-# =============================================================================
 
 set -euo pipefail
 
-# =============================================================================
-# 설정
-# =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# 색상 정의
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -22,13 +13,11 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# 기본값
 DEFAULT_ENV="dev"
 SKIP_CONFIRM=false
 TARGET_LAYER=""
 ENVIRONMENT=""
 
-# 레이어 정의 (삭제는 역순!)
 declare -a LAYERS_REVERSE=(
     "04-workloads/app-tier"
     "03-platform"
@@ -36,9 +25,6 @@ declare -a LAYERS_REVERSE=(
     "01-network"
 )
 
-# =============================================================================
-# 유틸리티 함수
-# =============================================================================
 log_info()    { echo -e "${BLUE}[INFO]${NC} $(date '+%H:%M:%S') $1"; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $(date '+%H:%M:%S') $1"; }
 log_warn()    { echo -e "${YELLOW}[WARN]${NC} $(date '+%H:%M:%S') $1"; }
@@ -46,7 +32,7 @@ log_error()   { echo -e "${RED}[ERROR]${NC} $(date '+%H:%M:%S') $1" >&2; }
 
 log_step() {
     echo -e "\n${RED}${BOLD}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${RED}${BOLD}  🗑️  $1${NC}"
+    echo -e "${RED}${BOLD}  $1${NC}"
     echo -e "${RED}${BOLD}═══════════════════════════════════════════════════════════${NC}\n"
 }
 
@@ -62,17 +48,17 @@ print_banner() {
 
 usage() {
     cat << EOF
-${BOLD}사용법:${NC}
+${BOLD}Usage:${NC}
     $(basename "$0") <environment> [options]
 
 ${BOLD}Environment:${NC}
-    dev          개발 환경
-    prod         프로덕션 환경
+    dev          Development environment
+    prod         Production environment
 
 ${BOLD}Options:${NC}
-    -l, --layer LAYER    특정 레이어만 삭제
-    -y, --yes            확인 프롬프트 건너뛰기
-    -h, --help           도움말
+    -l, --layer LAYER    Destroy specific layer only
+    -y, --yes            Skip confirmation prompt
+    -h, --help           Show help
 
 ${BOLD}Examples:${NC}
     $(basename "$0") dev
@@ -82,11 +68,7 @@ ${BOLD}Examples:${NC}
 EOF
 }
 
-# =============================================================================
-# 인자 파싱
-# =============================================================================
 parse_args() {
-    # 환경 설정
     if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
         ENVIRONMENT="$1"
         shift
@@ -94,7 +76,6 @@ parse_args() {
         ENVIRONMENT="${DEFAULT_ENV}"
     fi
 
-    # 옵션 파싱
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -l|--layer)
@@ -110,107 +91,85 @@ parse_args() {
                 exit 0
                 ;;
             *)
-                log_error "알 수 없는 옵션: $1"
+                log_error "Unknown option: $1"
                 usage
                 exit 1
                 ;;
         esac
     done
 
-    # 환경 디렉토리 검증
     ENV_DIR="${PROJECT_ROOT}/environments/${ENVIRONMENT}"
     if [[ ! -d "${ENV_DIR}" ]]; then
-        log_error "환경 디렉토리가 없습니다: ${ENV_DIR}"
+        log_error "Environment directory not found: ${ENV_DIR}"
         exit 1
     fi
 }
 
-# =============================================================================
-# Terraform 삭제 실행 (핵심 수정 적용)
-# =============================================================================
 run_terraform_destroy() {
     local layer_path="$1"
     local layer_name=$(basename "${layer_path}")
     
-    # [설정 파일 찾기] deploy.sh와 동일한 로직 (숫자 제거)
-    # 예: 01-network -> network.tfbackend
     local config_name=$(echo "${layer_name}" | sed -E 's/^[0-9]+-//')
     local config_file="${PROJECT_ROOT}/environments/${ENVIRONMENT}/config/${config_name}.tfbackend"
 
-    log_step "Layer: ${layer_name} (Config: ${config_name}.tfbackend) 삭제 중..."
+    log_step "Layer: ${layer_name} (Config: ${config_name}.tfbackend) Destroying..."
 
     cd "${layer_path}"
 
-    # -------------------------------------------------------------------------
-    # 0. 캐시 정리 (Backend configuration changed 에러 방지)
-    # -------------------------------------------------------------------------
     if [[ -d ".terraform" ]]; then
-        # log_info "기존 .terraform 캐시 정리 중..."
         rm -rf .terraform .terraform.lock.hcl
     fi
 
-    # -------------------------------------------------------------------------
-    # 1. Terraform Init (백엔드 설정 주입)
-    # -------------------------------------------------------------------------
-    log_info "terraform init 실행 중..."
+    log_info "Running terraform init..."
     
     local init_cmd="terraform init -input=false -upgrade"
 
-    # 설정 파일 주입
     if [[ -f "${config_file}" ]]; then
-        log_info "백엔드 설정 적용: ${config_file}"
+        log_info "Applying backend config: ${config_file}"
         init_cmd="${init_cmd} -backend-config=${config_file} -reconfigure"
     else
-        log_warn "설정 파일을 찾을 수 없습니다 (기본 설정 사용): ${config_file}"
+        log_warn "Config file not found (using default): ${config_file}"
     fi
 
-    # 명령어 실행 (매우 중요!)
     if ! ${init_cmd}; then
-        log_error "terraform init 실패: ${layer_name}"
+        log_error "terraform init failed: ${layer_name}"
         return 1
     fi
 
-    # 리소스 존재 여부 확인 (init 후 실행해야 함)
     local resource_count=$(terraform state list 2>/dev/null | wc -l || echo "0")
     if [[ "${resource_count}" -eq 0 ]]; then
-        log_warn "${layer_name}: 삭제할 리소스 없음 (건너뜀)"
+        log_warn "${layer_name}: No resources to destroy (skipping)"
         return 0
     fi
 
-    log_info "삭제 대상: ${resource_count}개 리소스"
+    log_info "Destroy target: ${resource_count} resources"
 
-    # -------------------------------------------------------------------------
-    # 2. Terraform Destroy
-    # -------------------------------------------------------------------------
-    log_info "terraform destroy 실행 중..."
+    log_info "Running terraform destroy..."
     if ! terraform destroy -auto-approve; then
-        log_error "terraform destroy 실패: ${layer_name}"
+        log_error "terraform destroy failed: ${layer_name}"
         return 1
     fi
 
-    log_success "✅ ${layer_name} 삭제 완료!"
+    log_success "${layer_name} destroy completed!"
 }
 
-# =============================================================================
-# 확인 프롬프트 (삭제는 더 엄격하게!)
-# =============================================================================
 confirm_destroy() {
     if [[ "${SKIP_CONFIRM}" == true ]]; then
         return 0
     fi
 
     echo ""
-    echo -e "${RED}${BOLD}⚠️  경고: 이 작업은 인프라를 삭제합니다!${NC}"
+    echo -e "${RED}${BOLD}WARNING: This will destroy infrastructure!${NC}"
     echo ""
-    echo -e "${YELLOW}📋 삭제 정보:${NC}"
-    echo -e "   환경: ${BOLD}${ENVIRONMENT}${NC}"
+    echo -e "${YELLOW}Destroy Info:${NC}"
+    echo -e "   Environment: ${BOLD}${ENVIRONMENT}${NC}"
     
     if [[ -n "${TARGET_LAYER}" ]]; then
-        echo -e "   대상: ${BOLD}${TARGET_LAYER}${NC}"
+        echo -e "   Target: ${BOLD}${TARGET_LAYER}${NC}"
     else
-        echo -e "   대상: ${BOLD}전체 레이어${NC}"
+        echo -e "   Target: ${BOLD}All Layers${NC}"
         echo ""
-        echo -e "${YELLOW}📦 삭제 순서 (역순):${NC}"
+        echo -e "${YELLOW}Destroy Order (reverse):${NC}"
         local i=1
         for layer in "${LAYERS_REVERSE[@]}"; do
             echo -e "   ${i}. ${layer}"
@@ -220,27 +179,23 @@ confirm_destroy() {
 
     echo ""
     
-    # prod 환경은 추가 확인
     if [[ "${ENVIRONMENT}" == "prod" ]]; then
-        echo -e "${RED}${BOLD}🚨 프로덕션 환경입니다! 매우 신중하게 진행하세요.${NC}"
+        echo -e "${RED}${BOLD}PRODUCTION environment! Proceed with caution.${NC}"
         echo ""
-        read -p "환경 이름을 정확히 입력하세요 [${ENVIRONMENT}]: " confirm_env
+        read -p "Enter environment name exactly [${ENVIRONMENT}]: " confirm_env
         if [[ "${confirm_env}" != "${ENVIRONMENT}" ]]; then
-            log_error "환경 이름이 일치하지 않습니다. 삭제를 취소합니다."
+            log_error "Environment name does not match. Destroy cancelled."
             exit 1
         fi
     fi
 
-    read -p "정말로 삭제하시겠습니까? [yes/NO]: " confirm
+    read -p "Are you sure you want to destroy? [yes/NO]: " confirm
     if [[ "${confirm}" != "yes" ]]; then
-        log_info "삭제가 취소되었습니다."
+        log_info "Destroy cancelled."
         exit 0
     fi
 }
 
-# =============================================================================
-# 메인 실행
-# =============================================================================
 main() {
     print_banner
     parse_args "$@"
@@ -250,36 +205,34 @@ main() {
     local start_time=$(date +%s)
     local env_dir="${PROJECT_ROOT}/environments/${ENVIRONMENT}"
 
-    # 실행할 레이어 결정
     if [[ -n "${TARGET_LAYER}" ]]; then
         local layer_path="${env_dir}/${TARGET_LAYER}"
         if [[ ! -d "${layer_path}" ]]; then
-            log_error "레이어가 없습니다: ${TARGET_LAYER}"
+            log_error "Layer not found: ${TARGET_LAYER}"
             exit 1
         fi
         run_terraform_destroy "${layer_path}"
     else
-        # 전체 레이어 역순 실행
         for layer in "${LAYERS_REVERSE[@]}"; do
             local layer_path="${env_dir}/${layer}"
             if [[ -d "${layer_path}" ]]; then
                 run_terraform_destroy "${layer_path}"
             else
-                log_warn "레이어 디렉토리 없음 (건너뜀): ${layer}"
+                log_warn "Layer directory not found (skipping): ${layer}"
             fi
         done
     fi
 
-    # 완료 메시지
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))
     local minutes=$((duration / 60))
     local seconds=$((duration % 60))
 
     echo ""
-    log_step "🗑️ 삭제 완료!"
-    log_success "환경: ${ENVIRONMENT}"
-    log_success "소요 시간: ${minutes}분 ${seconds}초"
+    log_step "Destroy completed!"
+    log_success "Environment: ${ENVIRONMENT}"
+    log_success "Duration: ${minutes}m ${seconds}s"
 }
 
 main "$@"
+

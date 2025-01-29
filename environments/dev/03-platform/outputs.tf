@@ -119,7 +119,7 @@ output "alb_controller_verification_commands" {
 }
 
 output "ingress_class_name" {
-  description = "AWS ALB IngressClass 이름"
+  description = "AWS ALB IngressClass name"
   value       = length(module.aws_load_balancer_controller) > 0 ? module.aws_load_balancer_controller[0].ingress_class_name : null
 }
 
@@ -137,4 +137,3 @@ output "container_insights_namespace" {
   description = "Container Insights namespace"
   value       = var.enable_container_insights ? module.container_insights[0].namespace : null
 }
-

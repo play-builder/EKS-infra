@@ -58,29 +58,19 @@ output "summary" {
 output "verification_commands" {
   description = "Commands to verify the deployment"
   value       = <<-EOT
-    # ============================================
-    # Verify Online Boutique Deployment
-    # ============================================
     
-    # 1. Check all pods
     kubectl -n ${var.namespace} get pods
     
-    # 2. Check services
     kubectl -n ${var.namespace} get svc
     
-    # 3. Check HPA
     kubectl -n ${var.namespace} get hpa
     
-    # 4. Check Ingress
     kubectl -n ${var.namespace} get ingress
     
-    # 5. Check ALB
     kubectl -n ${var.namespace} describe ingress ${var.helm_release_name}-ingress
     
-    # 6. Test Application (after DNS propagation)
     curl -I https://${local.ingress_host}
     
-    # 7. Port-forward for local testing
     kubectl -n ${var.namespace} port-forward svc/frontend 8080:80
   EOT
 }

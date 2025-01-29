@@ -1,6 +1,3 @@
-# ============================================
-# Bastion Module Outputs
-# ============================================
 
 output "instance_id" {
   description = "Bastion Host instance ID"

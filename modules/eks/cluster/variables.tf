@@ -1,11 +1,4 @@
-# ============================================
-# EKS Cluster Module - Variables
-# ============================================
-# 리팩토링: Node Group 변수 모두 제거, Cluster 관련 변수만 유지
 
-# ============================================
-# General Variables
-# ============================================
 variable "name" {
   description = "Common name prefix (e.g., 'dev-playdevops')"
   type        = string
@@ -27,9 +20,6 @@ variable "cluster_version" {
   }
 }
 
-# ============================================
-# Network Configuration
-# ============================================
 variable "vpc_id" {
   description = "VPC ID where the cluster will be created"
   type        = string
@@ -45,9 +35,6 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
-# ============================================
-# Cluster Configuration
-# ============================================
 variable "cluster_service_ipv4_cidr" {
   description = "Service IPv4 CIDR for the cluster (do not overlap with VPC CIDR)"
   type        = string
@@ -74,8 +61,7 @@ variable "cluster_endpoint_public_access" {
 variable "cluster_endpoint_public_access_cidrs" {
   description = "List of CIDR blocks allowed to access the public API server endpoint"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # ⚠️ Production에서는 제한 필요 
-  # default     = []  # ✅ 기본값 비움 (Private access만 사용) [PROD] dev.tfvars 등에서 회사의 VPN IP나 NAT Gateway IP 등 신뢰할 수 있는 CIDR만 허용하도록 강제해야 합니다.
+  default     = ["0.0.0.0/0"] # ⚠️ Should be restricted in Production
 
   validation {
     condition = alltrue([
@@ -85,18 +71,7 @@ variable "cluster_endpoint_public_access_cidrs" {
   }
 }
 
-# ============================================
-# OIDC Provider Configuration
-# ============================================
-# variable "eks_oidc_root_ca_thumbprint" {
-#   description = "Thumbprint of Root CA for EKS OIDC (required for IRSA)"
-#   type        = string
-#   default     = "9e99a48a9960b14926bb7f3b02e22da2b0ab7280" # AWS Global thumbprint
-# }
 
-# ============================================
-# Logging Configuration
-# ============================================
 variable "cluster_enabled_log_types" {
   description = "List of control plane logging types to enable"
   type        = list(string)
@@ -128,9 +103,6 @@ variable "cluster_log_retention_in_days" {
   }
 }
 
-# ============================================
-# Tags
-# ============================================
 variable "tags" {
   description = "Map of tags to apply to all resources"
   type        = map(string)

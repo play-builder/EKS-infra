@@ -8,7 +8,6 @@ variable "oidc_provider_arn" {
   type        = string
 }
 
-# [수정] oidc_issuer → oidc_provider로 변경하고 내부에서 https:// 추가
 variable "oidc_provider" {
   description = "OIDC provider URL without https:// prefix"
   type        = string
@@ -22,7 +21,7 @@ variable "aws_region" {
 variable "chart_version" {
   description = "Helm chart version for cluster-autoscaler"
   type        = string
-  default     = "9.37.0" # 최신 버전으로 업데이트
+  default     = "9.37.0"
 }
 
 variable "common_tags" {

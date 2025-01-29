@@ -1,6 +1,3 @@
-# =============================================================================
-# IAM Policy Document 생성 (JSON 변환)
-# =============================================================================
 data "aws_iam_policy_document" "this" {
   dynamic "statement" {
     for_each = var.iam_policy_statements
@@ -13,9 +10,6 @@ data "aws_iam_policy_document" "this" {
   }
 }
 
-# =============================================================================
-# IAM Policy 생성
-# =============================================================================
 resource "aws_iam_policy" "this" {
   count = length(var.iam_policy_statements) > 0 ? 1 : 0
 
@@ -25,9 +19,6 @@ resource "aws_iam_policy" "this" {
   tags        = var.tags
 }
 
-# =============================================================================
-# IAM Role 생성 (Trust Policy 포함)
-# =============================================================================
 resource "aws_iam_role" "this" {
   name = "${var.name}-role"
 
@@ -42,7 +33,6 @@ resource "aws_iam_role" "this" {
         }
         Condition = {
           StringEquals = {
-            # [보안] 특정 네임스페이스와 서비스 어카운트만 이 역할을 맡을 수 있음
             "${var.oidc_provider}:sub" = "system:serviceaccount:${var.namespace}:${var.service_account_name}",
             "${var.oidc_provider}:aud" = "sts.amazonaws.com"
           }
@@ -54,9 +44,6 @@ resource "aws_iam_role" "this" {
   tags = var.tags
 }
 
-# =============================================================================
-# Role과 Policy 연결
-# =============================================================================
 resource "aws_iam_role_policy_attachment" "this" {
   count = length(var.iam_policy_statements) > 0 ? 1 : 0
 

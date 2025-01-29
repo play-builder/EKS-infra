@@ -1,17 +1,14 @@
-# ============================================
-# IRSA Module Variables (Common)
-# 모든 IRSA 사용 케이스에서 재사용
-# ============================================
-
 variable "name" {
   description = "Name of the service using IRSA"
   type        = string
 }
+
 variable "namespace" {
   description = "Kubernetes namespace"
   type        = string
   default     = "kube-system"
 }
+
 variable "service_account_name" {
   description = "Kubernetes Service Account name"
   type        = string
@@ -27,10 +24,8 @@ variable "oidc_provider" {
   type        = string
 }
 
-
-# [핵심] 정책 내용을 변수로 받아서 동적으로 생성
 variable "iam_policy_statements" {
-  description = "IAM Policy Statement 목록"
+  description = "IAM Policy Statement list"
   type = list(object({
     sid       = optional(string)
     effect    = string
@@ -40,16 +35,13 @@ variable "iam_policy_statements" {
 }
 
 variable "create_service_account" {
-  description = "Kubernetes Service Account 생성 여부 (Helm 사용 시 false 권장)"
+  description = "Whether to create Kubernetes Service Account (recommended false when using Helm)"
   type        = bool
   default     = false
 }
 
 variable "tags" {
-  description = "리소스 태그"
+  description = "Resource tags"
   type        = map(string)
   default     = {}
 }
-
-
-

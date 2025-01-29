@@ -1,11 +1,11 @@
-# ALB SSL Ingress 모듈
+# ALB SSL Ingress Module
 
-## 📌 개요
+## Overview
 
-ACM 인증서와 ALB Ingress를 관리하는 모듈입니다.  
-**Deployment/Service는 별도의 `app` 모듈을 사용하세요.**
+Module for managing ACM certificates and ALB Ingress.  
+**Use the separate `app` module for Deployment/Service.**
 
-## 🎯 설계 원칙
+## Design Principles
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -24,10 +24,10 @@ ACM 인증서와 ALB Ingress를 관리하는 모듈입니다.
 └─────────────────────────────────────────────────────────┘
 ```
 
-## 📋 사용법
+## Usage
 
 ```hcl
-# 1. App 모듈로 Deployment + Service 생성
+# 1. Create Deployment + Service using App module
 module "app1" {
   source          = "../../modules/kubernetes/app"
   app_name        = "app1"
@@ -40,7 +40,7 @@ module "app1" {
   }
 }
 
-# 2. Ingress 모듈로 ALB 생성 (app 모듈의 Service 참조)
+# 2. Create ALB using Ingress module (reference app module's Service)
 module "alb_ingress" {
   source = "../../modules/kubernetes/ingress/alb-ssl"
 
@@ -59,4 +59,5 @@ module "alb_ingress" {
     }
   ]
 }
+
 ```

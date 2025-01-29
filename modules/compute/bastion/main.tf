@@ -1,10 +1,3 @@
-# ============================================
-# Bastion Module - Main Configuration
-# ============================================
-
-# ============================================
-# Data Source: Latest Amazon Linux 2 AMI
-# ============================================
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
@@ -30,15 +23,11 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
-# ============================================
-# Security Group for Bastion Host
-# ============================================
 resource "aws_security_group" "bastion" {
   name        = "${var.name}-bastion-sg"
   description = "Security group for Bastion Host"
   vpc_id      = var.vpc_id
 
-  # Ingress: SSH from allowed CIDR blocks
   ingress {
     description = "SSH from allowed IPs"
     from_port   = 22
@@ -47,7 +36,6 @@ resource "aws_security_group" "bastion" {
     cidr_blocks = var.ssh_cidr_blocks
   }
 
-  # Egress: Allow all outbound
   egress {
     description = "Allow all outbound traffic"
     from_port   = 0
@@ -64,9 +52,6 @@ resource "aws_security_group" "bastion" {
   )
 }
 
-# ============================================
-# EC2 Instance: Bastion Host
-# ============================================
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux_2.id
   instance_type          = var.instance_type
@@ -74,17 +59,13 @@ resource "aws_instance" "bastion" {
   subnet_id              = var.public_subnet_id
   vpc_security_group_ids = [aws_security_group.bastion.id]
 
-  # Enable detailed monitoring
   monitoring = true
 
-  # User data for initial setup
   user_data = <<-EOF
-              #!/bin/bash
               yum update -y
               yum install -y nc wget curl
               EOF
 
-  # Root volume
   root_block_device {
     volume_type           = "gp3"
     volume_size           = 8
@@ -92,7 +73,6 @@ resource "aws_instance" "bastion" {
     encrypted             = true
   }
 
-  # IMDSv2 required
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "required"
@@ -107,9 +87,6 @@ resource "aws_instance" "bastion" {
   )
 }
 
-# ============================================
-# Elastic IP for Bastion Host
-# ============================================
 resource "aws_eip" "bastion" {
   instance = aws_instance.bastion.id
   domain   = "vpc"

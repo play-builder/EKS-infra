@@ -1,6 +1,3 @@
-# ============================================
-# EBS CSI Driver Add-on Module Variables
-# ============================================
 
 variable "name" {
   description = "Name prefix for resources"

@@ -1,7 +1,6 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  # 1. Format admin user mappings
   map_users = [
     for user in var.admin_iam_users : {
       userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${user}"
@@ -10,7 +9,6 @@ locals {
     }
   ]
   
-  # 2. Format role/group mappings
   map_roles = concat(
     [
       for group in var.developer_iam_groups : {

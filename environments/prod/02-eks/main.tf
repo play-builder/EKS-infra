@@ -102,9 +102,6 @@ module "bastion" {
   instance_type    = var.bastion_instance_type
   instance_keypair = var.bastion_instance_keypair
 
-  # Security
-  # ⚠️ [보안 주의] SSH 접근 CIDR 설정
-  # Production에서는 반드시 회사 VPN IP 또는 특정 보안 IP로 제한
   ssh_cidr_blocks = var.bastion_ssh_cidr_blocks
 
   private_key_path = "private-key/${var.bastion_instance_keypair}.pem"

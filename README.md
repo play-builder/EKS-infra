@@ -1,17 +1,17 @@
 # EKS Infrastructure (Terraform)
 
-Production-Ready Amazon EKS 클러스터를 Terraform으로 구축하고 관리하는 Infrastructure as Code 프로젝트.
+Production-Ready Amazon EKS cluster built and managed with Terraform.
 
-## 주요 특징
+## Key Features
 
-- **레이어 기반 아키텍처**: Network → EKS → Platform → Workloads 4단계 분리로 Blast Radius 최소화
-- **IRSA (IAM Roles for Service Accounts)**: Pod 레벨 최소 권한 원칙 적용
-- **Partial Backend Configuration**: 환경별 State 분리 및 CI/CD 파이프라인 호환
-- **멀티 환경 지원**: dev/prod 환경 독립 운영
+- **Layer-based Architecture**: Network → EKS → Platform → Workloads 4-stage separation to minimize Blast Radius
+- **IRSA (IAM Roles for Service Accounts)**: Pod-level least privilege principle
+- **Partial Backend Configuration**: Environment-specific state separation and CI/CD pipeline compatibility
+- **Multi-Environment Support**: Independent dev/prod environment operation
 
 ![EKS Architecture](./images/eks-architecture.png)
 
-### 레이어 구조
+### Layer Structure
 
 ```
 Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: Workloads
@@ -27,11 +27,11 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
   tfbackend                                    tfbackend               tfbackend
 ```
 
-## 디렉토리 구조
+## Directory Structure
 
 ```
 .
-├── environments/                    # 환경별 Root Modules
+├── environments/                    # Environment-specific Root Modules
 │   ├── dev/
 │   │   ├── config/                  # Partial Backend Configuration
 │   │   │   ├── network.tfbackend
@@ -40,21 +40,21 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
 │   │   │   └── app-tier.tfbackend
 │   │   ├── 01-network/              # Layer 1: VPC, Subnets
 │   │   ├── 02-eks/                  # Layer 2: EKS Cluster, Node Groups
-│   │   ├── 03-platform/             # Layer 3: Addons (IRSA 기반)
+│   │   ├── 03-platform/             # Layer 3: Addons (IRSA-based)
 │   │   └── 04-workloads/
 │   │       └── app-tier/            # Layer 4: Applications
-│   └── prod/                        # Production (동일 구조)
+│   └── prod/                        # Production (same structure)
 │
-├── modules/                         # 재사용 가능한 Terraform Modules
+├── modules/                         # Reusable Terraform Modules
 │   ├── networking/
-│   │   ├── vpc/                     # VPC, Subnets, NAT, IGW
+│   │   ├── vpc/                    # VPC, Subnets, NAT, IGW
 │   │   └── security-groups/
 │   ├── compute/
 │   │   └── bastion/                 # Bastion Host
 │   ├── eks/
 │   │   ├── cluster/                 # EKS Control Plane + OIDC
 │   │   ├── node-group/              # Managed Node Groups
-│   │   └── fargate-profile/         # Fargate Profile (선택)
+│   │   └── fargate-profile/         # Fargate Profile (optional)
 │   ├── addons/
 │   │   ├── aws-load-balancer-controller/
 │   │   ├── ebs-csi-driver/
@@ -63,7 +63,7 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
 │   │   ├── metrics-server/
 │   │   └── container-insights/
 │   ├── iam/
-│   │   ├── irsa/                    # IRSA 공통 패턴
+│   │   ├── irsa/                    # IRSA common pattern
 │   │   └── user-roles/
 │   ├── kubernetes/
 │   │   ├── app/                     # Deployment + Service
@@ -73,71 +73,65 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
 │       └── acm/                     # ACM Certificate
 │
 ├── scripts/
-│   ├── deploy.sh                    # 전체 배포 스크립트
-│   ├── destroy.sh                   # 전체 삭제 스크립트
+│   ├── deploy.sh                    # Full deployment script
+│   ├── destroy.sh                   # Full destroy script
 │   └── backup-state.sh
 │
 ├── terraform/
-│   └── iam-github-oidc/             # GitHub Actions OIDC 설정
+│   └── iam-github-oidc/             # GitHub Actions OIDC configuration
 │
 ├── docs/
-│   ├── architecture.md              # 상세 아키텍처 문서
-│   └── runbook.md                   # 운영 매뉴얼
+│   ├── architecture.md              # Detailed architecture documentation
+│   └── runbook.md                   # Operations manual
 │
 └── .github/
     └── workflows/
-        ├── terraform-plan.yml       # PR 시 Plan
-        └── terraform-apply.yml      # main 병합 시 Apply
+        ├── terraform-plan.yml       # Plan on PR
+        └── terraform-apply.yml      # Apply on merge to main
 ```
 
-## 빠른 시작
+## Quick Start
 
-### 사전 요구사항
+### Prerequisites
 
 - Terraform >= 1.5.0
 - AWS CLI (configured)
 - kubectl
 - Helm 3.x
 
-### 배포
+### Deploy
 
 ```bash
-# 전체 배포 (01-network → 02-eks → 03-platform → 04-workloads)
+# Full deployment (01-network → 02-eks → 03-platform → 04-workloads)
 ./scripts/deploy.sh dev
 
-# 특정 레이어만 배포
+# Deploy specific layer only
 ./scripts/deploy.sh dev -l 02-eks
 
-# Dry-run (명령어만 출력)
+# Dry-run (output commands only)
 ./scripts/deploy.sh dev -d
 ```
 
-### 삭제
+### Destroy
 
 ```bash
-# 전체 삭제 (역순: 04 → 03 → 02 → 01)
+# Full destroy (reverse: 04 → 03 → 02 → 01)
 ./scripts/destroy.sh dev
 
-# 특정 레이어만 삭제
+# Destroy specific layer only
 ./scripts/destroy.sh dev -l 03-platform
 ```
 
-## 문서
+## Documentation
 
-- [Architecture](./docs/architecture.md) - 상세 아키텍처 및 설계 결정
-- [Runbook](./docs/runbook.md) - 운영 절차 및 트러블슈팅
+- [Architecture](./docs/architecture.md) - Detailed architecture documentation
+- [Runbook](./docs/runbook.md) - Operations manual
 
-## 기술 스택
+## Tech Stack
 
-| Component     | Version   | Description        |
-| ------------- | --------- | ------------------ |
-| Terraform     | >= 1.5.0  | IaC                |
-| EKS           | 1.31      | Kubernetes         |
-| AWS Provider  | ~> 5.7.0  | Terraform Provider |
-| Helm Provider | ~> 2.10.0 | Helm Charts 관리   |
-
-
-
-
-
-
+| Component     | Version   | Description            |
+| ------------- | --------- | ---------------------- |
+| Terraform     | >= 1.5.0  | IaC                    |
+| EKS           | 1.31      | Kubernetes             |
+| AWS Provider  | ~> 5.7.0  | Terraform Provider     |
+| Helm Provider | ~> 2.10.0 | Helm Charts Management |
