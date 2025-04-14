@@ -2,8 +2,8 @@
 # Manual edits may be lost in future updates.
 
 provider "registry.terraform.io/hashicorp/aws" {
-  version     = "5.7.0"
-  constraints = "~> 5.7.0"
+  version     = "5.87.0"
+  constraints = "~> 5.87.0"
   hashes = [
     "h1:aa0gGxD4NVirhzUUbEngnG2Ag6fAsPMjIsivd/f2QVM=",
   ]
@@ -11,7 +11,7 @@ provider "registry.terraform.io/hashicorp/aws" {
 
 provider "registry.terraform.io/hashicorp/helm" {
   version     = "2.10.1"
-  constraints = "~> 2.10.0"
+  constraints = "~> 2.17.0"
   hashes = [
     "h1:OFRsk+lMoRoNoJjJzRngH8hAq++Sb6LwrEKIjd7PeWA=",
   ]
@@ -27,7 +27,7 @@ provider "registry.terraform.io/hashicorp/kubernetes" {
 
 provider "registry.terraform.io/hashicorp/null" {
   version     = "3.0.0"
-  constraints = "~> 3.0.0"
+  constraints = "~> 3.4.0"
   hashes = [
     "h1:V1tzrSG6t3e7zWvUwRbGbhsWU2Jd/anrJpOl9XM+R/8=",
   ]
