@@ -31,7 +31,7 @@ variable "cluster_name" {
 variable "cluster_version" {
   description = "Kubernetes version to use for the EKS cluster"
   type        = string
-  default     = "1.31"
+  default     = "1.32"
 }
 
 variable "cluster_service_ipv4_cidr" {
@@ -67,7 +67,7 @@ variable "enable_public_node_group" {
 variable "enable_private_node_group" {
   description = "Enable Private Node Group (Recommended for Production)"
   type        = bool
-  default     = true 
+  default     = true
 }
 
 variable "node_group_ami_type" {
@@ -79,13 +79,13 @@ variable "node_group_ami_type" {
 variable "node_group_capacity_type" {
   description = "Capacity type (ON_DEMAND or SPOT)"
   type        = string
-  default     = "ON_DEMAND" 
+  default     = "ON_DEMAND"
 }
 
 variable "node_group_disk_size" {
   description = "Disk size in GiB for worker nodes"
   type        = number
-  default     = 50 
+  default     = 50
 }
 
 variable "node_group_max_unavailable" {
@@ -103,25 +103,25 @@ variable "private_node_group_name" {
 variable "private_node_group_desired_size" {
   description = "Private node group desired size"
   type        = number
-  default     = 3 
+  default     = 3
 }
 
 variable "private_node_group_min_size" {
   description = "Private node group min size"
   type        = number
-  default     = 2 
+  default     = 2
 }
 
 variable "private_node_group_max_size" {
   description = "Private node group max size"
   type        = number
-  default     = 5 
+  default     = 5
 }
 
 variable "private_node_group_instance_types" {
   description = "Private node group instance types"
   type        = list(string)
-  default     = ["m5.large"] 
+  default     = ["m5.large"]
 }
 
 variable "enable_bastion" {
@@ -162,7 +162,7 @@ variable "cluster_enabled_log_types" {
 variable "cluster_log_retention_in_days" {
   description = "CloudWatch log retention in days"
   type        = number
-  default     = 30 
+  default     = 30
 }
 
 variable "tags" {
