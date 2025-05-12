@@ -132,6 +132,6 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
 | Component     | Version   | Description            |
 | ------------- | --------- | ---------------------- |
 | Terraform     | >= 1.5.0  | IaC                    |
-| EKS           | 1.31      | Kubernetes             |
+| EKS           | 1.32      | Kubernetes             |
 | AWS Provider  | ~> 5.87.0 | Terraform Provider     |
 | Helm Provider | ~> 2.17.0 | Helm Charts Management |
