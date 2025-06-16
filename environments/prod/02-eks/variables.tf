@@ -73,7 +73,7 @@ variable "enable_private_node_group" {
 variable "node_group_ami_type" {
   description = "AMI type for EKS nodes"
   type        = string
-  default     = "AL2_x86_64"
+  default     = "AL2023_x86_64_STANDARD"
 }
 
 variable "node_group_capacity_type" {
