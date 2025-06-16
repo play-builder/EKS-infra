@@ -1,6 +1,5 @@
-    bucket       = "plydevops-infra-tf-dev"       # bucket = "{org}-{team}-tf-{env}"
-    key          = "dev/02-eks/terraform.tfstate" # key = "{environment}/{layer}/terraform.tfstate"    region       = var.region
+    bucket       = "plydevops-infra-tf-dev"       
+    key          = "dev/02-eks/terraform.tfstate"
     region       = "us-east-1"
     use_lockfile = true
     encrypt      = true
-    # kms_key_id     = "arn:aws:kms:${var.region}:${var.account_id}:key/${var.kms_key_id}"
