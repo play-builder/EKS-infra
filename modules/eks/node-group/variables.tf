@@ -89,9 +89,12 @@ variable "ami_type" {
     condition = contains([
       "AL2023_x86_64_STANDARD",
       "AL2023_ARM_64_STANDARD",
-      "AL2023_x86_64_STANDARD",
-      "AL2023_x86_64_STANDARD_GPU",
-      "AL2_ARM_64"
+      "AL2023_x86_64_NEURON",
+      "AL2023_x86_64_NVIDIA",
+      "AL2_x86_64",
+      "AL2_ARM_64",
+      "BOTTLEROCKET_x86_64",
+      "BOTTLEROCKET_ARM_64"
     ], var.ami_type)
     error_message = "Invalid AMI type. See AWS EKS documentation for valid values."
   }
