@@ -12,7 +12,7 @@ data "aws_eks_cluster" "cluster" {
 }
 
 data "aws_eks_cluster_auth" "cluster" {
-  name = data.terraform_remote_state.eks.outputs.cluster_id
+  name = data.terraform_remote_state.eks.outputs.cluster_name
 }
 
 provider "kubernetes" {
