@@ -1,10 +1,10 @@
-data "aws_ami" "amazon_linux_2" {
+data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["al2023-ami-*-x86_64"]
   }
 
   filter {
@@ -53,7 +53,7 @@ resource "aws_security_group" "bastion" {
 }
 
 resource "aws_instance" "bastion" {
-  ami                    = data.aws_ami.amazon_linux_2.id
+  ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = var.instance_type
   key_name               = var.instance_keypair
   subnet_id              = var.public_subnet_id
@@ -62,8 +62,9 @@ resource "aws_instance" "bastion" {
   monitoring = true
 
   user_data = <<-EOF
-              yum update -y
-              yum install -y nc wget curl
+              #!/bin/bash
+              dnf update -y
+              dnf install -y nc wget curl
               EOF
 
   root_block_device {
