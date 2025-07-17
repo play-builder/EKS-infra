@@ -51,7 +51,7 @@ variable "namespace" {
 variable "use_aws_managed_policy" {
   description = "Use AWS managed IAM policy instead of custom policy"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "aws_managed_policy_arn" {
