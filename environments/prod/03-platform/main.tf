@@ -24,10 +24,11 @@ locals {
   vpc_id           = data.terraform_remote_state.network.outputs.vpc_id
 
   common_tags = merge(
-    { for key, value in var.tags : key => replace(value, " ", "-") },
+    var.tags,
     {
       Environment = var.environment
       Project     = var.project_name
+      division    = var.division  
       ManagedBy   = "Terraform"
       Layer       = "platform"
     }
