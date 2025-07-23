@@ -94,8 +94,18 @@ variable "enable_shield" {
   default     = false
 }
 
-variable "common_tags" {
-  description = "Common tags to apply to all resources"
+variable "tags" {
+  description = "Map of tags to apply to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "common_tags" {
+  description = "DEPRECATED: Use 'tags' instead. Map of common tags."
+  type        = map(string)
+  default     = null
+}
+
+locals {
+  effective_tags = var.common_tags != null ? var.common_tags : var.tags
 }

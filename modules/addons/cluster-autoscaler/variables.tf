@@ -24,8 +24,18 @@ variable "chart_version" {
   default     = "9.37.0"
 }
 
-variable "common_tags" {
-  description = "Map of common tags"
+variable "tags" {
+  description = "Map of tags to apply to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "common_tags" {
+  description = "DEPRECATED: Use 'tags' instead. Map of common tags."
+  type        = map(string)
+  default     = null
+}
+
+locals {
+  effective_tags = var.common_tags != null ? var.common_tags : var.tags
 }
