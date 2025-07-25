@@ -4,8 +4,8 @@ variable "admin_iam_users" {
   default     = []
 }
 
-variable "developer_iam_groups" {
-  description = "List of IAM Group names to grant developer access"
+variable "developer_iam_roles" {
+  description = "List of IAM Role ARNs to grant developer access (roles assumed by dev group members)"
   type        = list(string)
   default     = []
 }
