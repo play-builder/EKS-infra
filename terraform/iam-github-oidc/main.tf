@@ -87,8 +87,8 @@ resource "aws_iam_policy" "terraform_deployment" {
           "s3:PutObject"
         ]
         Resource = [
-          "arn:aws:s3:::plydevops-infra-tf-*",
-          "arn:aws:s3:::plydevops-infra-tf-*/*"
+          "arn:aws:s3:::playdevops-infra-tf-*",
+          "arn:aws:s3:::playdevops-infra-tf-*/*"
         ]
       },
       {
@@ -98,7 +98,7 @@ resource "aws_iam_policy" "terraform_deployment" {
           "dynamodb:PutItem",
           "dynamodb:DeleteItem"
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/plydevops-terraform-state-lock-*"
+        Resource = "arn:aws:dynamodb:*:*:table/playdevops-terraform-state-lock-*"
       }
     ]
   })

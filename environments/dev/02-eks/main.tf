@@ -2,8 +2,8 @@ data "terraform_remote_state" "network" {
   backend = "s3"
 
   config = {
-    bucket = "plydevops-infra-tf-dev"
-    key    = "dev/01-network/terraform.tfstate"
+    bucket = "${var.project_name}-infra-tf-${var.environment}"
+    key    = "${var.environment}/01-network/terraform.tfstate"
     region = var.aws_region
   }
 }
