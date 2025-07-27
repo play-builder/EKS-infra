@@ -3,8 +3,8 @@ data "terraform_remote_state" "eks" {
   backend = "s3"
 
   config = {
-    bucket = "plydevops-infra-tf-prod"
-    key    = "prod/02-eks/terraform.tfstate"
+    bucket = "${var.project_name}-infra-tf-${var.environment}"
+    key    = "${var.environment}/02-eks/terraform.tfstate"
     region = var.aws_region
   }
 }
@@ -13,8 +13,8 @@ data "terraform_remote_state" "platform" {
   backend = "s3"
 
   config = {
-    bucket = "plydevops-infra-tf-prod"
-    key    = "prod/03-platform/terraform.tfstate"
+    bucket = "${var.project_name}-infra-tf-${var.environment}"
+    key    = "${var.environment}//03-platform/terraform.tfstate"
     region = var.aws_region
   }
 }
