@@ -74,7 +74,7 @@ variable "ingress_class_name" {
 variable "ingress_group_name" {
   description = "ALB Ingress Group name"
   type        = string
-  default     = "baryon-alb"
+  default     = "playdevops-alb"
 }
 
 variable "alb_scheme" {
