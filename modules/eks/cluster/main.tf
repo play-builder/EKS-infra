@@ -98,3 +98,31 @@ resource "aws_iam_openid_connect_provider" "cluster" {
   )
 }
 
+# modules/eks/cluster/main.tf — Append at the end
+
+# Enable Access Entry API for EKS authentication
+# This replaces the deprecated aws-auth ConfigMap approach
+resource "aws_eks_access_entry" "cluster_creator" {
+  count = var.enable_cluster_creator_access ? 1 : 0
+
+  cluster_name  = aws_eks_cluster.cluster.name
+  principal_arn = var.cluster_creator_arn
+  type          = "STANDARD"
+
+  depends_on = [aws_eks_cluster.cluster]
+}
+
+resource "aws_eks_access_policy_association" "cluster_creator" {
+  count = var.enable_cluster_creator_access ? 1 : 0
+
+  cluster_name  = aws_eks_cluster.cluster.name
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = var.cluster_creator_arn
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.cluster_creator]
+}
+
