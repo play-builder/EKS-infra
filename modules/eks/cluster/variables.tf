@@ -108,3 +108,15 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "enable_cluster_creator_access" {
+  description = "Enable Access Entry for cluster creator (for initial kubectl access)"
+  type        = bool
+  default     = false
+}
+
+variable "cluster_creator_arn" {
+  description = "IAM ARN of the cluster creator (user or role) for Access Entry"
+  type        = string
+  default     = ""
+}
