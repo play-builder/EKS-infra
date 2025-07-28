@@ -26,7 +26,7 @@ jobs:
 
     strategy:
       matrix:
-        environment: [dev]
+        environment: [dev, prod]
         layer:
           - 01-network
           - 02-eks
