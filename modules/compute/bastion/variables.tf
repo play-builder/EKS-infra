@@ -28,6 +28,11 @@ variable "ssh_cidr_blocks" {
   description = "CIDR blocks allowed to SSH"
   type        = list(string)
   default     = []
+
+    validation {
+    condition = !contains(var.ssh_cidr_blocks, "0.0.0.0/0")
+    error_message = "SSH access must not be open to 0.0.0.0/0. Specify exact office/VPN CIDR blocks."
+  }
 }
 
 variable "private_key_path" {
