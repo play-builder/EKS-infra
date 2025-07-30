@@ -14,7 +14,7 @@ data "terraform_remote_state" "platform" {
 
   config = {
     bucket = "${var.project_name}-infra-tf-${var.environment}"
-    key    = "${var.environment}//03-platform/terraform.tfstate"
+    key    = "${var.environment}/03-platform/terraform.tfstate"
     region = var.aws_region
   }
 }
