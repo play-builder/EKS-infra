@@ -91,8 +91,6 @@ variable "ami_type" {
       "AL2023_ARM_64_STANDARD",
       "AL2023_x86_64_NEURON",
       "AL2023_x86_64_NVIDIA",
-      "AL2_x86_64",
-      "AL2_ARM_64",
       "BOTTLEROCKET_x86_64",
       "BOTTLEROCKET_ARM_64"
     ], var.ami_type)
