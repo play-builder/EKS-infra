@@ -75,7 +75,7 @@ module "aws_load_balancer_controller" {
   ingress_class_name = var.alb_controller_ingress_class_name
   is_default_class   = var.alb_controller_is_default
 
-  common_tags = local.common_tags
+  tags = local.common_tags
 }
 
 module "external_dns" {
@@ -127,7 +127,7 @@ module "cluster_autoscaler" {
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
 
   chart_version = var.cluster_autoscaler_chart_version
-  common_tags   = local.common_tags
+  tags   = local.common_tags
 
   depends_on = [module.metrics_server]
 }
@@ -148,4 +148,45 @@ module "container_insights" {
   tags = local.common_tags
 }
 
+# --- Amazon Managed Prometheus (AMP) ---
+module "amp" {
+  source = "../../../modules/addons/amp"
+  count  = var.enable_amp ? 1 : 0
 
+  name           = "${local.name}-prometheus"
+  retention_days = var.amp_retention_days
+
+  tags = local.common_tags
+}
+
+module "adot_collector" {
+  source = "../../../modules/addons/adot-collector"
+  count  = var.enable_adot_collector ? 1 : 0
+
+  eks_cluster_name = local.eks_cluster_name
+  aws_region       = var.aws_region
+
+  oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
+  oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
+
+  amp_workspace_endpoint = var.enable_amp ? module.amp[0].workspace_prometheus_endpoint : ""
+
+  tags = local.common_tags
+
+  depends_on = [module.amp]
+}
+
+# --- Amazon Managed Grafana (AMG) ---
+module "amg" {
+  source = "../../../modules/addons/amg"
+  count  = var.enable_amg ? 1 : 0
+
+  name                     = "${local.name}-grafana"
+  authentication_providers = var.amg_authentication_providers
+
+  amp_workspace_id = var.enable_amp ? module.amp[0].workspace_id : ""
+
+  tags = local.common_tags
+
+  depends_on = [module.amp]
+}
