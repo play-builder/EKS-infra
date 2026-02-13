@@ -12,11 +12,11 @@ variable "cluster_name" {
 variable "cluster_version" {
   description = "Kubernetes version to use for the EKS cluster"
   type        = string
-  default     = "1.32"
+  default     = "1.35"
 
   validation {
-    condition     = can(regex("^1\\.(2[7-9]|3[0-9])$", var.cluster_version))
-    error_message = "cluster_version must be a valid Kubernetes version (1.27 or higher)."
+    condition     = can(regex("^1\\.(3[0-9])$", var.cluster_version))
+    error_message = "cluster_version must be 1.30 or higher. Versions below 1.30 are EOL."
   }
 }
 
