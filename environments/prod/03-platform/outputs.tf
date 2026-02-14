@@ -49,7 +49,7 @@ output "cluster_autoscaler_iam_role_arn" {
 }
 
 output "container_insights_namespace" {
-  description = "Container Insights namespace"
+  description = "DEPRECATED: Container Insights namespace"
   value       = var.enable_container_insights ? module.container_insights[0].namespace : null
 }
 
@@ -63,4 +63,31 @@ output "verification_commands" {
     kubectl -n kube-system get pods -l app.kubernetes.io/name=aws-cluster-autoscaler
     kubectl -n amazon-cloudwatch get pods
   EOT
+}
+
+# NEW: Observability Stack Outputs
+
+output "amp_workspace_id" {
+  description = "Amazon Managed Prometheus workspace ID"
+  value       = var.enable_amp ? module.amp[0].workspace_id : null
+}
+
+output "amp_workspace_endpoint" {
+  description = "AMP workspace Prometheus endpoint for remote write"
+  value       = var.enable_amp ? module.amp[0].workspace_prometheus_endpoint : null
+}
+
+output "adot_collector_addon_version" {
+  description = "ADOT Collector EKS addon version"
+  value       = var.enable_adot_collector ? module.adot_collector[0].addon_version : null
+}
+
+output "amg_workspace_endpoint" {
+  description = "Amazon Managed Grafana workspace endpoint"
+  value       = var.enable_amg ? module.amg[0].workspace_endpoint : null
+}
+
+output "amg_workspace_id" {
+  description = "Amazon Managed Grafana workspace ID"
+  value       = var.enable_amg ? module.amg[0].workspace_id : null
 }
