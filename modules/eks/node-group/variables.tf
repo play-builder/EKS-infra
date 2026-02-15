@@ -157,7 +157,7 @@ variable "tags" {
 }
 
 variable "common_tags" {
-  description = "DEPRECATED: Use 'tags' instead. Map of common tags."
+  description = "DEPRECATED: Use 'tags' instead. Will be removed in next major version."
   type        = map(string)
   default     = null
 }
