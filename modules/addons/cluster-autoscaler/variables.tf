@@ -21,7 +21,7 @@ variable "aws_region" {
 variable "chart_version" {
   description = "Helm chart version for cluster-autoscaler"
   type        = string
-  default     = "9.37.0"
+  default     = "9.55.0"
 }
 
 variable "tags" {

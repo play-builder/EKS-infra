@@ -1,6 +1,6 @@
 resource "aws_iam_role" "cluster_autoscaler" {
   name = "${var.cluster_name}-cluster-autoscaler"
-  tags = var.common_tags
+  tags = local.effective_tags  
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -21,7 +21,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
 resource "aws_iam_policy" "cluster_autoscaler" {
   name   = "${var.cluster_name}-cluster-autoscaler-policy"
   policy = data.aws_iam_policy_document.cluster_autoscaler.json
-  tags   = var.common_tags
+  tags   = local.effective_tags
 }
 
 resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
