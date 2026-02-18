@@ -94,7 +94,7 @@ terraform apply
 Update the version in Terraform:
 
 ```hcl
-cluster_version = "1.32"
+cluster_version = "1.35"
 
 ```
 

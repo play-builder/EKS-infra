@@ -27,69 +27,6 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
   tfbackend                                    tfbackend               tfbackend
 ```
 
-## Directory Structure
-
-```
-.
-├── environments/                    # Environment-specific Root Modules
-│   ├── dev/
-│   │   ├── config/                  # Partial Backend Configuration
-│   │   │   ├── network.tfbackend
-│   │   │   ├── eks.tfbackend
-│   │   │   ├── platform.tfbackend
-│   │   │   └── app-tier.tfbackend
-│   │   ├── 01-network/              # Layer 1: VPC, Subnets
-│   │   ├── 02-eks/                  # Layer 2: EKS Cluster, Node Groups
-│   │   ├── 03-platform/             # Layer 3: Addons (IRSA-based)
-│   │   └── 04-workloads/
-│   │       └── app-tier/            # Layer 4: Applications
-│   └── prod/                        # Production (same structure)
-│
-├── modules/                         # Reusable Terraform Modules
-│   ├── networking/
-│   │   ├── vpc/                    # VPC, Subnets, NAT, IGW
-│   │   └── security-groups/
-│   ├── compute/
-│   │   └── bastion/                 # Bastion Host
-│   ├── eks/
-│   │   ├── cluster/                 # EKS Control Plane + OIDC
-│   │   ├── node-group/              # Managed Node Groups
-│   │   └── fargate-profile/         # Fargate Profile (optional)
-│   ├── addons/
-│   │   ├── aws-load-balancer-controller/
-│   │   ├── ebs-csi-driver/
-│   │   ├── external-dns/
-│   │   ├── cluster-autoscaler/
-│   │   ├── metrics-server/
-│   │   └── container-insights/
-│   ├── iam/
-│   │   ├── irsa/                    # IRSA common pattern
-│   │   └── user-roles/
-│   ├── kubernetes/
-│   │   ├── app/                     # Deployment + Service
-│   │   └── ingress/
-│   │       └── alb-ssl/             # ALB Ingress + ACM
-│   └── security/
-│       └── acm/                     # ACM Certificate
-│
-├── scripts/
-│   ├── deploy.sh                    # Full deployment script
-│   ├── destroy.sh                   # Full destroy script
-│   └── backup-state.sh
-│
-├── terraform/
-│   └── iam-github-oidc/             # GitHub Actions OIDC configuration
-│
-├── docs/
-│   ├── architecture.md              # Detailed architecture documentation
-│   └── runbook.md                   # Operations manual
-│
-└── .github/
-    └── workflows/
-        ├── terraform-plan.yml       # Plan on PR
-        └── terraform-apply.yml      # Apply on merge to main
-```
-
 ## Quick Start
 
 ### Prerequisites
@@ -129,9 +66,14 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
 
 ## Tech Stack
 
-| Component     | Version   | Description            |
-| ------------- | --------- | ---------------------- |
-| Terraform     | >= 1.12.0  | IaC                    |
-| EKS           | 1.32      | Kubernetes             |
-| AWS Provider  | ~> 5.87.0 | Terraform Provider     |
-| Helm Provider | ~> 2.17.0 | Helm Charts Management |
+| Component                  | Version    | Description            |
+| -------------------------- | ---------- | ---------------------- |
+| Terraform                  | >= 1.12.0  | IaC                    |
+| EKS                        | 1.35       | Kubernetes             |
+| AWS Provider               | ~> 5.87.0  | Terraform Provider     |
+| Helm Provider              | ~> 2.17.0  | Helm Charts Management |
+| Cluster Autoscaler         | 9.55.0     | Node auto-scaling      |
+| Metrics Server             | 3.13.0     | Pod metrics for HPA    |
+| ADOT Collector             | EKS Addon  | Metrics collection     |
+| Amazon Managed Prometheus  | -          | Metrics storage        |
+| Amazon Managed Grafana     | -          | Dashboards & Alerts    |
