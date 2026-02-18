@@ -75,7 +75,7 @@ module "aws_load_balancer_controller" {
   ingress_class_name = var.alb_controller_ingress_class_name
   is_default_class   = var.alb_controller_is_default
 
-  common_tags = local.common_tags
+  tags = local.common_tags
 }
 
 module "external_dns" {
