@@ -9,12 +9,12 @@ The system is designed with a **4-layer model** to ensure clear ownership, secur
 
 ## Architecture Model (4 Layers)
 
-| Layer | Responsibility |
-|------|---------------|
+| Layer   | Responsibility                       |
+| ------- | ------------------------------------ |
 | Layer 1 | Network (VPC, Subnets, NAT, Routing) |
-| Layer 2 | EKS (Cluster, Node Groups, OIDC) |
-| Layer 3 | Platform (Shared Add-ons) |
-| Layer 4 | Workloads (Applications) |
+| Layer 2 | EKS (Cluster, Node Groups, OIDC)     |
+| Layer 3 | Platform (Shared Add-ons)            |
+| Layer 4 | Workloads (Applications)             |
 
 ---
 
@@ -23,13 +23,14 @@ The system is designed with a **4-layer model** to ensure clear ownership, secur
 **Purpose**: Isolate traffic, control egress, and provide a secure foundation for EKS.
 
 - VPC (`/16`)
-- Public Subnets  
+- Public Subnets
   - ALB, NAT Gateway, Bastion
-- Private Subnets  
+- Private Subnets
   - EKS Worker Nodes
 - Optional DB Subnets
 
 **NAT Strategy**
+
 - `dev`: Single NAT Gateway (cost optimized)
 - `prod`: NAT Gateway per AZ (high availability)
 
@@ -45,6 +46,7 @@ The system is designed with a **4-layer model** to ensure clear ownership, secur
 - OIDC Provider enabled (required for IRSA)
 
 **Access Control**
+
 - IAM authentication + Kubernetes RBAC
 - No direct public access to nodes
 
@@ -60,6 +62,7 @@ The system is designed with a **4-layer model** to ensure clear ownership, secur
 - EBS CSI Driver
 
 **Key Principle**
+
 - All components use **IRSA**
 - No permissions on node IAM role
 
@@ -74,6 +77,7 @@ The system is designed with a **4-layer model** to ensure clear ownership, secur
 - HPA (Horizontal Pod Autoscaler)
 
 **Responsibility**
+
 - Teams manage only this layer
 - No direct AWS IAM access required
 
@@ -111,8 +115,17 @@ permissions:
   id-token: write
   contents: read
 
+## Observability Architecture
 
+### Before (Container Insights)
+CloudWatch Agent (DaemonSet) → CloudWatch Metrics
+Fluent Bit (DaemonSet)       → CloudWatch Logs
 
+### After (ADOT + AMP + AMG)
+ADOT Collector (DaemonSet)
+  → Scrape: Pods, Nodes, kube-state-metrics
+  → Remote Write → AMP (Prometheus)
+  → AMG (Grafana) → Query AMP
 
 
 
@@ -215,3 +228,5 @@ permissions:
 
 
 
+
+```
