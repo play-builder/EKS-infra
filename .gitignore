@@ -65,6 +65,7 @@ credentials
 *.backup
 *.bak
 _BACKUP_SOURCE
+scripts
 
 # ============================================
 # IDE & OS Files

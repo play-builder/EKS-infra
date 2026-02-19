@@ -31,32 +31,119 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
 
 ### Prerequisites
 
-- Terraform >= 1.5.0
+- Terraform >= 1.12.0
 - AWS CLI (configured)
 - kubectl
 - Helm 3.x
 
 ### Deploy
 
+Deploy layers **in order** (01 → 02 → 03 → 04). Each layer depends on the previous one.
+
+> Replace `{env}` with `dev` or `prod`.
+
+#### Step 1: Network
+
 ```bash
-# Full deployment (01-network → 02-eks → 03-platform → 04-workloads)
-./scripts/deploy.sh dev
+cd environments/{env}/01-network
+rm -rf .terraform .terraform.lock.hcl
+terraform init -input=false -backend-config=../config/network.tfbackend -reconfigure
+terraform fmt -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform apply -auto-approve tfplan
+```
 
-# Deploy specific layer only
-./scripts/deploy.sh dev -l 02-eks
+#### Step 2: EKS
 
-# Dry-run (output commands only)
-./scripts/deploy.sh dev -d
+```bash
+cd environments/{env}/02-eks
+rm -rf .terraform .terraform.lock.hcl
+terraform init -input=false -backend-config=../config/eks.tfbackend -reconfigure
+terraform fmt -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform apply -auto-approve tfplan
+```
+
+After EKS is deployed, update your kubeconfig:
+
+```bash
+aws eks update-kubeconfig \
+  --region us-east-1 \
+  --name "$(terraform output -raw cluster_name)"
+
+kubectl get nodes
+```
+
+#### Step 3: Platform
+
+```bash
+cd environments/{env}/03-platform
+rm -rf .terraform .terraform.lock.hcl
+terraform init -input=false -backend-config=../config/platform.tfbackend -reconfigure
+terraform fmt -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform apply -auto-approve tfplan
+```
+
+Verify add-ons:
+
+```bash
+kubectl get pods -n kube-system
+```
+
+#### Step 4: Workloads
+
+```bash
+cd environments/{env}/04-workloads/app-tier
+rm -rf .terraform .terraform.lock.hcl
+terraform init -input=false -backend-config=../../config/app-tier.tfbackend -reconfigure
+terraform fmt -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform apply -auto-approve tfplan
 ```
 
 ### Destroy
 
-```bash
-# Full destroy (reverse: 04 → 03 → 02 → 01)
-./scripts/destroy.sh dev
+> **⚠️ Destroy in REVERSE order only (04 → 03 → 02 → 01).** Never destroy Network first — it will leave orphaned resources.
 
-# Destroy specific layer only
-./scripts/destroy.sh dev -l 03-platform
+#### Step 1: Workloads
+
+```bash
+cd environments/{env}/04-workloads/app-tier
+rm -rf .terraform .terraform.lock.hcl
+terraform init -input=false -backend-config=../../config/app-tier.tfbackend -reconfigure
+terraform destroy -auto-approve
+```
+
+#### Step 2: Platform
+
+```bash
+cd environments/{env}/03-platform
+rm -rf .terraform .terraform.lock.hcl
+terraform init -input=false -backend-config=../config/platform.tfbackend -reconfigure
+terraform destroy -auto-approve
+```
+
+#### Step 3: EKS
+
+```bash
+cd environments/{env}/02-eks
+rm -rf .terraform .terraform.lock.hcl
+terraform init -input=false -backend-config=../config/eks.tfbackend -reconfigure
+terraform destroy -auto-approve
+```
+
+#### Step 4: Network
+
+```bash
+cd environments/{env}/01-network
+rm -rf .terraform .terraform.lock.hcl
+terraform init -input=false -backend-config=../config/network.tfbackend -reconfigure
+terraform destroy -auto-approve
 ```
 
 ## Documentation
@@ -66,14 +153,14 @@ Layer 1: Network        Layer 2: EKS           Layer 3: Platform       Layer 4: 
 
 ## Tech Stack
 
-| Component                  | Version    | Description            |
-| -------------------------- | ---------- | ---------------------- |
-| Terraform                  | >= 1.12.0  | IaC                    |
-| EKS                        | 1.35       | Kubernetes             |
-| AWS Provider               | ~> 5.87.0  | Terraform Provider     |
-| Helm Provider              | ~> 2.17.0  | Helm Charts Management |
-| Cluster Autoscaler         | 9.55.0     | Node auto-scaling      |
-| Metrics Server             | 3.13.0     | Pod metrics for HPA    |
-| ADOT Collector             | EKS Addon  | Metrics collection     |
-| Amazon Managed Prometheus  | -          | Metrics storage        |
-| Amazon Managed Grafana     | -          | Dashboards & Alerts    |
+| Component                 | Version   | Description            |
+| ------------------------- | --------- | ---------------------- |
+| Terraform                 | >= 1.12.0 | IaC                    |
+| EKS                       | 1.35      | Kubernetes             |
+| AWS Provider              | ~> 5.87.0 | Terraform Provider     |
+| Helm Provider             | ~> 2.17.0 | Helm Charts Management |
+| Cluster Autoscaler        | 9.55.0    | Node auto-scaling      |
+| Metrics Server            | 3.13.0    | Pod metrics for HPA    |
+| ADOT Collector            | EKS Addon | Metrics collection     |
+| Amazon Managed Prometheus | -         | Metrics storage        |
+| Amazon Managed Grafana    | -         | Dashboards & Alerts    |
