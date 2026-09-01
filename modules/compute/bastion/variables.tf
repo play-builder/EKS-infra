@@ -29,8 +29,8 @@ variable "ssh_cidr_blocks" {
   type        = list(string)
   default     = []
 
-    validation {
-    condition = !contains(var.ssh_cidr_blocks, "0.0.0.0/0")
+  validation {
+    condition     = !contains(var.ssh_cidr_blocks, "0.0.0.0/0")
     error_message = "SSH access must not be open to 0.0.0.0/0. Specify exact office/VPN CIDR blocks."
   }
 }

@@ -11,7 +11,7 @@ locals {
   map_roles = [
     for role_arn in var.readonly_iam_roles : {
       rolearn  = role_arn
-      username = element(split("/", role_arn), length(split("/", role_arn)) - 1)  # Extract role name safely
+      username = element(split("/", role_arn), length(split("/", role_arn)) - 1) # Extract role name safely
       groups   = ["view"]
     }
   ]

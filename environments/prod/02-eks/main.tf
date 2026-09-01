@@ -44,6 +44,10 @@ module "eks_cluster" {
   cluster_endpoint_public_access       = var.cluster_endpoint_public_access
   cluster_endpoint_public_access_cidrs = var.cluster_endpoint_public_access_cidrs
 
+  authentication_mode                         = var.authentication_mode
+  bootstrap_cluster_creator_admin_permissions = var.bootstrap_cluster_creator_admin_permissions
+  cluster_admin_principal_arns                = var.cluster_admin_principal_arns
+
   cluster_enabled_log_types     = var.cluster_enabled_log_types
   cluster_log_retention_in_days = var.cluster_log_retention_in_days
 

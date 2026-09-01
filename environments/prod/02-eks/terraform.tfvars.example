@@ -1,0 +1,24 @@
+aws_region   = "us-east-1"
+project_name = "playdevops"
+environment  = "prod"
+cluster_name = "prod-playdevops-eks"
+
+cluster_version                            = "1.36"
+authentication_mode                        = "API"
+bootstrap_cluster_creator_admin_permissions = false
+cluster_admin_principal_arns = [
+  "arn:aws:iam::123456789012:role/AWSReservedSSO_AdministratorAccess_REPLACE_ME",
+]
+
+cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
+
+enable_bastion            = false
+enable_public_node_group  = false
+enable_private_node_group = true
+
+private_node_group_desired_size  = 3
+private_node_group_min_size      = 3
+private_node_group_max_size      = 6
+private_node_group_instance_types = ["m7i.large"]
+
+bastion_instance_keypair = ""

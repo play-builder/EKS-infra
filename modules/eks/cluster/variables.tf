@@ -12,11 +12,39 @@ variable "cluster_name" {
 variable "cluster_version" {
   description = "Kubernetes version to use for the EKS cluster"
   type        = string
-  default     = "1.35"
+  default     = "1.36"
 
   validation {
     condition     = can(regex("^1\\.(3[0-9])$", var.cluster_version))
     error_message = "cluster_version must be 1.30 or higher. Versions below 1.30 are EOL."
+  }
+}
+
+variable "authentication_mode" {
+  description = "EKS authentication mode. This course uses Access Entry API instead of aws-auth."
+  type        = string
+  default     = "API"
+
+  validation {
+    condition     = contains(["API", "API_AND_CONFIG_MAP"], var.authentication_mode)
+    error_message = "authentication_mode must be API or API_AND_CONFIG_MAP."
+  }
+}
+
+variable "bootstrap_cluster_creator_admin_permissions" {
+  description = "Grant the creating principal automatic cluster-admin permissions"
+  type        = bool
+  default     = false
+}
+
+variable "cluster_admin_principal_arns" {
+  description = "Explicit IAM principals granted AmazonEKSClusterAdminPolicy through Access Entries"
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.cluster_admin_principal_arns : can(regex("^arn:aws(-[a-z]+)?:iam::[0-9]{12}:(role|user)/", arn))])
+    error_message = "Every cluster admin principal must be an IAM role or user ARN."
   }
 }
 

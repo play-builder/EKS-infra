@@ -1,7 +1,7 @@
 resource "aws_iam_role" "fargate_pod_execution" {
   name = "${var.cluster_name}-${var.fargate_profile_name}-role"
   tags = var.common_tags
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

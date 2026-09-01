@@ -57,13 +57,13 @@ variable "enable_nat_gateway" {
 variable "single_nat_gateway" {
   description = "Use single NAT Gateway for all AZs (false for HA in Production)"
   type        = bool
-  default     = false 
+  default     = false
 }
 
 variable "one_nat_gateway_per_az" {
   description = "One NAT Gateway per AZ (true for HA in Production)"
   type        = bool
-  default     = true 
+  default     = true
 }
 
 variable "enable_dns_hostnames" {

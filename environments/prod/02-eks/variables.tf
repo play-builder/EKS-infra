@@ -31,7 +31,25 @@ variable "cluster_name" {
 variable "cluster_version" {
   description = "Kubernetes version to use for the EKS cluster"
   type        = string
-  default     = "1.35"
+  default     = "1.36"
+}
+
+variable "authentication_mode" {
+  description = "EKS authentication mode"
+  type        = string
+  default     = "API"
+}
+
+variable "bootstrap_cluster_creator_admin_permissions" {
+  description = "Automatically grant cluster admin to the Terraform caller"
+  type        = bool
+  default     = false
+}
+
+variable "cluster_admin_principal_arns" {
+  description = "Explicit IAM principals granted cluster-admin through Access Entries"
+  type        = set(string)
+  default     = []
 }
 
 variable "cluster_service_ipv4_cidr" {

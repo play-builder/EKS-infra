@@ -1,0 +1,26 @@
+aws_region   = "us-east-1"
+project_name = "playdevops"
+environment  = "dev"
+cluster_name = "dev-playdevops-eks"
+
+cluster_version                            = "1.36"
+authentication_mode                        = "API"
+bootstrap_cluster_creator_admin_permissions = false
+cluster_admin_principal_arns = [
+  "arn:aws:iam::123456789012:role/AWSReservedSSO_AdministratorAccess_REPLACE_ME",
+]
+
+# Replace with the operator's public IP. Never use 0.0.0.0/0 for the course.
+cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
+
+enable_bastion            = false
+enable_public_node_group  = false
+enable_private_node_group = true
+
+private_node_group_desired_size  = 2
+private_node_group_min_size      = 2
+private_node_group_max_size      = 4
+private_node_group_instance_types = ["t3.large"]
+
+# Required by the module even when the bastion is disabled; leave empty.
+bastion_instance_keypair = ""

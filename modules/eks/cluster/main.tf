@@ -55,6 +55,11 @@ resource "aws_eks_cluster" "cluster" {
   role_arn = aws_iam_role.cluster.arn
   version  = var.cluster_version
 
+  access_config {
+    authentication_mode                         = var.authentication_mode
+    bootstrap_cluster_creator_admin_permissions = var.bootstrap_cluster_creator_admin_permissions
+  }
+
   vpc_config {
     subnet_ids = concat(
       var.public_subnet_ids,
@@ -86,9 +91,9 @@ resource "aws_eks_cluster" "cluster" {
   ]
 }
 resource "aws_iam_openid_connect_provider" "cluster" {
-  client_id_list = ["sts.amazonaws.com"]
+  client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = []
-  url            = aws_eks_cluster.cluster.identity[0].oidc[0].issuer
+  url             = aws_eks_cluster.cluster.identity[0].oidc[0].issuer
 
   tags = merge(
     var.tags,
@@ -126,3 +131,24 @@ resource "aws_eks_access_policy_association" "cluster_creator" {
   depends_on = [aws_eks_access_entry.cluster_creator]
 }
 
+resource "aws_eks_access_entry" "cluster_admin" {
+  for_each = var.cluster_admin_principal_arns
+
+  cluster_name  = aws_eks_cluster.cluster.name
+  principal_arn = each.value
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "cluster_admin" {
+  for_each = var.cluster_admin_principal_arns
+
+  cluster_name  = aws_eks_cluster.cluster.name
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = each.value
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.cluster_admin]
+}

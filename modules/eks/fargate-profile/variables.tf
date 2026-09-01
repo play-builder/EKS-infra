@@ -15,7 +15,7 @@ variable "subnet_ids" {
 
 variable "selectors" {
   description = "List of selectors (namespace/labels) for Fargate Pods"
-  type        = list(object({
+  type = list(object({
     namespace = string
     labels    = map(string)
   }))
