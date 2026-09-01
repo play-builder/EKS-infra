@@ -1,5 +1,5 @@
 bucket       = "playdevops-infra-tf-prod"
-key          = "prod/04-workloads/app-tier/terraform.tfstate"
+key          = "prod/04-workloads/argocd/terraform.tfstate"
 region       = "us-east-1"
 encrypt      = true
 use_lockfile = true

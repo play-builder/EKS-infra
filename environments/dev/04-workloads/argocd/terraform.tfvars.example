@@ -1,0 +1,9 @@
+aws_region   = "us-east-1"
+project_name = "playdevops"
+environment  = "dev"
+
+gitops_repo_url        = "https://github.com/REPLACE_ME/argocd-gitops.git"
+gitops_target_revision = "main"
+
+# First apply with false. Set true after the repository exists and is reachable.
+enable_bootstrap = false
