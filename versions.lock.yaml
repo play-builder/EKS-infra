@@ -1,0 +1,28 @@
+schemaVersion: 1
+verifiedAt: "2026-09-01"
+
+tooling:
+  terraform: "1.15.9"
+  awsProvider: "5.87.0"
+
+kubernetes:
+  eks: "1.36"
+
+delivery:
+  helmCli: "4.2.4"
+  argoCdChart: "10.4.3"
+  argoCdController: "3.5.2"
+  argoRolloutsChart: "2.42.0"
+  argoRolloutsController: "1.9.1"
+  gatewayApi: "1.6.0"
+  awsLoadBalancerControllerChart: "3.5.0"
+  awsLoadBalancerController: "3.5.0"
+  gatewayApiTrafficRouterPlugin: "0.16.0"
+  externalSecretsChart: "2.10.0"
+
+platform:
+  externalDnsChart: "1.21.1"
+  metricsServerChart: "3.14.0"
+  certManagerChart: "v1.21.1"
+  certManagerChartDigest: "sha256:15c0b46d9006ce8eb9ff14d1bf54d1bbfcc587bb9e24cd9fe186fb8fec56af1f"
+  adotCollector: "0.49.0"
