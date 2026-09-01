@@ -1,186 +1,143 @@
-# EKS Infrastructure Runbook
+# EKS 운영 Runbook
 
-> **Minimal operational guide for Amazon EKS deployed via Terraform.** > **Audience:** DevOps / Platform Engineers
+## 핵심 요약
 
----
+항상 `01 → 02 → 03 → 04` 순서로 적용하고 `04 → 03 → 02 → 01` 역순으로 제거합니다.
+장애 대응 전에는 AWS identity, kube context, 대상 environment를 먼저 확인합니다.
 
-**Verify AWS identity:**
+## 안전 확인
 
 ```bash
 aws sts get-caller-identity
-
+kubectl config current-context
+kubectl cluster-info
 ```
 
----
+prod 작업 전에는 출력의 account ID와 cluster name을 작업 티켓의 값과 대조합니다.
 
-## 🚀 Terraform Deployment Order
-
-**Always deploy layers in the following order.** Terraform is the single source of truth.
-
-1. `01-network`
-2. `02-eks`
-3. `03-platform`
-4. `04-workloads`
-
----
-
-## 🔗 Connect to EKS (MANDATORY)
-
-After the EKS layer (`02-eks`) is applied, the local kubeconfig must be updated to interact with the cluster.
-
-**Update Kubeconfig:**
+## 클러스터 접속
 
 ```bash
 aws eks update-kubeconfig \
   --region us-east-1 \
-  --name "$(terraform output -raw cluster_name)"
+  --name dev-playdevops-eks \
+  --alias course-dev
 
+kubectl --context course-dev get nodes
 ```
 
-**Validate access:**
+prod는 cluster name과 alias를 각각 `prod-playdevops-eks`, `course-prod`로 바꿉니다.
 
-If this step is skipped, the cluster is unreachable via kubectl.
+## 계층 상태 확인
 
 ```bash
-kubectl get nodes
-kubectl get pods -A
-
+terraform -chdir=environments/dev/01-network output
+terraform -chdir=environments/dev/02-eks output
+terraform -chdir=environments/dev/03-platform output
+terraform -chdir=environments/dev/04-workloads/argocd output
 ```
-
----
-
-## ✅ Platform Add-ons Check
-
-After deploying `03-platform`, verify that all critical add-ons are operational.
-
-**Check Pod Status:**
 
 ```bash
-kubectl get pods -n kube-system
-
+kubectl --context course-dev -n kube-system get pods
+kubectl --context course-dev -n argocd get application
+kubectl --context course-dev get gateway,httproute -A
+kubectl --context course-dev get externalsecret -A
 ```
 
-**Required components (All must be `Running`):**
-
-- `aws-load-balancer-controller`
-- `external-dns`
-- `aws-ebs-csi-driver`
-- `cluster-autoscaler`
-
----
-
-## ⚙️ Common Day-2 Operations
-
-### Scale Node Group (Terraform)
-
-Modify your `variables.tf` or `tfvars`:
-
-```hcl
-node_group_desired_size = 3
-node_group_min_size     = 2
-node_group_max_size     = 5
-
-```
-
-Apply changes:
+## Nodes가 join하지 못할 때
 
 ```bash
-terraform apply
-
-```
-
-### Upgrade EKS Version
-
-Update the version in Terraform:
-
-```hcl
-cluster_version = "1.35"
-
-```
-
-Apply changes (Node groups will follow automatically):
-
-```bash
-terraform apply
-
-```
-
-### Update Platform Add-ons
-
-Navigate to the platform layer directory:
-
-```bash
-cd environments/dev/03-platform
-terraform apply
-
-```
-
----
-
-## 🔧 Quick Troubleshooting
-
-### `kubectl` not working
-
-Refesh your kubeconfig token:
-
-```bash
-aws eks update-kubeconfig \
+aws eks describe-nodegroup \
   --region us-east-1 \
-  --name "$(terraform output -raw cluster_name)"
-
+  --cluster-name dev-playdevops-eks \
+  --nodegroup-name dev-playdevops-node-group
 ```
 
-### Nodes not joining
+확인 순서:
 
-Check the following:
+1. Node group health issue code
+2. private subnet route와 NAT egress
+3. node IAM role의 EKS worker/ECR pull policy
+4. security group의 cluster-to-node 통신
+5. EKS Access Entry는 사용자 접근용이며 node bootstrap 문제와 혼동하지 않음
 
-1. Node Group status in AWS Console/CLI.
-2. Subnet tags (ensure private subnets are tagged correctly).
-3. `aws-auth` ConfigMap:
+## Gateway가 Programmed되지 않을 때
 
 ```bash
-kubectl describe configmap aws-auth -n kube-system
-
+kubectl --context course-dev describe gateway sample-app -n app-dev
+kubectl --context course-dev describe httproute sample-app -n app-dev
+kubectl --context course-dev -n kube-system logs \
+  deploy/aws-load-balancer-controller --since=15m
 ```
 
-### ALB not created
+`Accepted`, `Programmed`, `ResolvedRefs` condition과 subnet tag, LBC IRSA, Gateway CRD/controller
+버전을 확인합니다. ALB가 생성됐는데 DNS만 실패하면 ExternalDNS log와 hosted-zone filter를
+분리해 진단합니다.
 
-Check logs for the Load Balancer Controller:
+## AMP 수집 또는 분석이 실패할 때
 
 ```bash
-kubectl logs -n kube-system \
-  -l app.kubernetes.io/name=aws-load-balancer-controller
-
+kubectl --context course-prod -n opentelemetry-operator-system get opentelemetrycollector
+kubectl --context course-prod -n opentelemetry-operator-system logs \
+  -l app.kubernetes.io/name=adot-collector-prometheus --since=15m
+kubectl --context course-prod -n argo-rollouts logs deploy/argo-rollouts --since=15m
+kubectl --context course-prod -n app-prod get analysisrun
 ```
 
-**Verify:**
+- ADOT: `aps:RemoteWrite` IRSA와 workspace endpoint 확인
+- Rollouts: `aps:QueryMetrics` IRSA와 native SigV4 region 확인
+- PromQL: 최신 ReplicaSet의 `rollouts_pod_template_hash` label과 request rate 확인
+- `Error`: 인증·timeout·query 문제, `Failed`: 측정값이 threshold 미달인 문제로 구분
 
-- Ingress annotations are correct.
-- IRSA role is correctly attached to the ServiceAccount.
+분석 장애를 이유로 바로 수동 승격하지 않습니다. 실제 서비스 정상성과 지표 경로 장애가
+분리 확인되고 incident commander가 승인한 경우에만 다음 명령을 사용합니다.
 
----
-
-## 🔐 CI/CD Authentication
-
-GitHub Actions uses **OIDC** for authentication. No static AWS credentials are allowed.
-
-**Required permissions in Workflow YAML:**
-
-```yaml
-permissions:
-  id-token: write
-  contents: read
+```bash
+kubectl argo rollouts promote sample-app -n app-prod
 ```
 
----
+## OutOfSync 반복
 
-## ⚠️ Safe Teardown Rule
+HPA가 활성화된 chart는 `spec.replicas`를 렌더하지 않습니다. prod Canary 동안 Rollouts plugin이
+수정하는 `HTTPRoute.spec.rules`만 조건부로 ignore합니다. 리소스 전체를 ignore하지 않습니다.
 
-**DESTROY IN REVERSE ORDER ONLY.**
+```bash
+argocd app diff sample-app-prod
+kubectl --context course-prod -n app-prod get httproute sample-app -o yaml
+kubectl --context course-prod -n app-prod get rollout sample-app -o yaml
+```
 
-1. `04-workloads`
-2. `03-platform`
-3. `02-eks`
-4. `01-network`
+## 안전한 rollback
 
-> **WARNING:** Never destroy the `01-network` layer first. Doing so will leave orphaned resources.
+GitOps desired state가 권위입니다. 정상 digest 커밋을 되돌린 후 Argo CD가 동기화하도록 합니다.
+
+```bash
+git log --oneline -- envs/prod/values.yaml
+git revert <bad-promotion-commit>
+```
+
+즉시 트래픽을 안정 ReplicaSet으로 돌려야 할 때:
+
+```bash
+kubectl argo rollouts abort sample-app -n app-prod
+kubectl argo rollouts status sample-app -n app-prod --watch
+```
+
+CLI 조치는 긴급 복구이며 Git의 desired state도 반드시 일치시켜 drift를 제거합니다.
+
+## Upgrade 원칙
+
+EKS는 한 minor씩 올리고 control plane → add-on compatibility → node group 순으로 검증합니다.
+현재 계약 버전은 `versions.lock.yaml`을 수정하고, dev에서 runtime 검증한 뒤 prod PR로
+승격합니다. runbook에 버전 숫자를 중복 하드코딩하지 않습니다.
+
+## 제거와 비용
+
+1. GitOps Application과 Gateway를 삭제합니다.
+2. ALB와 target group 삭제를 확인합니다.
+3. `04 → 03 → 02 → 01` 순서로 destroy합니다.
+4. prod와 dev state를 각각 확인합니다.
+
+NAT Gateway, EKS control plane, EC2 node, ALB, AMP는 실행 시간 동안 비용이 발생합니다.
+ECR은 `force_delete=false`, Secrets Manager는 recovery window를 사용하므로 별도 정리가 필요할
+수 있습니다.
