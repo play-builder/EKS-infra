@@ -65,7 +65,7 @@ variable "enable_alb_controller" {
 variable "alb_controller_chart_version" {
   description = "Helm chart version"
   type        = string
-  default     = ""
+  default     = "3.5.0"
 }
 
 variable "alb_controller_image_repository" {
@@ -95,7 +95,7 @@ variable "enable_external_dns" {
 variable "external_dns_chart_version" {
   description = "Helm chart version"
   type        = string
-  default     = "1.14.5"
+  default     = "1.21.1"
 }
 
 variable "external_dns_domain_filters" {
@@ -113,19 +113,19 @@ variable "enable_metrics_server" {
 variable "metrics_server_chart_version" {
   description = "Metrics Server Helm chart version"
   type        = string
-  default     = "3.13.0"
+  default     = "3.14.0"
 }
 
 variable "enable_cluster_autoscaler" {
   description = "Enable Cluster Autoscaler installation"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "cluster_autoscaler_chart_version" {
   description = "Cluster Autoscaler Helm chart version"
   type        = string
-  default     = "9.55.0"
+  default     = "9.59.0"
 }
 
 variable "enable_container_insights" {
@@ -176,7 +176,7 @@ variable "amp_retention_days" {
 variable "enable_amg" {
   description = "Enable Amazon Managed Grafana"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "amg_authentication_providers" {

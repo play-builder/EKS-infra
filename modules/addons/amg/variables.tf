@@ -17,7 +17,7 @@ variable "authentication_providers" {
 }
 
 variable "amp_workspace_id" {
-  description = "AMP workspace ID to configure as datasource"
+  description = "AMP workspace ID retained for caller compatibility; service-managed discovery uses IAM"
   type        = string
   default     = ""
 }

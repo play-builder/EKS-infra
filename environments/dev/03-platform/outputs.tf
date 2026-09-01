@@ -1,126 +1,21 @@
-output "ebs_csi_driver_iam_role_arn" {
-  description = "IAM Role ARN for EBS CSI Driver"
-  value       = var.enable_ebs_csi_driver ? module.ebs_csi_driver[0].iam_role_arn : null
-}
-
-output "ebs_csi_driver_addon_id" {
-  description = "EBS CSI Driver add-on ID"
-  value       = var.enable_ebs_csi_driver ? module.ebs_csi_driver[0].addon_id : null
-}
-
 output "acm_certificate_arn" {
-  description = "The ARN of the public wildcard ACM certificate"
+  description = "Wildcard ACM certificate ARN used when HTTPS is enabled"
   value       = module.acm.acm_certificate_arn
 }
 
-output "ebs_csi_driver_addon_version" {
-  description = "EBS CSI Driver add-on version"
-  value       = var.enable_ebs_csi_driver ? module.ebs_csi_driver[0].addon_version : null
-}
-
-output "ebs_csi_verification_commands" {
-  description = "Shell commands to verify EBS CSI Driver; run manually or via script if enable_ebs_csi_driver = true"
-  value       = <<-EOT
-    aws eks list-addons --cluster-name ${local.eks_cluster_name}
-    aws eks describe-addon --cluster-name ${local.eks_cluster_name} --addon-name aws-ebs-csi-driver
-    kubectl -n kube-system get pods -l app.kubernetes.io/name=aws-ebs-csi-driver
-    kubectl -n kube-system get deploy ebs-csi-controller
-    kubectl -n kube-system get ds ebs-csi-node
-    kubectl -n kube-system get sa ebs-csi-controller-sa
-    kubectl -n kube-system get sa ebs-csi-controller-sa -o jsonpath='{.metadata.annotations.eks\\.amazonaws\\.com/role-arn}'
-    kubectl get storageclass
-    kubectl get sc ebs-sc
-    cat <<EOF | kubectl apply -f -
-    apiVersion: v1
-    kind: PersistentVolumeClaim
-    metadata:
-      name: test-ebs-pvc
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      storageClassName: gp3
-      resources:
-        requests:
-          storage: 1Gi
-    EOF
-    kubectl get pvc test-ebs-pvc
-    kubectl get pv
-    kubectl delete pvc test-ebs-pvc
-  EOT
+output "ebs_csi_driver_iam_role_arn" {
+  description = "IAM role for the EBS CSI controller"
+  value       = var.enable_ebs_csi_driver ? module.ebs_csi_driver[0].iam_role_arn : null
 }
 
 output "alb_controller_iam_role_arn" {
-  description = "IAM Role ARN for AWS Load Balancer Controller"
+  description = "IAM role for AWS Load Balancer Controller"
   value       = var.enable_alb_controller ? module.aws_load_balancer_controller[0].iam_role_arn : null
 }
 
-output "alb_controller_helm_release_name" {
-  description = "Helm release name for AWS Load Balancer Controller"
-  value       = var.enable_alb_controller ? module.aws_load_balancer_controller[0].helm_release_name : null
-}
-
 output "alb_controller_helm_release_status" {
-  description = "Helm release status for AWS Load Balancer Controller"
+  description = "AWS Load Balancer Controller Helm release status"
   value       = var.enable_alb_controller ? module.aws_load_balancer_controller[0].helm_release_status : null
-}
-
-output "alb_controller_verification_commands" {
-  description = "Shell commands to verify AWS Load Balancer Controller (if enabled)"
-
-  value = <<-EOT
-  %{if var.enable_alb_controller}
-  kubectl -n kube-system get deployment aws-load-balancer-controller
-  kubectl -n kube-system describe deployment aws-load-balancer-controller
-
-  kubectl -n kube-system get pods -l app.kubernetes.io/name=aws-load-balancer-controller
-
-  kubectl -n kube-system get sa aws-load-balancer-controller
-  kubectl -n kube-system describe sa aws-load-balancer-controller
-
-  kubectl -n kube-system get sa aws-load-balancer-controller \\
-    -o jsonpath='{.metadata.annotations.eks\\.amazonaws\\.com/role-arn}'
-
-  kubectl -n kube-system get svc aws-load-balancer-webhook-service
-  kubectl -n kube-system describe svc aws-load-balancer-webhook-service
-
-  kubectl get ingressclass
-  kubectl describe ingressclass ${var.alb_controller_ingress_class_name}
-
-  kubectl -n kube-system logs -l app.kubernetes.io/name=aws-load-balancer-controller --tail=50
-
-  cat <<EOF | kubectl apply -f -
-  apiVersion: networking.k8s.io/v1
-  kind: Ingress
-  metadata:
-    name: test-ingress
-    annotations:
-      alb.ingress.kubernetes.io/scheme: internet-facing
-      alb.ingress.kubernetes.io/target-type: ip
-  spec:
-    ingressClassName: ${var.alb_controller_ingress_class_name}
-    rules:
-      - http:
-          paths:
-            - path: /
-              pathType: Prefix
-              backend:
-                service:
-                  name: test-service
-                  port:
-                    number: 80
-  EOF
-
-  kubectl get ingress test-ingress
-  kubectl describe ingress test-ingress
-  kubectl delete ingress test-ingress
-  %{else}
-  %{endif}
-  EOT
-}
-
-output "ingress_class_name" {
-  description = "AWS ALB IngressClass name"
-  value       = length(module.aws_load_balancer_controller) > 0 ? module.aws_load_balancer_controller[0].ingress_class_name : null
 }
 
 output "metrics_server_release_name" {
@@ -128,39 +23,41 @@ output "metrics_server_release_name" {
   value       = var.enable_metrics_server ? module.metrics_server[0].helm_release_name : null
 }
 
-output "cluster_autoscaler_iam_role_arn" {
-  description = "Cluster Autoscaler IAM Role ARN"
-  value       = var.enable_cluster_autoscaler ? module.cluster_autoscaler[0].iam_role_arn : null
-}
-
-output "container_insights_namespace" {
-  description = "DEPRECATED: Container Insights namespace"
-  value       = var.enable_container_insights ? module.container_insights[0].namespace : null
-}
-
-# NEW: Observability Stack Outputs
-
 output "amp_workspace_id" {
-  description = "Amazon Managed Prometheus workspace ID"
+  description = "Environment-local AMP workspace ID"
   value       = var.enable_amp ? module.amp[0].workspace_id : null
 }
 
 output "amp_workspace_endpoint" {
-  description = "AMP workspace Prometheus endpoint for remote write"
+  description = "AMP Prometheus endpoint used by ADOT and Argo Rollouts"
   value       = var.enable_amp ? module.amp[0].workspace_prometheus_endpoint : null
 }
 
-output "adot_collector_addon_version" {
-  description = "ADOT Collector EKS addon version"
+output "adot_collector_role_arn" {
+  description = "Least-privilege ADOT remote-write role"
+  value       = var.enable_adot_collector ? module.adot_collector[0].iam_role_arn : null
+}
+
+output "adot_addon_version" {
+  description = "ADOT EKS add-on version selected by AWS"
   value       = var.enable_adot_collector ? module.adot_collector[0].addon_version : null
 }
 
 output "amg_workspace_endpoint" {
-  description = "Amazon Managed Grafana workspace endpoint"
+  description = "Optional Amazon Managed Grafana endpoint"
   value       = var.enable_amg ? module.amg[0].workspace_endpoint : null
 }
 
-output "amg_workspace_id" {
-  description = "Amazon Managed Grafana workspace ID"
-  value       = var.enable_amg ? module.amg[0].workspace_id : null
+output "verification_commands" {
+  description = "Read-only commands for platform readiness"
+  value       = <<-EOT
+    kubectl -n kube-system get deploy aws-load-balancer-controller
+    kubectl -n kube-system get deploy external-dns
+    kubectl -n kube-system get deploy metrics-server
+    kubectl get crd gateways.gateway.networking.k8s.io
+    kubectl get crd loadbalancerconfigurations.gateway.k8s.aws
+    kubectl -n opentelemetry-operator-system get opentelemetrycollector
+    kubectl -n opentelemetry-operator-system get pods
+  EOT
 }
+

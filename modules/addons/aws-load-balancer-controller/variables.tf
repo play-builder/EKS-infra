@@ -44,7 +44,7 @@ variable "service_account_name" {
 variable "helm_chart_version" {
   description = "AWS Load Balancer Controller Helm chart version"
   type        = string
-  default     = "1.14.5"
+  default     = "3.5.0"
 }
 
 variable "ecr_account_id" {
@@ -90,6 +90,18 @@ variable "enable_wafv2" {
 
 variable "enable_shield" {
   description = "Enable AWS Shield integration"
+  type        = bool
+  default     = false
+}
+
+variable "enable_alb_gateway_api" {
+  description = "Enable the L7 Gateway API controller"
+  type        = bool
+  default     = true
+}
+
+variable "enable_nlb_gateway_api" {
+  description = "Enable the L4 Gateway API controller"
   type        = bool
   default     = false
 }

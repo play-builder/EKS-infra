@@ -28,7 +28,7 @@ locals {
     {
       Environment = var.environment
       Project     = var.project_name
-      division    = var.division  
+      division    = var.division
       ManagedBy   = "Terraform"
       Layer       = "platform"
     }
@@ -76,6 +76,11 @@ module "aws_load_balancer_controller" {
   is_default_class   = var.alb_controller_is_default
 
   tags = local.common_tags
+
+  depends_on = [
+    kubectl_manifest.gateway_api,
+    kubectl_manifest.aws_lbc_gateway,
+  ]
 }
 
 module "external_dns" {
@@ -93,6 +98,8 @@ module "external_dns" {
 
   namespace     = "kube-system"
   chart_version = var.external_dns_chart_version
+  sources       = ["service", "gateway-httproute"]
+  policy        = "upsert-only"
 
   tags = local.common_tags
 }
@@ -127,7 +134,7 @@ module "cluster_autoscaler" {
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
 
   chart_version = var.cluster_autoscaler_chart_version
-  tags   = local.common_tags
+  tags          = local.common_tags
 
   depends_on = [module.metrics_server]
 }
@@ -170,6 +177,7 @@ module "adot_collector" {
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
 
   amp_workspace_endpoint = var.enable_amp ? module.amp[0].workspace_prometheus_endpoint : ""
+  amp_workspace_arn      = var.enable_amp ? module.amp[0].workspace_arn : "*"
 
   tags = local.common_tags
 

@@ -1,0 +1,22 @@
+aws_region   = "us-east-1"
+project_name = "playdevops"
+environment  = "dev"
+
+acm_domain_name = "example.com"
+hosted_zone_id  = "Z_REPLACE_ME"
+
+enable_alb_controller = true
+enable_external_dns   = true
+enable_metrics_server = true
+enable_amp            = true
+enable_adot_collector = true
+
+# The available chart release targets Kubernetes 1.35; keep it off for EKS 1.36.
+enable_cluster_autoscaler = false
+enable_amg                = false
+
+enable_course_resources          = true
+enable_gateway_api               = true
+course_application_namespace     = "app-dev"
+secret_recovery_window_in_days   = 7
+external_dns_domain_filters      = ["example.com"]

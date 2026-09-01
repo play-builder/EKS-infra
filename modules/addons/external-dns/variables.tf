@@ -21,7 +21,7 @@ variable "oidc_provider" {
 variable "chart_version" {
   description = "Helm chart version for external-dns"
   type        = string
-  default     = "1.14.5"
+  default     = "1.21.1"
 }
 
 variable "hosted_zone_id" {
@@ -44,4 +44,21 @@ variable "tags" {
   description = "Common tags"
   type        = map(string)
   default     = {}
+}
+
+variable "sources" {
+  description = "Kubernetes resource sources watched by ExternalDNS"
+  type        = list(string)
+  default     = ["service", "gateway-httproute"]
+}
+
+variable "policy" {
+  description = "ExternalDNS record update policy"
+  type        = string
+  default     = "upsert-only"
+
+  validation {
+    condition     = contains(["create-only", "upsert-only", "sync"], var.policy)
+    error_message = "policy must be create-only, upsert-only, or sync."
+  }
 }

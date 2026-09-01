@@ -23,7 +23,7 @@ resource "aws_iam_role" "adot" {
   tags = merge(var.tags, { Name = "${var.eks_cluster_name}-adot-collector-role" })
 }
 
-# --- IAM Policy: AMP Remote Write + CloudWatch ---
+# The collector only writes metrics to this environment's AMP workspace.
 resource "aws_iam_role_policy" "adot" {
   name = "${var.eks_cluster_name}-adot-collector-policy"
   role = aws_iam_role.adot.id
@@ -35,58 +35,107 @@ resource "aws_iam_role_policy" "adot" {
         Sid    = "AMPRemoteWrite"
         Effect = "Allow"
         Action = [
-          "aps:RemoteWrite",
-          "aps:GetSeries",
-          "aps:GetLabels",
-          "aps:GetMetricMetadata"
+          "aps:RemoteWrite"
         ]
-        Resource = "*"
-      },
-      {
-        Sid    = "CloudWatchLogs"
-        Effect = "Allow"
-        Action = [
-          "logs:PutLogEvents",
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:DescribeLogStreams",
-          "logs:DescribeLogGroups"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "XRay"
-        Effect = "Allow"
-        Action = [
-          "xray:PutTraceSegments",
-          "xray:PutTelemetryRecords",
-          "xray:GetSamplingRules",
-          "xray:GetSamplingTargets"
-        ]
-        Resource = "*"
+        Resource = var.amp_workspace_arn
       }
     ]
   })
 }
 
-# --- EKS ADOT Addon ---
+# The ADOT EKS add-on installs an operator and requires cert-manager first.
+resource "helm_release" "cert_manager" {
+  name             = "cert-manager"
+  repository       = "oci://quay.io/jetstack/charts"
+  chart            = "cert-manager"
+  version          = var.cert_manager_chart_version
+  namespace        = "cert-manager"
+  create_namespace = true
+  atomic           = true
+  timeout          = 600
+
+  values = [
+    yamlencode({
+      crds = {
+        enabled = true
+      }
+    })
+  ]
+}
+
+# The EKS add-on installs the OpenTelemetry operator and CRDs.
 resource "aws_eks_addon" "adot" {
   cluster_name                = var.eks_cluster_name
   addon_name                  = "adot"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
-  service_account_role_arn    = aws_iam_role.adot.arn
 
   tags = merge(var.tags, { Name = "${var.eks_cluster_name}-adot-addon" })
 
-  depends_on = [aws_iam_role_policy.adot]
+  depends_on = [
+    aws_iam_role_policy.adot,
+    helm_release.cert_manager,
+  ]
+}
+
+resource "kubernetes_service_account_v1" "adot_collector" {
+  count = var.amp_workspace_endpoint != "" ? 1 : 0
+
+  metadata {
+    name      = "adot-collector"
+    namespace = "opentelemetry-operator-system"
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.adot.arn
+    }
+  }
+
+  depends_on = [aws_eks_addon.adot]
+}
+
+resource "kubernetes_cluster_role_v1" "adot_collector" {
+  count = var.amp_workspace_endpoint != "" ? 1 : 0
+
+  metadata {
+    name = "${var.eks_cluster_name}-adot-prometheus-reader"
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["endpoints", "nodes", "nodes/proxy", "pods", "services"]
+    verbs      = ["get", "list", "watch"]
+  }
+
+  rule {
+    non_resource_urls = ["/metrics", "/metrics/cadvisor"]
+    verbs             = ["get"]
+  }
+}
+
+resource "kubernetes_cluster_role_binding_v1" "adot_collector" {
+  count = var.amp_workspace_endpoint != "" ? 1 : 0
+
+  metadata {
+    name = "${var.eks_cluster_name}-adot-prometheus-reader"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role_v1.adot_collector[0].metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account_v1.adot_collector[0].metadata[0].name
+    namespace = kubernetes_service_account_v1.adot_collector[0].metadata[0].namespace
+  }
 }
 
 resource "kubernetes_manifest" "otel_collector" {
   count = var.amp_workspace_endpoint != "" ? 1 : 0
 
   manifest = {
-    apiVersion = "opentelemetry.io/v1alpha1"
+    apiVersion = "opentelemetry.io/v1beta1"
     kind       = "OpenTelemetryCollector"
     metadata = {
       name      = "adot-collector-prometheus"
@@ -94,8 +143,9 @@ resource "kubernetes_manifest" "otel_collector" {
     }
     spec = {
       mode           = "daemonset"
-      serviceAccount = "adot-collector"
-      config = yamlencode({
+      serviceAccount = kubernetes_service_account_v1.adot_collector[0].metadata[0].name
+      image          = var.collector_image
+      config = {
         receivers = {
           prometheus = {
             config = {
@@ -105,8 +155,8 @@ resource "kubernetes_manifest" "otel_collector" {
               }
               scrape_configs = [
                 {
-                  job_name     = "kubernetes-pods"
-                  sample_limit = 10000
+                  job_name              = "kubernetes-pods"
+                  sample_limit          = 10000
                   kubernetes_sd_configs = [{ role = "pod" }]
                   relabel_configs = [
                     {
@@ -150,7 +200,7 @@ resource "kubernetes_manifest" "otel_collector" {
                     ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
                     insecure_skip_verify = true
                   }
-                  bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+                  bearer_token_file     = "/var/run/secrets/kubernetes.io/serviceaccount/token"
                   kubernetes_sd_configs = [{ role = "node" }]
                   relabel_configs = [
                     {
@@ -214,9 +264,12 @@ resource "kubernetes_manifest" "otel_collector" {
             }
           }
         }
-      })
+      }
     }
   }
 
-  depends_on = [aws_eks_addon.adot]
+  depends_on = [
+    aws_eks_addon.adot,
+    kubernetes_cluster_role_binding_v1.adot_collector,
+  ]
 }

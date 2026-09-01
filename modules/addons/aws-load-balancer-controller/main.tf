@@ -15,7 +15,7 @@ resource "aws_iam_policy" "lbc" {
   policy      = file("${path.module}/iam-policy.json")
 
   tags = merge(
-    var.common_tags,
+    local.effective_tags,
     {
       Name = "${var.name}-lbc-iam-policy"
     }
@@ -37,7 +37,7 @@ module "irsa_role" {
 
   iam_policy_statements = []
 
-  tags = var.common_tags
+  tags = local.effective_tags
 }
 
 resource "aws_iam_role_policy_attachment" "lbc" {
@@ -82,7 +82,13 @@ resource "helm_release" "lbc" {
       enableWaf    = var.enable_waf
       enableWafv2  = var.enable_wafv2
       enableShield = var.enable_shield
+
+      controllerConfig = {
+        featureGates = {
+          ALBGatewayAPI = var.enable_alb_gateway_api
+          NLBGatewayAPI = var.enable_nlb_gateway_api
+        }
+      }
     })
   ]
 }
-

@@ -1,6 +1,6 @@
 resource "aws_iam_role" "cluster_autoscaler" {
   name = "${var.cluster_name}-cluster-autoscaler"
-  tags = local.effective_tags  
+  tags = local.effective_tags
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

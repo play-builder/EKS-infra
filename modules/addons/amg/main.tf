@@ -79,32 +79,17 @@ resource "aws_iam_role_policy" "amg_amp" {
         Resource = "*"
       },
       {
-        Sid    = "SNSForAlerts"
-        Effect = "Allow"
-        Action = ["sns:Publish"]
+        Sid      = "SNSForAlerts"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
         Resource = "*"
       }
     ]
   })
 }
 
-resource "aws_grafana_workspace_configuration" "amp_datasource" {
-  count        = var.amp_workspace_id != "" ? 1 : 0
-  workspace_id = aws_grafana_workspace.this.id
-
-  configuration = jsonencode({
-    datasources = [{
-      name = "Amazon Managed Prometheus"
-      type = "prometheus"
-      url  = "https://aps-workspaces.${data.aws_region.current.name}.amazonaws.com/workspaces/${var.amp_workspace_id}"
-      jsonData = {
-        httpMethod    = "POST"
-        sigV4Auth     = true
-        sigV4AuthType = "default"
-        sigV4Region   = data.aws_region.current.name
-      }
-    }]
-  })
-}
-
-data "aws_region" "current" {}
+# There is no aws_grafana_workspace_configuration resource in the AWS provider.
+# The service-managed workspace discovers AMP through data_sources = ["PROMETHEUS"]
+# and the IAM permissions above. Creating a named Grafana data source is an
+# explicit post-provisioning API/console operation and is deliberately outside
+# this Terraform module.

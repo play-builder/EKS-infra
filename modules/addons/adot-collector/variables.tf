@@ -24,6 +24,24 @@ variable "amp_workspace_endpoint" {
   default     = ""
 }
 
+variable "amp_workspace_arn" {
+  description = "AMP workspace ARN allowed for remote write"
+  type        = string
+  default     = "*"
+}
+
+variable "cert_manager_chart_version" {
+  description = "cert-manager chart required by the ADOT EKS add-on"
+  type        = string
+  default     = "v1.21.1"
+}
+
+variable "collector_image" {
+  description = "Pinned multi-architecture ADOT collector image"
+  type        = string
+  default     = "public.ecr.aws/aws-observability/aws-otel-collector:v0.49.0"
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

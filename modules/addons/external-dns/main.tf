@@ -56,9 +56,11 @@ resource "helm_release" "external_dns" {
 
       domainFilters = var.domain_filters
 
+      sources = var.sources
+
       txtOwnerId = var.cluster_name
 
-      policy = "sync"
+      policy = var.policy
 
       logLevel = "info"
     })
