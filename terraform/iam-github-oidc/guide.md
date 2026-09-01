@@ -1,24 +1,31 @@
-# 1. Create and navigate to the directory
+# Shared GitHub OIDC and ECR
 
-mkdir -p terraform/iam-github-oidc
-cd terraform/iam-github-oidc
+이 root는 course AWS 계정에서 한 번만 적용합니다. dev/prod cluster가 공통으로 사용할 ECR과
+GitHub Actions OIDC role을 만듭니다.
 
-# 2. Create the files above and run Terraform
-
+```bash
+cp terraform.tfvars.example terraform.tfvars
 terraform init
-terraform plan
-terraform apply
+terraform plan -out=tfplan
+terraform apply tfplan
+```
 
-# 3. Copy the output ARN
+필수 출력:
 
-terraform output github_actions_role_arn
+```bash
+terraform output -raw infra_role_arn
+terraform output -raw sample_app_push_role_arn
+terraform output -raw sample_app_ecr_repository_url
+```
 
-# Example: arn:aws:iam::123456789012:role/GitHubActionsRole
+GitHub의 `cicd-course-sample-app` repository variables:
 
-# 4. Save to GitHub Secrets
+```text
+AWS_REGION=us-east-1
+AWS_ROLE_ARN=<sample_app_push_role_arn>
+ECR_REPOSITORY=playdevops/sample-app
+```
 
-# Repository Settings → Secrets → Actions → New repository secret
 
-# Name: AWS_ROLE_ARN
-
-# Value: <ARN copied above>
+`terraform.tfvars`와 Terraform state에는 계정 식별 정보가 있으므로 원격 저장소에
+커밋하지 않습니다.

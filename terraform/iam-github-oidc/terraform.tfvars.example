@@ -1,0 +1,16 @@
+aws_region   = "us-east-1"
+project_name = "playdevops"
+github_org   = "play-builder"
+
+infra_oidc_subjects = [
+  "repo:play-builder@42942042/EKS-infra@405337777:ref:refs/heads/main",
+]
+
+sample_app_oidc_subjects = [
+  "repo:play-builder@42942042/cicd-course-sample-app@1352247019:ref:refs/heads/main",
+  "repo:play-builder@42942042/cicd-course-sample-app@1352247019:ref:refs/heads/dev",
+]
+
+tags = {
+  Course = "cicd-gitops"
+}
