@@ -5,6 +5,12 @@
 항상 `01 → 02 → 03 → 04` 순서로 적용하고 `04 → 03 → 02 → 01` 역순으로 제거합니다.
 장애 대응 전에는 AWS identity, kube context, 대상 environment를 먼저 확인합니다.
 
+과정에서 검증한 `ap-northeast-2` 또는 `us-east-1` 중 클러스터를 만든 Region을 사용합니다.
+
+```bash
+export AWS_REGION="ap-northeast-2"
+```
+
 ## 안전 확인
 
 ```bash
@@ -19,7 +25,7 @@ prod 작업 전에는 출력의 account ID와 cluster name을 작업 티켓의 �
 
 ```bash
 aws eks update-kubeconfig \
-  --region us-east-1 \
+  --region "$AWS_REGION" \
   --name dev-playdevops-eks \
   --alias course-dev
 
@@ -48,7 +54,7 @@ kubectl --context course-dev get externalsecret -A
 
 ```bash
 aws eks describe-nodegroup \
-  --region us-east-1 \
+  --region "$AWS_REGION" \
   --cluster-name dev-playdevops-eks \
   --nodegroup-name dev-playdevops-node-group
 ```

@@ -42,6 +42,14 @@ GitHub OIDC + ECR
 
 버전 계약은 [versions.lock.yaml](./versions.lock.yaml)에 있습니다.
 
+과정 시작 시 두 검증 Region 중 하나를 선택하고 모든 Terraform root와 AWS CLI에서 같은 값을
+사용합니다. 아래 예시는 서울이며 버지니아 북부를 선택하면 `us-east-1`로 바꿉니다.
+
+```bash
+export AWS_REGION="ap-northeast-2"
+export STATE_BUCKET_NAME="replace-with-your-state-bucket"
+```
+
 ## 0. 공통 GitHub OIDC와 ECR
 
 ```bash
@@ -52,7 +60,12 @@ cp terraform.tfvars.example terraform.tfvars
 `terraform.tfvars`에서 GitHub owner/repository subject를 실제 값으로 교체한 다음 실행합니다.
 
 ```bash
-terraform init
+terraform init -reconfigure \
+  -backend-config="bucket=$STATE_BUCKET_NAME" \
+  -backend-config="key=shared/iam-github-oidc/terraform.tfstate" \
+  -backend-config="region=$AWS_REGION" \
+  -backend-config="encrypt=true" \
+  -backend-config="use_lockfile=true"
 terraform plan -out=tfplan
 terraform apply tfplan
 terraform output
@@ -80,6 +93,8 @@ cp environments/dev/04-workloads/argocd/terraform.tfvars.example environments/de
 ```bash
 terraform -chdir=environments/dev/<layer> init \
   -backend-config=../config/<backend>.tfbackend \
+  -backend-config="bucket=$STATE_BUCKET_NAME" \
+  -backend-config="region=$AWS_REGION" \
   -reconfigure
 
 terraform -chdir=environments/dev/<layer> plan -out=tfplan
@@ -103,7 +118,7 @@ placeholder, secret value, repository 접근을 준비한 뒤 `true`로 바꾸�
 다음 명령이 모두 정상이어야 prod를 시작합니다.
 
 ```bash
-aws eks update-kubeconfig --region us-east-1 --name dev-playdevops-eks
+aws eks update-kubeconfig --region "$AWS_REGION" --name dev-playdevops-eks
 
 kubectl get nodes
 kubectl -n kube-system get deploy aws-load-balancer-controller

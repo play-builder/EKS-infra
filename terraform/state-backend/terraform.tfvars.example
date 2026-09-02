@@ -1,4 +1,5 @@
-aws_region   = "us-east-1"
+# Supported course Regions: ap-northeast-2 or us-east-1.
+aws_region   = "ap-northeast-2"
 bucket_name  = "replace-with-a-globally-unique-state-bucket"
 project_name = "replace-with-your-course-project-name"
 

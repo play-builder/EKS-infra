@@ -70,7 +70,7 @@ module "aws_load_balancer_controller" {
 
   helm_chart_version = var.alb_controller_chart_version
 
-  ecr_account_id = split(".", var.alb_controller_image_repository)[0]
+  ecr_account_id = var.alb_controller_ecr_account_id
 
   ingress_class_name = var.alb_controller_ingress_class_name
   is_default_class   = var.alb_controller_is_default

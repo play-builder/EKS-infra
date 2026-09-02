@@ -5,7 +5,14 @@ GitHub Actions OIDC role을 만듭니다.
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
-terraform init
+export AWS_REGION="ap-northeast-2"
+export STATE_BUCKET_NAME="replace-with-your-state-bucket"
+terraform init -reconfigure \
+  -backend-config="bucket=$STATE_BUCKET_NAME" \
+  -backend-config="key=shared/iam-github-oidc/terraform.tfstate" \
+  -backend-config="region=$AWS_REGION" \
+  -backend-config="encrypt=true" \
+  -backend-config="use_lockfile=true"
 terraform plan -out=tfplan
 terraform apply tfplan
 ```
@@ -21,7 +28,7 @@ terraform output -raw sample_app_ecr_repository_url
 GitHub의 `cicd-course-sample-app` repository variables:
 
 ```text
-AWS_REGION=us-east-1
+AWS_REGION=ap-northeast-2  # 또는 us-east-1. Terraform에 적용한 Region과 같아야 함
 AWS_ROLE_ARN=<sample_app_push_role_arn>
 ECR_REPOSITORY=playdevops/sample-app
 ```
