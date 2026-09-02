@@ -72,7 +72,16 @@ variable "cluster_endpoint_public_access" {
 variable "cluster_endpoint_public_access_cidrs" {
   description = "List of CIDR blocks for public access"
   type        = list(string)
-  default     = []
+
+  validation {
+    condition = !var.cluster_endpoint_public_access || (
+      length(var.cluster_endpoint_public_access_cidrs) > 0 && alltrue([
+        for cidr in var.cluster_endpoint_public_access_cidrs :
+        can(cidrhost(cidr, 0)) && cidr != "0.0.0.0/0"
+      ])
+    )
+    error_message = "Public endpoint access requires at least one valid restricted CIDR; 0.0.0.0/0 is not allowed."
+  }
 }
 
 variable "enable_public_node_group" {

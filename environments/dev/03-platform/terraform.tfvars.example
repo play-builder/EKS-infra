@@ -19,4 +19,5 @@ enable_course_resources          = true
 enable_gateway_api               = true
 course_application_namespace     = "app-dev"
 secret_recovery_window_in_days   = 7
-external_dns_domain_filters      = ["example.com"]
+external_dns_domain_filters      = ["dev.example.com"]
+external_dns_exclude_domains     = []

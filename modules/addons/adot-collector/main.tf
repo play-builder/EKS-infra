@@ -142,7 +142,8 @@ resource "kubernetes_manifest" "otel_collector" {
       namespace = "opentelemetry-operator-system"
     }
     spec = {
-      mode           = "daemonset"
+      mode           = "deployment"
+      replicas       = 1
       serviceAccount = kubernetes_service_account_v1.adot_collector[0].metadata[0].name
       image          = var.collector_image
       config = {
@@ -150,8 +151,8 @@ resource "kubernetes_manifest" "otel_collector" {
           prometheus = {
             config = {
               global = {
-                scrape_interval = "60s"
-                scrape_timeout  = "15s"
+                scrape_interval = "15s"
+                scrape_timeout  = "10s"
               }
               scrape_configs = [
                 {
@@ -233,7 +234,7 @@ resource "kubernetes_manifest" "otel_collector" {
 
         processors = {
           batch = {
-            timeout         = "60s"
+            timeout         = "5s"
             send_batch_size = 1000
           }
         }

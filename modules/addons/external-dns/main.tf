@@ -54,7 +54,8 @@ resource "helm_release" "external_dns" {
         region   = var.aws_region
       }
 
-      domainFilters = var.domain_filters
+      domainFilters  = var.domain_filters
+      excludeDomains = var.exclude_domains
 
       sources = var.sources
 

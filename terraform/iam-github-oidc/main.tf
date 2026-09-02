@@ -217,6 +217,7 @@ resource "aws_iam_policy" "sample_app_push" {
         Sid    = "PushSampleApp"
         Effect = "Allow"
         Action = [
+          "ecr:BatchGetImage",
           "ecr:BatchCheckLayerAvailability",
           "ecr:CompleteLayerUpload",
           "ecr:GetDownloadUrlForLayer",
@@ -236,4 +237,3 @@ resource "aws_iam_role_policy_attachment" "sample_app_push" {
   role       = aws_iam_role.sample_app_push.name
   policy_arn = aws_iam_policy.sample_app_push.arn
 }
-

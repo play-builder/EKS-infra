@@ -34,6 +34,12 @@ variable "domain_filters" {
   type        = list(string)
 }
 
+variable "exclude_domains" {
+  description = "Subdomains that this ExternalDNS deployment must not manage"
+  type        = list(string)
+  default     = []
+}
+
 variable "namespace" {
   description = "Namespace to install ExternalDNS"
   type        = string

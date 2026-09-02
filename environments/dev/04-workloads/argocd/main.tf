@@ -86,7 +86,7 @@ resource "helm_release" "argo_rollouts" {
         initContainers = [
           {
             name    = "copy-gateway-api-plugin"
-            image   = "ghcr.io/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi:v${var.gateway_plugin_version}"
+            image   = "ghcr.io/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi:v${var.gateway_plugin_version}@${var.gateway_plugin_digest}"
             command = ["/bin/sh", "-c"]
             args    = ["cp /bin/rollouts-plugin-trafficrouter-gatewayapi /plugins/"]
             volumeMounts = [

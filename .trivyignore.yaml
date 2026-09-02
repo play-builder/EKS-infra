@@ -1,0 +1,21 @@
+misconfigurations:
+  - id: AWS-0104
+    paths: ["modules/compute/bastion/main.tf"]
+    statement: "Sandbox bastion requires outbound HTTPS; ingress remains restricted."
+    expired_at: 2027-09-02
+  - id: AWS-0039
+    paths: ["modules/eks/cluster/main.tf"]
+    statement: "EKS 1.36 encrypts Kubernetes API data at rest by default; a customer-managed KMS key is outside the course cost boundary."
+    expired_at: 2027-09-02
+  - id: AWS-0040
+    paths: ["modules/eks/cluster/main.tf"]
+    statement: "The course uses a public API endpoint restricted by public_access_cidrs for student workstations."
+    expired_at: 2027-09-02
+  - id: AWS-0164
+    paths: ["modules/networking/vpc/main.tf"]
+    statement: "Public subnets intentionally host internet-facing load balancers; worker nodes use private subnets."
+    expired_at: 2027-09-02
+  - id: AWS-0132
+    paths: ["terraform/state-backend/main.tf"]
+    statement: "The disposable course backend uses SSE-S3 to avoid a persistent KMS key charge."
+    expired_at: 2027-09-02

@@ -1,0 +1,3 @@
+github_owner      = "REPLACE_ME"
+gitops_repository = "argocd-gitops"
+required_check    = "validate"

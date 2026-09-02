@@ -89,13 +89,15 @@ variable "cluster_endpoint_public_access" {
 variable "cluster_endpoint_public_access_cidrs" {
   description = "List of CIDR blocks allowed to access the public API server endpoint"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # ⚠️ Should be restricted in Production
 
   validation {
-    condition = alltrue([
-      for cidr in var.cluster_endpoint_public_access_cidrs : can(cidrhost(cidr, 0))
-    ])
-    error_message = "All CIDR blocks must be valid IPv4 CIDR notation."
+    condition = !var.cluster_endpoint_public_access || (
+      length(var.cluster_endpoint_public_access_cidrs) > 0 && alltrue([
+        for cidr in var.cluster_endpoint_public_access_cidrs :
+        can(cidrhost(cidr, 0)) && cidr != "0.0.0.0/0"
+      ])
+    )
+    error_message = "Public endpoint access requires at least one valid restricted CIDR; 0.0.0.0/0 is not allowed."
   }
 }
 

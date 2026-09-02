@@ -1,0 +1,12 @@
+aws_region   = "us-east-1"
+bucket_name  = "replace-with-a-globally-unique-state-bucket"
+project_name = "replace-with-your-course-project-name"
+
+# Disposable course accounts only. This lets the final Terraform destroy
+# remove versioned state objects after every dependent root is destroyed.
+force_destroy = true
+
+tags = {
+  Environment = "shared"
+  Owner       = "replace-with-your-name"
+}

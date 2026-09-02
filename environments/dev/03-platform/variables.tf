@@ -104,6 +104,12 @@ variable "external_dns_domain_filters" {
   default     = ["playdevops.click"]
 }
 
+variable "external_dns_exclude_domains" {
+  description = "Subdomains that ExternalDNS must not manage"
+  type        = list(string)
+  default     = []
+}
+
 variable "enable_metrics_server" {
   description = "Enable Metrics Server installation"
   type        = bool

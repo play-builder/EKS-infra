@@ -93,8 +93,9 @@ module "external_dns" {
   oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
 
-  hosted_zone_id = var.hosted_zone_id
-  domain_filters = var.external_dns_domain_filters
+  hosted_zone_id  = var.hosted_zone_id
+  domain_filters  = var.external_dns_domain_filters
+  exclude_domains = var.external_dns_exclude_domains
 
   namespace     = "kube-system"
   chart_version = var.external_dns_chart_version

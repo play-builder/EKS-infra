@@ -5,12 +5,18 @@ on:
     paths:
       - "**/*.tf"
       - "**/*.tfvars.example"
+      - ".tflint.hcl"
+      - ".trivyignore.yaml"
+      - "policy/**"
       - ".github/workflows/terraform-validate.yml"
   push:
     branches: [main]
     paths:
       - "**/*.tf"
       - "**/*.tfvars.example"
+      - ".tflint.hcl"
+      - ".trivyignore.yaml"
+      - "policy/**"
       - ".github/workflows/terraform-validate.yml"
 
 permissions:
@@ -26,10 +32,56 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
-          terraform_version: "1.15.9"
+          terraform_version: "1.16.0"
 
       - name: Check repository formatting
         run: terraform fmt -check -recursive
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6.3.0
+        with:
+          tflint_version: v0.64.0
+
+      - name: Run repository TFLint gate
+        run: tflint --recursive --config="$GITHUB_WORKSPACE/.tflint.hcl"
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Scan Terraform with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          scan-type: config
+          scan-ref: .
+          skip-dirs: vendor
+          trivyignores: .trivyignore.yaml
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Install Conftest
+        env:
+          CONFTEST_VERSION: "0.69.0"
+          CONFTEST_SHA256: "96fc2fbf11f0afde51256647127e6f00a64ce839a4d9a0a1aef2426c0e6f4b3f"
+        run: |
+          curl -fsSL \
+            "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" \
+            -o /tmp/conftest.tar.gz
+          echo "${CONFTEST_SHA256}  /tmp/conftest.tar.gz" | sha256sum --check
+          tar -xzf /tmp/conftest.tar.gz -C /tmp conftest
+          sudo install -m 0755 /tmp/conftest /usr/local/bin/conftest
+
+      - name: Verify the lightweight Conftest policy
+        run: conftest verify --policy policy/terraform
 
   validate:
     runs-on: ubuntu-latest
@@ -37,7 +89,9 @@ jobs:
       fail-fast: false
       matrix:
         root:
+          - terraform/state-backend
           - terraform/iam-github-oidc
+          - terraform/github-governance
           - environments/dev/01-network
           - environments/dev/02-eks
           - environments/dev/03-platform
@@ -58,7 +112,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
-          terraform_version: "1.15.9"
+          terraform_version: "1.16.0"
 
       - name: Check formatting
         run: terraform fmt -check -diff

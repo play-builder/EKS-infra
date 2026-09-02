@@ -1,9 +1,19 @@
 schemaVersion: 1
-verifiedAt: "2026-09-01"
+verifiedAt: "2026-09-02"
 
 tooling:
-  terraform: "1.15.9"
+  terraform: "1.16.0"
   awsProvider: "5.87.0"
+  githubProvider: "6.13.0"
+  tflint: "0.64.0"
+  setupTflintAction: "6.3.0"
+  setupTflintActionSha: "6e1e0642c0289bd619021bf6b34e3c08ed1e005a"
+  trivy: "0.74.0"
+  trivyAction: "0.36.0"
+  trivyActionSha: "ed142fd0673e97e23eac54620cfb913e5ce36c25"
+  conftest: "0.69.0"
+  preCommitTerraform: "1.108.1"
+  preCommitHooks: "6.0.0"
 
 kubernetes:
   eks: "1.36"
@@ -18,6 +28,7 @@ delivery:
   awsLoadBalancerControllerChart: "3.5.0"
   awsLoadBalancerController: "3.5.0"
   gatewayApiTrafficRouterPlugin: "0.16.0"
+  gatewayApiTrafficRouterPluginDigest: "sha256:af5aaba7e34c2b8eb0d52128ac91cb913f065b710c7dea88db59d626a96c53c2"
   externalSecretsChart: "2.10.0"
 
 platform:
