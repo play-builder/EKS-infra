@@ -1,5 +1,5 @@
 schemaVersion: 1
-verifiedAt: "2026-09-02"
+verifiedAt: "2026-09-03"
 
 tooling:
   terraform: "1.16.0"
@@ -32,6 +32,10 @@ delivery:
   externalSecretsChart: "2.10.0"
 
 platform:
+  ebsCsiIamPolicy: "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  courseStorageClass: "course-gp3"
+  courseStorageType: "gp3"
+  courseVolumeBindingMode: "WaitForFirstConsumer"
   externalDnsChart: "1.21.1"
   metricsServerChart: "3.14.0"
   certManagerChart: "v1.21.1"

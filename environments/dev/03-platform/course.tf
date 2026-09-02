@@ -43,6 +43,30 @@ locals {
   application_namespace = var.course_application_namespace != "" ? var.course_application_namespace : "app-${var.environment}"
 }
 
+resource "kubernetes_storage_class_v1" "course_gp3" {
+  count = var.enable_course_resources && var.enable_course_storage_class && var.enable_ebs_csi_driver ? 1 : 0
+
+  metadata {
+    name = "course-gp3"
+    annotations = {
+      "storageclass.kubernetes.io/is-default-class" = "false"
+    }
+  }
+
+  storage_provisioner    = "ebs.csi.aws.com"
+  reclaim_policy         = "Delete"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+
+  parameters = {
+    "type"      = "gp3"
+    "encrypted" = "true"
+    "fsType"    = "ext4"
+  }
+
+  depends_on = [module.ebs_csi_driver]
+}
+
 data "kubectl_file_documents" "gateway_api" {
   content = file("${path.root}/../../../vendor/gateway-api/v1.6.0/standard-install.yaml")
 }
@@ -163,3 +187,7 @@ output "gateway_crd_versions" {
   }
 }
 
+output "course_storage_class_name" {
+  description = "Non-default encrypted gp3 StorageClass for the Stateful course lab"
+  value       = var.enable_course_resources && var.enable_course_storage_class && var.enable_ebs_csi_driver ? kubernetes_storage_class_v1.course_gp3[0].metadata[0].name : null
+}
