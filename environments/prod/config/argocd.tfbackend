@@ -1,5 +1,4 @@
-bucket       = "playdevops-infra-tf-prod"
+# bucket and region are learner-specific and must be passed to terraform init.
 key          = "prod/04-workloads/argocd/terraform.tfstate"
-region       = "us-east-1"
 encrypt      = true
 use_lockfile = true

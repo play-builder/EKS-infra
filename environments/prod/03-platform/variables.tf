@@ -1,7 +1,6 @@
 variable "aws_region" {
   description = "AWS Region"
   type        = string
-  default     = "us-east-1"
 }
 
 variable "environment" {
@@ -68,10 +67,10 @@ variable "alb_controller_chart_version" {
   default     = "3.5.0"
 }
 
-variable "alb_controller_image_repository" {
-  description = "Docker image repository"
+variable "alb_controller_ecr_account_id" {
+  description = "AWS-owned ECR account ID that publishes the Load Balancer Controller image in aws_region"
   type        = string
-  default     = "602401143452.dkr.ecr.us-east-1.amazonaws.com/amazon/aws-load-balancer-controller"
+  default     = "602401143452"
 }
 
 variable "alb_controller_ingress_class_name" {

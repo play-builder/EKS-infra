@@ -1,6 +1,4 @@
-
-bucket       = "playdevops-infra-tf-dev"         
-key          = "dev/01-network/terraform.tfstate" 
-region       = "us-east-1"                        
-encrypt      = true                             
+# bucket and region are learner-specific and must be passed to terraform init.
+key          = "dev/01-network/terraform.tfstate"
+encrypt      = true
 use_lockfile = true

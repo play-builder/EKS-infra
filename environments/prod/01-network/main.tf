@@ -1,6 +1,15 @@
+data "aws_availability_zones" "available" {
+  state = "available"
+
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
+}
 
 locals {
-  name = "${var.environment}-${var.project_name}"
+  name               = "${var.environment}-${var.project_name}"
+  availability_zones = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, 3)
 
   common_tags = merge(
     var.tags,
@@ -22,7 +31,7 @@ module "vpc" {
 
   name               = local.name
   vpc_cidr           = var.vpc_cidr
-  availability_zones = var.availability_zones
+  availability_zones = local.availability_zones
 
   public_subnet_cidrs   = var.public_subnet_cidrs
   private_subnet_cidrs  = var.private_subnet_cidrs

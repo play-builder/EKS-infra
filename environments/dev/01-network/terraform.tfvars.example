@@ -1,12 +1,15 @@
-aws_region  = "us-east-1"
+# Supported course Regions: ap-northeast-2 or us-east-1.
+aws_region   = "ap-northeast-2"
 project_name = "playdevops"
 environment  = "dev"
 
-vpc_cidr              = "10.0.0.0/16"
-availability_zones     = ["us-east-1a", "us-east-1b", "us-east-1c"]
-public_subnet_cidrs    = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-private_subnet_cidrs   = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
-database_subnet_cidrs  = ["10.0.21.0/24", "10.0.22.0/24", "10.0.23.0/24"]
+vpc_cidr = "10.0.0.0/16"
+
+# Empty selects the first three standard AZs in aws_region. Set concrete AZ names only when an override is required.
+availability_zones    = []
+public_subnet_cidrs   = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+private_subnet_cidrs  = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
+database_subnet_cidrs = ["10.0.21.0/24", "10.0.22.0/24", "10.0.23.0/24"]
 
 # Course cost profile: one NAT Gateway. Use one per AZ for production-grade HA.
 enable_nat_gateway     = true

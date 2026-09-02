@@ -24,9 +24,14 @@ variable "vpc_cidr" {
 }
 
 variable "availability_zones" {
-  description = "List of AWS Availability Zones to use for subnets (e.g. us-east-1a, us-east-1b, ...)"
+  description = "Optional Availability Zone override; leave empty to use the first three standard AZs in aws_region"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  default     = []
+
+  validation {
+    condition     = length(var.availability_zones) == 0 || length(var.availability_zones) == 3
+    error_message = "availability_zones must be empty for automatic selection or contain exactly three AZs."
+  }
 }
 
 variable "public_subnet_cidrs" {
