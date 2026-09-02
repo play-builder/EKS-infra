@@ -208,14 +208,17 @@ check_workflow_run() {
   require_command gh
   require_command jq
 
+  local before_id=${6:-0}
+  [[ "$before_id" =~ ^[0-9]+$ ]] || fail "before_id는 0 이상의 workflow database ID여야 합니다: $before_id" 64
+
   local attempts=${COURSE_CHECK_WAIT_ATTEMPTS:-30}
   local delay=${COURSE_CHECK_WAIT_SECONDS:-2}
   local attempt=0 runs run_id="" final
   while ((attempt < attempts)); do
     runs=$(gh run list --repo "$repository" --workflow "$workflow" --event "$event" \
       --limit 50 --json databaseId,headSha,status,conclusion,url)
-    run_id=$(jq -r --arg sha "$head_sha" \
-      '[.[] | select(.headSha == $sha)] | sort_by(.databaseId) | last | .databaseId // empty' \
+    run_id=$(jq -r --arg sha "$head_sha" --argjson before "$before_id" \
+      '[.[] | select(.headSha == $sha and .databaseId > $before)] | sort_by(.databaseId) | last | .databaseId // empty' \
       <<<"$runs")
     [[ -n "$run_id" ]] && break
     attempt=$((attempt + 1))
@@ -230,6 +233,48 @@ check_workflow_run() {
     <<<"$final" >/dev/null || fail "선택한 workflow run이 요청 SHA의 success 상태가 아닙니다."
   jq '{databaseId, headSha, status, conclusion, url}' <<<"$final"
   pass "$chapter exact-SHA workflow가 성공했습니다(run_id=$run_id)."
+}
+
+check_ch05() {
+  local repository_name=${1:-} digest=${2:-}
+  [[ -n "$repository_name" && -n "$digest" ]] || \
+    fail "사용법: bash scripts/course-check.sh ch05 <ecr-repository-name> <sha256-digest>" 64
+  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "유효하지 않은 image digest입니다: $digest" 64
+  require_command aws
+  require_command jq
+  require_environment AWS_PROFILE
+  require_environment AWS_REGION
+
+  local response platforms
+  response=$(aws ecr batch-get-image \
+    --repository-name "$repository_name" \
+    --image-ids "imageDigest=$digest" \
+    --accepted-media-types \
+      application/vnd.oci.image.index.v1+json \
+      application/vnd.docker.distribution.manifest.list.v2+json \
+    --region "$AWS_REGION" \
+    --profile "$AWS_PROFILE" \
+    --output json)
+
+  jq -e --arg digest "$digest" '
+    (.failures | length) == 0 and
+    (.images | length) == 1 and
+    .images[0].imageId.imageDigest == $digest
+  ' <<<"$response" >/dev/null || fail "요청한 digest의 ECR image index를 찾지 못했습니다."
+
+  platforms=$(jq -r '
+    .images[0].imageManifest
+    | fromjson
+    | [.manifests[]?.platform | select(.os == "linux") | .architecture]
+    | unique
+    | sort
+    | join(",")
+  ' <<<"$response")
+  [[ "$platforms" == "amd64,arm64" ]] || \
+    fail "ECR index에 linux/amd64와 linux/arm64가 모두 없습니다(found=$platforms)."
+
+  printf 'ECR_INDEX: repository=%s digest=%s platforms=%s\n' "$repository_name" "$digest" "$platforms"
+  pass "ch05 ECR multi-architecture image index가 유효합니다."
 }
 
 cidr_range() {
@@ -292,14 +337,78 @@ check_ch10() {
   pass "ch10 Dev 핵심 runtime 상태가 Ready/Synced/Healthy입니다."
 }
 
+check_stateful() {
+  local context=${1:-} namespace=${2:-} base_url=${3:-}
+  [[ -n "$context" && -n "$namespace" && -n "$base_url" ]] || \
+    fail "사용법: bash scripts/course-check.sh stateful <kubectl-context> <namespace> <base-url>" 64
+  base_url=${base_url%/}
+  for command in kubectl jq curl; do
+    require_command "$command"
+  done
+
+  local storage_class stateful_set claims migration_job application_pods products inventory order
+  storage_class=$(kubectl --context "$context" get storageclass/course-gp3 -o json)
+  jq -e '
+    .provisioner == "ebs.csi.aws.com" and
+    .reclaimPolicy == "Delete" and
+    .volumeBindingMode == "WaitForFirstConsumer" and
+    .allowVolumeExpansion == true and
+    .parameters.type == "gp3" and
+    .parameters.encrypted == "true"
+  ' <<<"$storage_class" >/dev/null || fail "course-gp3 StorageClass 계약이 일치하지 않습니다."
+
+  stateful_set=$(kubectl --context "$context" -n "$namespace" get statefulset sample-app-postgresql -o json)
+  jq -e '.spec.replicas == 1 and .status.readyReplicas == 1 and .status.currentRevision == .status.updateRevision' \
+    <<<"$stateful_set" >/dev/null || fail "PostgreSQL StatefulSet이 Ready가 아닙니다."
+
+  claims=$(kubectl --context "$context" -n "$namespace" get pvc \
+    -l app.kubernetes.io/component=database -o json)
+  jq -e '
+    (.items | length) == 1 and
+    all(.items[]; .status.phase == "Bound" and .spec.storageClassName == "course-gp3")
+  ' <<<"$claims" >/dev/null || fail "PostgreSQL PVC가 course-gp3에 Bound되지 않았습니다."
+
+  migration_job=$(kubectl --context "$context" -n "$namespace" get job sample-app-migration -o json)
+  jq -e '.status.succeeded >= 1 and (.status.failed // 0) == 0' \
+    <<<"$migration_job" >/dev/null || fail "schema migration Job이 성공하지 않았습니다."
+
+  application_pods=$(kubectl --context "$context" -n "$namespace" get pods \
+    -l app.kubernetes.io/name=sample-app -o json)
+  jq -e '
+    (.items | length) > 0 and
+    all(.items[]; any(.status.conditions[]?; .type == "Ready" and .status == "True"))
+  ' <<<"$application_pods" >/dev/null || fail "Mini Commerce application Pod가 모두 Ready가 아닙니다."
+
+  products=$(curl --fail --silent --show-error --max-time 5 "$base_url/products")
+  jq -e '.products | type == "array" and length >= 4' <<<"$products" >/dev/null || \
+    fail "상품 목록 API가 mock 상품을 반환하지 않습니다."
+  inventory=$(curl --fail --silent --show-error --max-time 5 "$base_url/products/1/inventory")
+  jq -e '.productId == 1 and (.availableQuantity | type == "number")' <<<"$inventory" >/dev/null || \
+    fail "재고 API 응답이 유효하지 않습니다."
+  order=$(curl --fail --silent --show-error --max-time 5 \
+    --request POST "$base_url/orders" \
+    --header 'Content-Type: application/json' \
+    --header "Idempotency-Key: course-check-$namespace" \
+    --data '{"items":[{"productId":4,"quantity":1}]}')
+  jq -e '.order.status == "CONFIRMED" and .order.totalCents == 32900 and (.order.id | type == "number")' \
+    <<<"$order" >/dev/null || fail "멱등 주문 생성 API 응답이 유효하지 않습니다."
+
+  jq '{productCount: (.products | length), firstSku: .products[0].sku}' <<<"$products"
+  jq '{productId, availableQuantity}' <<<"$inventory"
+  jq '{orderId: .order.id, status: .order.status, totalCents: .order.totalCents}' <<<"$order"
+  pass "Stateful Mini Commerce storage, migration, Pod, 상품·재고·주문 API가 유효합니다."
+}
+
 usage() {
   printf '%s\n' \
     'Usage: bash scripts/course-check.sh <chapter> [arguments]' \
     '  ch01 <three-repositories-root>' \
     '  ch02' \
-    '  ch03|ch11|ch12|ch13 <owner/repository> <commit-sha> [workflow] [event]' \
+    '  ch03|ch11|ch12|ch13 <owner/repository> <commit-sha> [workflow] [event] [before-id]' \
+    '  ch05 <ecr-repository-name> <sha256-digest>' \
     '  ch08 <first-ipv4-cidr> <second-ipv4-cidr>' \
-    '  ch10 [kubectl-context] [namespace]'
+    '  ch10 [kubectl-context] [namespace]' \
+    '  stateful <kubectl-context> <namespace> <base-url>'
 }
 
 chapter=${1:-}
@@ -313,11 +422,13 @@ case "$chapter" in
   ch01) check_ch01 "$@" ;;
   ch02) check_ch02 "$@" ;;
   ch03) check_workflow_run ch03 "$@" ;;
+  ch05) check_ch05 "$@" ;;
   ch08) check_ch08 "$@" ;;
   ch10) check_ch10 "$@" ;;
   ch11) check_workflow_run ch11 "$@" ;;
   ch12) check_workflow_run ch12 "$@" ;;
   ch13) check_workflow_run ch13 "$@" ;;
+  stateful) check_stateful "$@" ;;
   *)
     usage >&2
     fail "지원하지 않는 Chapter입니다: $chapter" 64

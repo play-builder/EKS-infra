@@ -8,6 +8,8 @@ on:
       - ".tflint.hcl"
       - ".trivyignore.yaml"
       - "policy/**"
+      - "scripts/**"
+      - "tests/**"
       - ".github/workflows/terraform-validate.yml"
   push:
     branches: [main]
@@ -17,12 +19,23 @@ on:
       - ".tflint.hcl"
       - ".trivyignore.yaml"
       - "policy/**"
+      - "scripts/**"
+      - "tests/**"
       - ".github/workflows/terraform-validate.yml"
 
 permissions:
   contents: read
 
 jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Verify course repository contracts
+        run: bash tests/stateful-contract.sh
+
   format:
     runs-on: ubuntu-latest
     steps:

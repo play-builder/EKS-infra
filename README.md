@@ -29,7 +29,7 @@ GitHub OIDC + ECR
 | shared | GitHub OIDC, ECR, GitHub Actions IAM role | EKS cluster |
 | 01-network | VPC, subnet, NAT, route | EKS |
 | 02-eks | EKS 1.36, node group, Access Entry, OIDC provider | platform chart |
-| 03-platform | Gateway CRD, AWS LBC, ExternalDNS, AMP, ADOT, IRSA | sample-app |
+| 03-platform | Gateway CRD, AWS LBC, ExternalDNS, AMP, ADOT, IRSA, `course-gp3` | sample-app/PVC |
 | 04-workloads | Argo CD, Argo Rollouts, Gateway plugin, bootstrap Application | app manifest 원본 |
 
 ## 전제 도구
@@ -113,6 +113,10 @@ terraform -chdir=environments/dev/<layer> apply tfplan
 `04-workloads/argocd`는 처음에 `enable_bootstrap=false`로 적용합니다. GitOps 저장소의
 placeholder, secret value, repository 접근을 준비한 뒤 `true`로 바꾸고 다시 적용합니다.
 
+`03-platform`은 EBS CSI Driver와 non-default `course-gp3` StorageClass도 만듭니다. StorageClass는
+encrypted gp3, volume expansion, `WaitForFirstConsumer`를 사용합니다. Ch01~Ch14에서는 PVC가
+없으므로 EBS volume 비용이 추가되지 않고, Ch14 이후 Stateful 실습에서 처음 provisioning됩니다.
+
 ## 2. DEV_READY 게이트
 
 다음 명령이 모두 정상이어야 prod를 시작합니다.
@@ -151,9 +155,48 @@ kubectl -n app-prod get analysistemplate sample-app-success-rate
 kubectl -n argo-rollouts logs deploy/argo-rollouts | rg 'gatewayAPI|plugin'
 ```
 
+## 4. Ch14 이후 Stateful runtime 검증
+
+GitOps의 `stateful-values.yaml`을 활성화하고 Argo CD 동기화가 끝난 뒤 consolidated checker로
+StorageClass, PVC, PostgreSQL, migration Job, application Pod, 상품·재고·멱등 주문 API를 함께 확인합니다.
+
+```bash
+bash scripts/course-check.sh stateful course-dev app-dev https://sample-app.dev.example.com
+```
+
+정상 종료는 `PASS: Stateful Mini Commerce...`이고, 상품 수와 첫 SKU, 상품 1번의 재고가 함께
+출력됩니다. 이 검증은 secret 값을 출력하지 않습니다. 단일 replica PostgreSQL은 schema migration과
+rollback을 관찰하기 위한 교육용이며 운영 HA 구성으로 간주하지 않습니다.
+
+## GitHub governance state
+
+`terraform/github-governance`는 기존 `argocd-gitops` repository를 declarative import한 뒤 다음
+delivery 설정과 Ruleset을 함께 관리합니다.
+
+- auto-merge와 squash merge 활성화
+- merge commit과 rebase merge 비활성화
+- merge 후 branch 자동 삭제
+- Dependabot vulnerability alerts 활성화
+- `main-protection` Ruleset
+
+`prevent_destroy=true`이므로 이 Terraform root로 repository를 삭제하지 못합니다. Plan에서 기존
+repository import와 위 설정 외의 예상하지 않은 변경이 없는지 확인한 뒤 apply합니다.
+
 ## 제거 순서와 비용
 
-클러스터를 제거할 때는 반드시 `04 → 03 → 02 → 01` 역순입니다. Gateway가 만든 ALB와
+Stateful 실습을 했다면 먼저 GitOps switch를 `false`로 되돌리고 동기화해 PostgreSQL StatefulSet을
+제거합니다. 그다음 PVC를 명시적으로 삭제하고 PV가 사라질 때까지 확인합니다.
+
+```bash
+kubectl --context course-dev -n app-dev get pvc -l app.kubernetes.io/component=database
+kubectl --context course-dev -n app-dev delete pvc -l app.kubernetes.io/component=database
+kubectl --context course-dev get pv
+```
+
+PVC 삭제는 EBS data를 되돌릴 수 없게 삭제하는 작업입니다. namespace와 label을 먼저 조회하고,
+필요한 data가 없음을 확인한 후 실행합니다.
+
+이후 클러스터는 반드시 `04 → 03 → 02 → 01` 역순으로 제거합니다. Gateway가 만든 ALB와
 target group이 삭제된 것을 먼저 확인해야 VPC 삭제가 막히지 않습니다. ECR의
 `force_delete=false`와 Secrets Manager의 7일 recovery window는 실수 삭제를 막기 위한
 의도된 보호 장치입니다.

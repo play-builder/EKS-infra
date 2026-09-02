@@ -1,6 +1,30 @@
+resource "github_repository" "gitops_settings" {
+  name = var.gitops_repository
+
+  allow_auto_merge       = true
+  allow_squash_merge     = true
+  allow_merge_commit     = false
+  allow_rebase_merge     = false
+  delete_branch_on_merge = true
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+import {
+  to = github_repository.gitops_settings
+  id = var.gitops_repository
+}
+
+resource "github_repository_vulnerability_alerts" "gitops" {
+  repository = github_repository.gitops_settings.name
+  enabled    = true
+}
+
 resource "github_repository_ruleset" "gitops_prod" {
   name        = "main-protection"
-  repository  = var.gitops_repository
+  repository  = github_repository.gitops_settings.name
   target      = "branch"
   enforcement = "active"
 

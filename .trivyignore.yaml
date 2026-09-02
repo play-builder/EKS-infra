@@ -19,3 +19,11 @@ misconfigurations:
     paths: ["terraform/state-backend/main.tf"]
     statement: "The disposable course backend uses SSE-S3 to avoid a persistent KMS key charge."
     expired_at: 2027-09-02
+  - id: GIT-0001
+    paths: ["terraform/github-governance/main.tf"]
+    statement: "The public visibility is intentional because students fork this course repository; delivery controls and secret scanning remain independently enforced."
+    expired_at: 2027-09-03
+  - id: GIT-0003
+    paths: ["terraform/github-governance/main.tf"]
+    statement: "Alerts are managed by the dedicated github_repository_vulnerability_alerts resource; Trivy only inspects the github_repository block."
+    expired_at: 2027-09-03

@@ -52,7 +52,13 @@ variable "ebs_csi_driver_resolve_conflicts_on_create" {
 variable "ebs_csi_driver_use_aws_managed_policy" {
   description = "Use AWS managed IAM policy"
   type        = bool
-  default     = false
+  default     = true
+}
+
+variable "enable_course_storage_class" {
+  description = "Create the non-default encrypted gp3 StorageClass used by the Stateful course lab"
+  type        = bool
+  default     = true
 }
 
 variable "enable_alb_controller" {

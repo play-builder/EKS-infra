@@ -7,6 +7,7 @@ acm_domain_name = "example.com"
 hosted_zone_id  = "Z_REPLACE_ME"
 
 enable_alb_controller = true
+ebs_csi_driver_use_aws_managed_policy = true
 enable_external_dns   = true
 enable_metrics_server = true
 enable_amp            = true
@@ -17,6 +18,7 @@ enable_amg                = false
 
 enable_course_resources        = true
 enable_gateway_api             = true
+enable_course_storage_class    = true
 course_application_namespace   = "app-prod"
 secret_recovery_window_in_days = 7
 external_dns_domain_filters   = ["example.com"]
