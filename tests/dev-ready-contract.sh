@@ -17,6 +17,31 @@ for region in ap-northeast-2 us-east-1; do
   ! grep -Fq '[CLOUD_RUNTIME]' <<<"$output"
 done
 
+grep -Fq '(.evidenceId | nonblank)' "$root/scripts/dev-ready-check.sh" || {
+  echo 'raw Dev SLO evidenceId does not use the canonical nonblank predicate' >&2
+  exit 1
+}
+grep -Fq '(.slo.evidenceId | nonblank)' "$root/scripts/dev-ready-check.sh" || {
+  echo 'DEV_READY slo.evidenceId does not use the canonical nonblank predicate' >&2
+  exit 1
+}
+for label in ascii-whitespace bom-whitespace; do
+  blank=' '
+  [[ "$label" == bom-whitespace ]] && blank=$(printf '\357\273\277')
+  blank_ready="$tmp_dir/dev-ready-$label.json"
+  blank_deployment="$tmp_dir/deployment-$label.json"
+  blank_slo="$tmp_dir/slo-$label.json"
+  jq --arg blank "$blank" '.slo.evidenceId=$blank' \
+    "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$blank_ready"
+  make_dev_handoff "$blank_ready" "$blank_deployment" "$blank_slo"
+  if AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 \
+    bash "$root/scripts/dev-ready-check.sh" \
+      "$blank_deployment" "$blank_slo" "$blank_ready" >/dev/null 2>&1; then
+    echo "DEV_READY accepted $label-only SLO evidence identity" >&2
+    exit 1
+  fi
+done
+
 two_character_ecr_ready="$tmp_dir/dev-ready-two-character-ecr.json"
 two_character_ecr_deployment="$tmp_dir/deployment-two-character-ecr.json"
 two_character_ecr_slo="$tmp_dir/slo-two-character-ecr.json"

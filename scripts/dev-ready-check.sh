@@ -37,6 +37,7 @@ course_assert_json "$deployment" '
 ' 'invalid course.dev-deployment/v1 evidence'
 
 course_assert_json "$slo" '
+  def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
   def canonical_ecr_repository:
     capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
     $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
@@ -54,12 +55,13 @@ course_assert_json "$slo" '
   (.image.repository | canonical_ecr_repository) and
   (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
   (.gitopsRevision | test("^[0-9a-f]{40}$")) and .region == $ENV.AWS_REGION and
-  (.evidenceId | type == "string" and length > 0) and
+  (.evidenceId | nonblank) and
   (.observedAt | canonical_utc_seconds) and (.expiresAt | canonical_utc_seconds) and
   (.observedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
 ' 'invalid or expired course.dev-slo/v1 evidence'
 
 course_assert_json "$ready" '
+  def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
   def canonical_ecr_repository:
     capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
     $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
@@ -93,7 +95,7 @@ course_assert_json "$ready" '
   (.gitops | keys == ["devRevision"]) and (.gitops.devRevision | test("^[0-9a-f]{40}$")) and
   (.cluster | keys == ["arn"]) and
   (.cluster.arn | test("^arn:aws:eks:" + $ENV.AWS_REGION + ":" + $ENV.AWS_ACCOUNT_ID + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")) and
-  (.slo | keys == ["evidenceId"]) and (.slo.evidenceId | type == "string" and length > 0) and
+  (.slo | keys == ["evidenceId"]) and (.slo.evidenceId | nonblank) and
   (.issuedAt | canonical_utc_seconds) and (.expiresAt | canonical_utc_seconds) and
   (.issuedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
 ' 'invalid, stale, or aliased course.dev-ready/v1 evidence'
