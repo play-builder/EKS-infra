@@ -10,6 +10,14 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "required command is missing: $1"
 }
 
+temporary_plan_file=
+temporary_output_file=
+cleanup_temporary_files() {
+  [[ -z "$temporary_plan_file" ]] || rm -f -- "$temporary_plan_file"
+  [[ -z "$temporary_output_file" ]] || rm -f -- "$temporary_output_file"
+}
+trap cleanup_temporary_files EXIT
+
 sha256_file() {
   if command -v shasum >/dev/null 2>&1; then
     shasum -a 256 "$1" | awk '{print $1}'
@@ -62,6 +70,13 @@ validate_adoption() {
   [[ -f "$adoption" ]] || fail "adoption evidence not found: $adoption"
   handoff_sha="sha256:$(sha256_file "$handoff")"
   jq -e --arg now "$now" --arg handoff_sha "$handoff_sha" --slurpfile handoff "$handoff" '
+    def canonical_utc_seconds:
+      . as $value |
+      ($value | type == "string") and
+      ($value | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+      ((try ($value | fromdateiso8601 | strftime("%Y-%m-%dT%H:%M:%SZ")) catch "") == $value);
+    def release_keys:
+      ["chart","crdUids","helmStorageObjectUid","name","namespace","revision","status","valuesSha256","version","workloadUids"];
     (keys | sort) == (["clusterArn","environment","evidenceGrade","expiresAt","handoffSha256","observedAt","region","release","schemaVersion","terraform"] | sort) and
     .schemaVersion == "course.platform-release-adoption/v1" and
     .evidenceGrade == "CLOUD_RUNTIME" and
@@ -69,22 +84,22 @@ validate_adoption() {
     .environment == $handoff[0].environment and
     .region == $handoff[0].region and
     .clusterArn == $handoff[0].clusterArn and
-    (.release | keys | sort) == (["chart","crdUids","helmStorageObjectUid","name","namespace","valuesSha256","version","workloadUids"] | sort) and
-    .release.namespace == $handoff[0].release.namespace and
-    .release.name == $handoff[0].release.name and
-    .release.chart == $handoff[0].release.chart and
-    .release.version == $handoff[0].release.version and
-    .release.valuesSha256 == $handoff[0].release.valuesSha256 and
-    .release.helmStorageObjectUid == $handoff[0].release.helmStorageObjectUid and
-    (.release.workloadUids | sort_by(.kind,.name,.uid)) == ($handoff[0].release.workloadUids | sort_by(.kind,.name,.uid)) and
-    (.release.crdUids | sort_by(.name,.uid)) == ($handoff[0].release.crdUids | sort_by(.name,.uid)) and
+    (.release | keys) == ["after","before"] and
+    (.release.before | keys) == release_keys and
+    (.release.after | keys) == release_keys and
+    .release.before == $handoff[0].release and
+    .release.after == .release.before and
     (.terraform | keys | sort) == (["address","imported","planActions","stateLineage","stateSerial"] | sort) and
     .terraform.address == "module.external_secrets[0].helm_release.this" and
     .terraform.imported == true and
     .terraform.planActions == [] and
-    (.terraform.stateLineage | type == "string" and length > 0) and
-    (.terraform.stateSerial | type == "number" and . >= 0) and
+    (.terraform.stateLineage | type == "string" and test("^[0-9a-fA-F-]{36}$")) and
+    (.terraform.stateSerial | type == "number" and . == floor and . >= 1) and
+    (.observedAt | canonical_utc_seconds) and
+    (.expiresAt | canonical_utc_seconds) and
+    (($handoff[0].observedAt | fromdateiso8601) <= (.observedAt | fromdateiso8601)) and
     ((.observedAt | fromdateiso8601) <= ($now | fromdateiso8601)) and
+    ((.observedAt | fromdateiso8601) < (.expiresAt | fromdateiso8601)) and
     (($now | fromdateiso8601) < (.expiresAt | fromdateiso8601))
   ' "$adoption" >/dev/null || fail "adoption must be an exact no-op import with unchanged release and object UIDs"
 }
@@ -102,63 +117,155 @@ verify_frozen_application() {
   ' <<<"$app_json" >/dev/null || fail "live Argo Application is not frozen or its UID changed"
 }
 
-verify_release_uids() {
-  local context=$1 evidence=$2 item actual kind name uid
+capture_workload_uids() {
+  local context=$1 release_json=$2 actual kind name uid
   while IFS=$'\t' read -r kind name uid; do
     actual=$(kubectl --context "$context" -n external-secrets get "$kind" "$name" -o json | jq -r '.metadata.uid')
-    [[ "$actual" == "$uid" ]] || fail "workload UID changed during ownership transfer: $kind/$name"
-  done < <(jq -r '.release.workloadUids[] | [.kind,.name,.uid] | @tsv' "$evidence")
+    [[ -n "$actual" && "$actual" != null ]] || fail "workload UID is missing during ownership transfer: $kind/$name"
+    jq -cn --arg kind "$kind" --arg name "$name" --arg uid "$actual" \
+      '{kind:$kind,name:$name,uid:$uid}'
+  done < <(jq -r '.workloadUids[] | [.kind,.name,.uid] | @tsv' <<<"$release_json")
+}
+
+capture_crd_uids() {
+  local context=$1 release_json=$2 actual name uid
   while IFS=$'\t' read -r name uid; do
     actual=$(kubectl --context "$context" get crd "$name" -o json | jq -r '.metadata.uid')
-    [[ "$actual" == "$uid" ]] || fail "CRD UID changed during ownership transfer: $name"
-  done < <(jq -r '.release.crdUids[] | [.name,.uid] | @tsv' "$evidence")
+    [[ -n "$actual" && "$actual" != null ]] || fail "CRD UID is missing during ownership transfer: $name"
+    jq -cn --arg name "$name" --arg uid "$actual" '{name:$name,uid:$uid}'
+  done < <(jq -r '.crdUids[] | [.name,.uid] | @tsv' <<<"$release_json")
+}
+
+capture_live_release() {
+  local context=$1 release_selectors=$2 helm_status live_values_sha storage_uid workload_uids crd_uids revision
+  helm_status=$(helm --kube-context "$context" -n external-secrets status external-secrets -o json)
+  revision=$(jq -er '.version | select(type == "number" and . == floor and . >= 1)' <<<"$helm_status") || \
+    fail "live Helm release revision is invalid"
+  live_values_sha=$(helm --kube-context "$context" -n external-secrets get values external-secrets -a -o json \
+    | jq -S -c . | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print "sha256:"$1}')
+  storage_uid=$(kubectl --context "$context" -n external-secrets get secret \
+    -l "owner=helm,name=external-secrets,status=deployed,version=$revision" -o json \
+    | jq -er '.items | select(type == "array" and length == 1) | .[0].metadata.uid | select(type == "string" and length > 0)') || \
+    fail "exact live Helm storage object could not be resolved"
+  workload_uids=$(capture_workload_uids "$context" "$release_selectors" | jq -cs '.')
+  crd_uids=$(capture_crd_uids "$context" "$release_selectors" | jq -cs '.')
+
+  jq -ce --arg valuesSha256 "$live_values_sha" --arg storageUid "$storage_uid" \
+    --argjson workloadUids "$workload_uids" --argjson crdUids "$crd_uids" '
+      {
+        namespace:.namespace,
+        name:.name,
+        chart:.chart.metadata.name,
+        version:.chart.metadata.version,
+        revision:.version,
+        status:.info.status,
+        valuesSha256:$valuesSha256,
+        helmStorageObjectUid:$storageUid,
+        workloadUids:$workloadUids,
+        crdUids:$crdUids
+      } as $release |
+      $release |
+      select(
+        .namespace == "external-secrets" and .name == "external-secrets" and
+        .chart == "external-secrets" and (.version | type == "string" and length > 0) and
+        (.revision | type == "number" and . == floor and . >= 1) and .status == "deployed" and
+        (.valuesSha256 | test("^sha256:[0-9a-f]{64}$")) and
+        (.workloadUids | type == "array" and length > 0) and
+        (.crdUids | type == "array" and length > 0)
+      )
+    ' <<<"$helm_status" || fail "live Helm release identity is malformed or not deployed"
+}
+
+verify_release_uids() {
+  local context=$1 evidence=$2 release_filter=${3:-.release} release_json live_json
+  release_json=$(jq -ce "$release_filter" "$evidence") || fail "release identity is missing from evidence"
+  live_json=$(capture_live_release "$context" "$release_json")
+  [[ "$(jq -cS . <<<"$live_json")" == "$(jq -cS . <<<"$release_json")" ]] || \
+    fail "release identity or UID changed during ownership transfer"
+}
+
+verify_terraform_state_owner() {
+  local state_json=$1 expected_release=$2
+  jq -e --argjson release "$expected_release" '
+    [.resources[]? |
+      select(
+        .module == "module.external_secrets[0]" and
+        .mode == "managed" and .type == "helm_release" and .name == "this"
+      )] as $resources |
+    ($resources | length) == 1 and
+    $resources[0].provider == "provider[\"registry.terraform.io/hashicorp/helm\"]" and
+    ($resources[0].instances | length) == 1 and
+    $resources[0].instances[0].attributes as $attributes |
+    $attributes.name == $release.name and
+    $attributes.namespace == $release.namespace and
+    $attributes.chart == $release.chart and
+    $attributes.version == $release.version and
+    $attributes.status == $release.status and
+    (.lineage | type == "string" and test("^[0-9a-fA-F-]{36}$")) and
+    (.serial | type == "number" and . == floor and . >= 1)
+  ' <<<"$state_json" >/dev/null || fail "Terraform state does not contain the exact adopted Helm release owner"
 }
 
 adopt_release() {
-  local terraform_root=$1 handoff=$2 output=$3 context=$4 now tmp plan_file state_json handoff_sha
-  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  validate_handoff "$handoff" "$now"
+  local terraform_root=$1 handoff=$2 output=$3 context=$4 validation_now observed_at expires_at
+  local state_json handoff_sha before_release live_before after_release plan_json
+  validation_now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  validate_handoff "$handoff" "$validation_now"
   for command in jq kubectl helm terraform; do require_command "$command"; done
   verify_frozen_application "$context" "$handoff"
-  verify_release_uids "$context" "$handoff"
-
-  local values_sha live_values_sha helm_status
-  live_values_sha=$(helm --kube-context "$context" -n external-secrets get values external-secrets -a -o json \
-    | jq -S -c . | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print "sha256:"$1}')
-  values_sha=$(jq -r '.release.valuesSha256' "$handoff")
-  [[ "$live_values_sha" == "$values_sha" ]] || fail "live Helm values digest changed after Phase A"
-  helm_status=$(helm --kube-context "$context" -n external-secrets status external-secrets -o json)
-  jq -e --slurpfile handoff "$handoff" '
-    .info.status == "deployed" and
-    .version == $handoff[0].release.revision
-  ' <<<"$helm_status" >/dev/null || fail "live Helm release status/revision changed"
+  before_release=$(jq -cS '.release' "$handoff")
+  live_before=$(capture_live_release "$context" "$before_release")
+  [[ "$(jq -cS . <<<"$live_before")" == "$before_release" ]] || \
+    fail "live Helm release identity or UID changed after Phase A"
 
   terraform -chdir="$terraform_root" import 'module.external_secrets[0].helm_release.this' external-secrets/external-secrets
-  plan_file=$(mktemp "${TMPDIR:-/tmp}/external-secrets-adoption-plan.XXXXXX")
-  terraform -chdir="$terraform_root" plan -input=false -out="$plan_file"
-  terraform -chdir="$terraform_root" show -json "$plan_file" \
-    | jq -e '[.resource_changes[]? | select(.change.actions != ["no-op"])] | length == 0' >/dev/null || \
+  temporary_plan_file=$(mktemp "${TMPDIR:-/tmp}/external-secrets-adoption-plan.XXXXXX")
+  terraform -chdir="$terraform_root" plan -input=false -out="$temporary_plan_file"
+  plan_json=$(terraform -chdir="$terraform_root" show -json "$temporary_plan_file")
+  jq -e '
+    [.resource_changes[]? |
+      select(.address == "module.external_secrets[0].helm_release.this")] as $release |
+    ($release | length) == 1 and
+    $release[0].mode == "managed" and
+    $release[0].type == "helm_release" and
+    $release[0].name == "this" and
+    $release[0].change.actions == ["no-op"] and
+    all(.resource_changes[]?; .change.actions == ["no-op"])
+  ' <<<"$plan_json" >/dev/null || \
     fail "post-import Terraform plan is not a no-op"
 
   state_json=$(terraform -chdir="$terraform_root" state pull)
+  verify_terraform_state_owner "$state_json" "$before_release"
+  after_release=$(capture_live_release "$context" "$before_release")
+  verify_frozen_application "$context" "$handoff"
+  [[ "$(jq -cS . <<<"$after_release")" == "$before_release" ]] || \
+    fail "release identity or UID changed during Terraform adoption"
+
+  observed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  expires_at=$(date -u -v+1H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -d '+1 hour' '+%Y-%m-%dT%H:%M:%SZ')
+  validate_handoff "$handoff" "$observed_at"
   handoff_sha="sha256:$(sha256_file "$handoff")"
-  tmp=$(mktemp "${output}.tmp.XXXXXX")
-  trap 'rm -f -- "$tmp" "$plan_file"' EXIT
+  temporary_output_file=$(mktemp "${output}.tmp.XXXXXX")
   jq -n --slurpfile handoff "$handoff" --arg handoffSha "$handoff_sha" \
     --arg lineage "$(jq -r '.lineage' <<<"$state_json")" \
     --argjson serial "$(jq -r '.serial' <<<"$state_json")" \
-    --arg observedAt "$now" --arg expiresAt "$(date -u -v+1H '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -d '+1 hour' '+%Y-%m-%dT%H:%M:%SZ')" '
+    --argjson before "$before_release" --argjson after "$after_release" \
+    --arg observedAt "$observed_at" --arg expiresAt "$expires_at" '
       {
         schemaVersion:"course.platform-release-adoption/v1", evidenceGrade:"CLOUD_RUNTIME",
         environment:$handoff[0].environment, region:$handoff[0].region, clusterArn:$handoff[0].clusterArn,
         handoffSha256:$handoffSha,
-        release:($handoff[0].release | del(.revision,.status)),
+        release:{before:$before,after:$after},
         terraform:{address:"module.external_secrets[0].helm_release.this",stateLineage:$lineage,stateSerial:$serial,imported:true,planActions:[]},
         observedAt:$observedAt, expiresAt:$expiresAt
       }
-    ' >"$tmp"
-  mv -- "$tmp" "$output"
-  validate_adoption "$handoff" "$output" "$now"
+    ' >"$temporary_output_file"
+  chmod 600 "$temporary_output_file"
+  validate_adoption "$handoff" "$temporary_output_file" "$observed_at"
+  mv -- "$temporary_output_file" "$output"
+  temporary_output_file=
+  rm -f -- "$temporary_plan_file"
+  temporary_plan_file=
   printf 'ADOPTED: external-secrets/external-secrets is Terraform-owned; no apply was run.\n'
 }
 
@@ -170,7 +277,7 @@ verify_phase_b() {
   if kubectl --context "$context" -n argocd get application "$app" >/dev/null 2>&1; then
     fail "Phase B Application must be absent after Terraform adoption"
   fi
-  verify_release_uids "$context" "$adoption"
+  verify_release_uids "$context" "$adoption" '.release.after'
   printf 'PHASE_B_READY: Application absent and imported UIDs unchanged.\n'
 }
 

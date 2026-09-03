@@ -152,8 +152,12 @@ bash scripts/external-secrets-owner-handoff.sh adopt \
 ```
 
 저장된 plan이 no-op이고 UID가 유지된 adoption evidence가 승인된 뒤에만 GitOps Phase B에서 비활성
-Application을 삭제합니다. 마지막으로 `verify-phase-b`가 Application 부재와 controller/CRD UID
-불변을 확인합니다.
+Application을 삭제합니다. adoption evidence의 `release.before`는 승인된 handoff release 전체를
+그대로 결속하고, `release.after`는 import 직후 Terraform state, Helm release/values, Kubernetes Helm
+storage object·controller·CRD를 다시 조회해 구성합니다. 두 객체가 정확히 같고 Terraform owner가
+exact address에 존재하며 전체 plan이 no-op일 때만 evidence를 원자적으로 게시합니다. 호출자는
+`release.after`를 입력할 수 없습니다. 마지막으로 `verify-phase-b`가 Application 부재와 live release
+identity/UID 불변을 확인합니다.
 
 ## 2. DEV_READY 게이트
 

@@ -43,6 +43,7 @@ override_data {
   values = {
     outputs = {
       cluster_name                       = "prod-course"
+      cluster_arn                        = "arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-course"
       cluster_endpoint                   = "https://eks.example.invalid"
       cluster_certificate_authority_data = "Y2E="
       oidc_provider_arn                  = "arn:aws:iam::123456789012:oidc-provider/example.invalid"
@@ -90,6 +91,37 @@ run "existing_release_requires_adoption_evidence" {
 
   variables {
     external_secrets_ownership_mode = "adopted"
+  }
+
+  expect_failures = [terraform_data.external_secrets_ownership_gate]
+}
+
+run "canonical_adoption_evidence_is_accepted" {
+  command = plan
+
+  variables {
+    external_secrets_ownership_mode         = "adopted"
+    external_secrets_adoption_evidence_path = abspath("tests/fixtures/external-secrets-adoption-canonical.json")
+  }
+}
+
+run "legacy_flat_adoption_evidence_is_rejected" {
+  command = plan
+
+  variables {
+    external_secrets_ownership_mode         = "adopted"
+    external_secrets_adoption_evidence_path = abspath("tests/fixtures/external-secrets-adoption-flat.json")
+  }
+
+  expect_failures = [terraform_data.external_secrets_ownership_gate]
+}
+
+run "non_array_plan_actions_are_rejected" {
+  command = plan
+
+  variables {
+    external_secrets_ownership_mode         = "adopted"
+    external_secrets_adoption_evidence_path = abspath("tests/fixtures/external-secrets-adoption-non-array-actions.json")
   }
 
   expect_failures = [terraform_data.external_secrets_ownership_gate]

@@ -23,20 +23,70 @@ locals {
   eks_cluster_name = data.terraform_remote_state.eks.outputs.cluster_name
   vpc_id           = data.terraform_remote_state.network.outputs.vpc_id
 
-  external_secrets_adoption = try(
-    var.external_secrets_adoption_evidence_path != null ?
-    jsondecode(file(var.external_secrets_adoption_evidence_path)) : {},
-    {}
+  external_secrets_adoption = var.external_secrets_adoption_evidence_path == null ? null : try(
+    jsondecode(file(var.external_secrets_adoption_evidence_path)),
+    null
   )
+  external_secrets_adoption_release        = try(local.external_secrets_adoption.release, null)
+  external_secrets_adoption_release_before = try(local.external_secrets_adoption_release.before, null)
+  external_secrets_adoption_release_after  = try(local.external_secrets_adoption_release.after, null)
+  external_secrets_adoption_terraform      = try(local.external_secrets_adoption.terraform, null)
+
   external_secrets_adoption_valid = var.external_secrets_ownership_mode == "fresh" || (
-    toset(keys(local.external_secrets_adoption)) == toset(["schemaVersion", "evidenceGrade", "environment", "region", "clusterArn", "handoffSha256", "release", "terraform", "observedAt", "expiresAt"]) &&
+    try(toset(keys(local.external_secrets_adoption)) == toset(["schemaVersion", "evidenceGrade", "environment", "region", "clusterArn", "handoffSha256", "release", "terraform", "observedAt", "expiresAt"]), false) &&
     try(local.external_secrets_adoption.schemaVersion, "") == "course.platform-release-adoption/v1" &&
     try(local.external_secrets_adoption.evidenceGrade, "") == "CLOUD_RUNTIME" &&
     try(local.external_secrets_adoption.environment, "") == var.environment &&
     try(local.external_secrets_adoption.region, "") == var.aws_region &&
-    try(local.external_secrets_adoption.terraform.address, "") == "module.external_secrets[0].helm_release.this" &&
-    try(local.external_secrets_adoption.terraform.imported, false) == true &&
-    try(length(local.external_secrets_adoption.terraform.planActions), -1) == 0
+    try(local.external_secrets_adoption.clusterArn, "") == data.terraform_remote_state.eks.outputs.cluster_arn &&
+    try(can(regex("^sha256:[0-9a-f]{64}$", local.external_secrets_adoption.handoffSha256)), false) &&
+    try(toset(keys(local.external_secrets_adoption_release)) == toset(["before", "after"]), false) &&
+    try(toset(keys(local.external_secrets_adoption_release_before)) == toset(["namespace", "name", "chart", "version", "revision", "status", "valuesSha256", "helmStorageObjectUid", "workloadUids", "crdUids"]), false) &&
+    try(toset(keys(local.external_secrets_adoption_release_after)) == toset(["namespace", "name", "chart", "version", "revision", "status", "valuesSha256", "helmStorageObjectUid", "workloadUids", "crdUids"]), false) &&
+    try(local.external_secrets_adoption_release_before == local.external_secrets_adoption_release_after, false) &&
+    try(local.external_secrets_adoption_release_before.namespace, "") == "external-secrets" &&
+    try(local.external_secrets_adoption_release_before.name, "") == "external-secrets" &&
+    try(local.external_secrets_adoption_release_before.chart, "") == "external-secrets" &&
+    try(local.external_secrets_adoption_release_before.version, "") == var.external_secrets_chart_version &&
+    try(local.external_secrets_adoption_release_before.revision >= 1 && floor(local.external_secrets_adoption_release_before.revision) == local.external_secrets_adoption_release_before.revision, false) &&
+    try(local.external_secrets_adoption_release_before.status, "") == "deployed" &&
+    try(can(regex("^sha256:[0-9a-f]{64}$", local.external_secrets_adoption_release_before.valuesSha256)), false) &&
+    try(length(local.external_secrets_adoption_release_before.helmStorageObjectUid) > 0, false) &&
+    try(
+      length(local.external_secrets_adoption_release_before.workloadUids) > 0 &&
+      alltrue([
+        for item in local.external_secrets_adoption_release_before.workloadUids :
+        toset(keys(item)) == toset(["kind", "name", "uid"]) &&
+        length(item.kind) > 0 && length(item.name) > 0 && length(item.uid) > 0
+      ]),
+      false
+    ) &&
+    try(
+      length(local.external_secrets_adoption_release_before.crdUids) > 0 &&
+      alltrue([
+        for item in local.external_secrets_adoption_release_before.crdUids :
+        toset(keys(item)) == toset(["name", "uid"]) &&
+        length(item.name) > 0 && length(item.uid) > 0
+      ]),
+      false
+    ) &&
+    try(toset(keys(local.external_secrets_adoption_terraform)) == toset(["address", "stateLineage", "stateSerial", "imported", "planActions"]), false) &&
+    try(local.external_secrets_adoption_terraform.address, "") == "module.external_secrets[0].helm_release.this" &&
+    try(can(regex("^[0-9a-fA-F-]{36}$", local.external_secrets_adoption_terraform.stateLineage)), false) &&
+    try(local.external_secrets_adoption_terraform.stateSerial >= 1 && floor(local.external_secrets_adoption_terraform.stateSerial) == local.external_secrets_adoption_terraform.stateSerial, false) &&
+    try(local.external_secrets_adoption_terraform.imported, false) == true &&
+    try(jsonencode(local.external_secrets_adoption_terraform.planActions) == "[]", false) &&
+    try(
+      can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", local.external_secrets_adoption.observedAt)) &&
+      formatdate("YYYY-MM-DD'T'hh:mm:ss'Z'", local.external_secrets_adoption.observedAt) == local.external_secrets_adoption.observedAt,
+      false
+    ) &&
+    try(
+      can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", local.external_secrets_adoption.expiresAt)) &&
+      formatdate("YYYY-MM-DD'T'hh:mm:ss'Z'", local.external_secrets_adoption.expiresAt) == local.external_secrets_adoption.expiresAt,
+      false
+    ) &&
+    try(timecmp(local.external_secrets_adoption.observedAt, local.external_secrets_adoption.expiresAt) < 0, false)
   )
 
   common_tags = merge(
