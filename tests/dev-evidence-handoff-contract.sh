@@ -122,6 +122,8 @@ for invalid in dev-slo-static.json dev-slo-failed.json dev-slo-identity-mismatch
 done
 
 expect_ch15_rejected ecr-empty '.image.repository = ""'
+expect_ch15_rejected ecr-one-character \
+  '.image.repository = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/a"'
 expect_ch15_rejected ecr-double-slash \
   '.image.repository = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/course//sample-app"'
 expect_ch15_rejected ecr-invalid-segment \
@@ -138,6 +140,12 @@ expect_ch15_rejected cluster-region-mismatch \
 expect_ch15_rejected cluster-name-101 \
   '.clusterArn = ("arn:aws:eks:ap-northeast-2:123456789012:cluster/" + ("a" * 101))'
 expect_ch15_rejected observed-at-invalid-calendar '.observedAt = "2026-02-31T00:00:00Z"'
+
+two_character_ecr="$tmp_dir/ch15-ecr-two-character.json"
+jq '.image.repository = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/ab"' \
+  "$fixtures/dev-deployment-valid.json" >"$two_character_ecr"
+bash "$root/scripts/course-check.sh" ch15 --validate-evidence \
+  "$two_character_ecr" "$now" >/dev/null
 
 for cluster_length in 1 100; do
   cluster_name=$(printf '%*s' "$cluster_length" '' | tr ' ' a)

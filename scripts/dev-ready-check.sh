@@ -18,7 +18,7 @@ course_assert_json "$deployment" '
   def canonical_ecr_repository:
     capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
     $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
-    ($repository.name | length <= 256);
+    (($repository.name | length) >= 2 and ($repository.name | length) <= 256);
   def canonical_utc_seconds:
     . as $timestamp |
     ($timestamp | type == "string") and
@@ -40,7 +40,7 @@ course_assert_json "$slo" '
   def canonical_ecr_repository:
     capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
     $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
-    ($repository.name | length <= 256);
+    (($repository.name | length) >= 2 and ($repository.name | length) <= 256);
   def canonical_utc_seconds:
     . as $timestamp |
     ($timestamp | type == "string") and
@@ -63,7 +63,7 @@ course_assert_json "$ready" '
   def canonical_ecr_repository:
     capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
     $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
-    ($repository.name | length <= 256);
+    (($repository.name | length) >= 2 and ($repository.name | length) <= 256);
   def canonical_utc_seconds:
     . as $timestamp |
     ($timestamp | type == "string") and

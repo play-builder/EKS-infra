@@ -476,7 +476,7 @@ validate_dev_deployment_evidence() {
   jq -e --arg now "$now" --arg grade "$expected_grade" '
     def canonical_ecr_repository:
       capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") |
-      select(.name | length <= 256);
+      select((.name | length) >= 2 and (.name | length) <= 256);
     def canonical_eks_cluster:
       capture("^arn:aws:eks:(?<region>ap-northeast-2|us-east-1):(?<accountId>[0-9]{12}):cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$");
     def canonical_utc_seconds:

@@ -17,6 +17,25 @@ for region in ap-northeast-2 us-east-1; do
   ! grep -Fq '[CLOUD_RUNTIME]' <<<"$output"
 done
 
+two_character_ecr_ready="$tmp_dir/dev-ready-two-character-ecr.json"
+two_character_ecr_deployment="$tmp_dir/deployment-two-character-ecr.json"
+two_character_ecr_slo="$tmp_dir/slo-two-character-ecr.json"
+jq '.image.repository="123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/ab"' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$two_character_ecr_ready"
+make_dev_handoff "$two_character_ecr_ready" \
+  "$two_character_ecr_deployment" "$two_character_ecr_slo"
+AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 \
+  bash "$root/scripts/dev-ready-check.sh" \
+    "$two_character_ecr_deployment" "$two_character_ecr_slo" "$two_character_ecr_ready" >/dev/null
+
+one_character_ecr_ready="$tmp_dir/dev-ready-one-character-ecr.json"
+one_character_ecr_deployment="$tmp_dir/deployment-one-character-ecr.json"
+one_character_ecr_slo="$tmp_dir/slo-one-character-ecr.json"
+jq '.image.repository="123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/a"' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$one_character_ecr_ready"
+make_dev_handoff "$one_character_ecr_ready" \
+  "$one_character_ecr_deployment" "$one_character_ecr_slo"
+
 one_character_ready="$tmp_dir/dev-ready-one-character-cluster.json"
 one_character_deployment="$tmp_dir/deployment-one-character-cluster.json"
 one_character_slo="$tmp_dir/slo-one-character-cluster.json"
@@ -160,6 +179,8 @@ run_rejected_with_slo "$tmp_dir/deployment-whitespace-owner.json" \
   "$tmp_dir/slo-whitespace-owner.json" "$tmp_dir/dev-ready-whitespace-owner.json"
 run_rejected_with_slo "$tmp_dir/deployment-registry-root-only.json" \
   "$tmp_dir/slo-registry-root-only.json" "$tmp_dir/dev-ready-registry-root-only.json"
+run_rejected_with_slo "$one_character_ecr_deployment" \
+  "$one_character_ecr_slo" "$one_character_ecr_ready"
 run_rejected_with_slo "$tmp_dir/deployment-invalid-image-repository.json" \
   "$slo" "$root/tests/fixtures/dev-ready-ap-northeast-2.json"
 run_rejected_with_slo "$deployment" "$tmp_dir/slo-invalid-image-repository.json" \
