@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$root/scripts/lib/evidence-common.sh"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin" "$tmp_dir/output"
@@ -127,7 +128,7 @@ jq -e '
   (.expiresAt | fromdateiso8601 | todateiso8601) == .expiresAt and
   (.observedAt | fromdateiso8601) < (.expiresAt | fromdateiso8601)
 ' "$valid_output" >/dev/null
-[[ $(stat -f '%Lp' "$valid_output") == 600 ]]
+course_assert_file_mode "$valid_output" 600
 grep -Fq -- '--region ap-northeast-2' "$tmp_dir/aws.log"
 grep -Fq -- '--context course-dev config view --minify -o json' "$tmp_dir/kubectl.log"
 grep -Fq -- '--context course-prod config view --minify -o json' "$tmp_dir/kubectl.log"
