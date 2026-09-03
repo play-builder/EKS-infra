@@ -89,7 +89,13 @@ cleanup_validate_removal() {
     ([.remaining[]] | all(type == "number" and floor == . and . == 0)) and
     (.retained | type == "array") and all(.retained[];
       keys == ["classification","environment","kind","name","namespace","requiresExplicitDeletion","uid"] and
-      .requiresExplicitDeletion == true) and
+      .requiresExplicitDeletion == true and
+      (.kind | IN("PersistentVolumeClaim","VolumeSnapshot","Namespace","SecretsManagerSecret","ProviderSecretReference")) and
+      (.environment | IN("dev","prod","shared")) and
+      (.classification | type == "string" and length > 0) and
+      (.name | type == "string" and length > 0) and
+      (.namespace | type == "string") and (.uid | type == "string" and length > 0)) and
+    ([.retained[] | [.environment,.kind,.namespace,.name,.uid]] | unique | length) == (.retained | length) and
     (.providerSecrets | keys == ["inventorySha256","retained"]) and .providerSecrets.retained == true and
     (.providerSecrets.inventorySha256 | test("^[0-9a-f]{64}$")) and
     (.observedAt | fromdateiso8601) <= now
@@ -97,11 +103,20 @@ cleanup_validate_removal() {
   [[ $(jq -r '.providerSecrets.inventorySha256' "$removal") == "$(cleanup_provider_secret_sha "$inventory")" ]] || \
     course_fail 'PROVIDER_SECRET_PROJECTION_DIGEST_MISMATCH'
   jq -en --argjson inventory "$(jq -c . "$inventory")" --argjson removal "$(jq -c . "$removal")" '
+    def retained_inventory_id($r):
+      if $r.kind == "PersistentVolumeClaim" or $r.kind == "VolumeSnapshot" then
+        ($r.namespace + "/" + $r.name)
+      else $r.name
+      end;
+    def supported_kind($kind):
+      $kind == "PersistentVolumeClaim" or $kind == "VolumeSnapshot" or
+      $kind == "Namespace" or $kind == "SecretsManagerSecret" or $kind == "ProviderSecretReference";
     all($removal.clusters[];
       .clusterArn | test("^arn:aws:eks:" + $inventory.region + ":" + $inventory.accountId + ":cluster/")) and
-    all($removal.retained[]; . as $r | any($inventory.resources[];
-      .environment == $r.environment and .kind == $r.kind and .classification == $r.classification and
-      (.id | endswith($r.uid)) and .decision == "RETAIN"))
+    ([ $removal.retained[] | select(supported_kind(.kind)) |
+      {environment,kind,classification,id:retained_inventory_id(.)} ] | sort_by(.environment,.kind,.id,.classification)) ==
+    ([ $inventory.resources[] | select(.decision == "RETAIN" and supported_kind(.kind)) |
+      {environment,kind,classification,id:.id} ] | sort_by(.environment,.kind,.id,.classification))
   ' >/dev/null || course_fail 'GITOPS_REMOVAL_IDENTITY_MISMATCH'
 }
 

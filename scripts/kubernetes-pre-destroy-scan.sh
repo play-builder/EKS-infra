@@ -51,10 +51,13 @@ scan_context() {
   kubectl --context "$context" get jobs.batch -A -l "course.id=$course_id,course.writer=migration" -o json >"$prefix-migration.json"
   kubectl --context "$context" get chaosengines.chaos-mesh.org -A -l "course.id=$course_id" -o json >"$prefix-chaos.json"
   kubectl --context "$context" get persistentvolumeclaims -A -l "course.id=$course_id" -o json >"$prefix-pvcs.json"
+  kubectl --context "$context" get volumesnapshots.snapshot.storage.k8s.io -A -o json >"$prefix-snapshots.json"
+  kubectl --context "$context" get namespaces -o json >"$prefix-namespaces.json"
   kubectl --context "$context" get persistentvolumes -o json >"$prefix-pvs.json"
   kubectl --context "$context" get volumeattachments.storage.k8s.io -o json >"$prefix-attachments.json"
   for file in "$prefix-workloads.json" "$prefix-load.json" "$prefix-recovery.json" "$prefix-migration.json" \
-    "$prefix-chaos.json" "$prefix-pvcs.json" "$prefix-pvs.json" "$prefix-attachments.json"; do
+    "$prefix-chaos.json" "$prefix-pvcs.json" "$prefix-snapshots.json" "$prefix-namespaces.json" \
+    "$prefix-pvs.json" "$prefix-attachments.json"; do
     jq -e '.items | type == "array"' "$file" >/dev/null || course_fail "invalid kubectl response: $file"
   done
 }
@@ -98,12 +101,21 @@ retained_storage=$(jq '[.retained[] | del(.requiresExplicitDeletion)] | sort_by(
 for environment in dev prod; do
   jq -en --arg environment "$environment" \
     --argjson expected "$retained_storage" \
-    --argjson actual "$(jq -c . "$tmp_dir/$environment-pvcs.json")" '
-    [$expected[] | select(.environment == $environment)] as $wanted |
-    ($wanted | length) == ([ $actual.items[] as $p | select(
-      $p.kind == "PersistentVolumeClaim" and
-      any($wanted[]; .namespace == $p.metadata.namespace and .name == $p.metadata.name and .uid == $p.metadata.uid)
-    ) ] | length)
+    --argjson pvcs "$(jq -c . "$tmp_dir/$environment-pvcs.json")" \
+    --argjson snapshots "$(jq -c . "$tmp_dir/$environment-snapshots.json")" \
+    --argjson namespaces "$(jq -c . "$tmp_dir/$environment-namespaces.json")" '
+    def kube_identity($kind;$item):
+      {kind:$kind,namespace:($item.metadata.namespace // ""),name:$item.metadata.name,uid:$item.metadata.uid};
+    [$expected[] | select(.environment == $environment and
+      (.kind == "PersistentVolumeClaim" or .kind == "VolumeSnapshot" or .kind == "Namespace"))] as $wanted |
+    ([ $pvcs.items[] | select(.kind == "PersistentVolumeClaim") | kube_identity("PersistentVolumeClaim"; .) ] +
+     [ $snapshots.items[] | select(.kind == "VolumeSnapshot") | kube_identity("VolumeSnapshot"; .) ] +
+     [ $namespaces.items[] | select(
+         ($environment == "dev" and (.metadata.name == "app-dev" or .metadata.name == "app-recovery")) or
+         ($environment == "prod" and .metadata.name == "app-prod")
+       ) | kube_identity("Namespace"; .) ]) as $actual |
+    ($wanted | map({kind,namespace,name,uid}) | sort_by(.kind,.namespace,.name,.uid)) ==
+    ($actual | map({kind,namespace,name,uid}) | sort_by(.kind,.namespace,.name,.uid))
   ' >/dev/null || course_fail "RETAINED_STORAGE_NOT_OBSERVED: $environment"
 done
 

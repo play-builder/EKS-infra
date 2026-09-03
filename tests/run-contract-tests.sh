@@ -28,6 +28,8 @@ tests=(
   chaos-mesh-contract.sh
   game-day-capacity-check-contract.sh
   ownership-inventory-contract.sh
+  retained-identity-contract.sh
+  kubernetes-pre-destroy-retained-contract.sh
   cleanup-preflight-contract.sh
   checkpoint-teardown-contract.sh
   final-cleanup-contract.sh
