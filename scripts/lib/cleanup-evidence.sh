@@ -178,6 +178,8 @@ cleanup_validate_removal() {
   [[ $(jq -r '.providerSecrets.inventorySha256' "$removal") == "$(cleanup_provider_secret_sha "$inventory")" ]] || \
     course_fail 'PROVIDER_SECRET_PROJECTION_DIGEST_MISMATCH'
   jq -en --argjson inventory "$(jq -c . "$inventory")" --argjson removal "$(jq -c . "$removal")" '
+    def canonical_cluster_arn($arn):
+      $arn | test("^arn:aws:eks:" + $inventory.region + ":" + $inventory.accountId + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$");
     def retained_inventory_id($r):
       if $r.kind == "PersistentVolumeClaim" or $r.kind == "VolumeSnapshot" then
         ($r.namespace + "/" + $r.name)
@@ -186,8 +188,7 @@ cleanup_validate_removal() {
     def supported_kind($kind):
       $kind == "PersistentVolumeClaim" or $kind == "VolumeSnapshot" or
       $kind == "VolumeSnapshotContent" or $kind == "Namespace";
-    all($removal.clusters[];
-      .clusterArn | test("^arn:aws:eks:" + $inventory.region + ":" + $inventory.accountId + ":cluster/")) and
+    all($removal.clusters[]; canonical_cluster_arn(.clusterArn)) and
     all($inventory.resources[] | select(.kind == "SecretsManagerSecret");
       .decision == "RETAIN" or .decision == "EXTERNAL_SHARED") and
     ([ $removal.retained[] | select(supported_kind(.kind)) |
@@ -217,9 +218,11 @@ cleanup_validate_freeze_removal() {
   ' 'invalid course.gitops-freeze/v1 evidence'
   [[ $(jq -r '.freezeEvidenceSha256' "$removal") == "$(course_raw_sha256_file "$freeze")" ]] || course_fail 'FREEZE_DIGEST_MISMATCH'
   jq -en --argjson inventory "$(jq -c . "$inventory")" --argjson freeze "$(jq -c . "$freeze")" --argjson removal "$(jq -c . "$removal")" '
+    def canonical_cluster_arn($arn):
+      $arn | test("^arn:aws:eks:" + $inventory.region + ":" + $inventory.accountId + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$");
     [ $freeze.clusters[] | {environment,clusterArn} ] == $removal.clusters and
     ($freeze.observedAt | fromdateiso8601) < ($removal.observedAt | fromdateiso8601) and
-    all($removal.clusters[]; .clusterArn | test("^arn:aws:eks:" + $inventory.region + ":" + $inventory.accountId + ":cluster/"))
+    all($removal.clusters[]; canonical_cluster_arn(.clusterArn))
   ' >/dev/null || course_fail 'GITOPS_CLEANUP_IDENTITY_MISMATCH'
 }
 

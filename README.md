@@ -182,8 +182,8 @@ kubectl -n app-dev get deploy,pod,hpa,externalsecret,gateway,httproute
 DEV_READY의 workflow identity는 sample-app의 canonical `ci` workflow에 결속합니다. `runId`는
 숫자로 파싱하지 않고 digit string으로 보존하며, `runUrl`의 마지막 run ID와 일치해야 합니다.
 `runUrl`은 `https://github.com/<owner>/cicd-course-sample-app/actions/runs/<runId>` 형식이어야
-하고, attestation URL은 같은 repository의 `attestations/<githubId>`로 결속합니다. multi-architecture
-image는 두 platform을 모두 포함해야 합니다.
+합니다. `githubId`도 digit string이며 attestation URL은 같은 repository의 `attestations/<digits>`로
+결속합니다. multi-architecture image는 두 platform을 모두 포함해야 합니다.
 
 ```json
 {
@@ -198,8 +198,8 @@ image는 두 platform을 모두 포함해야 합니다.
     "platforms": ["linux/amd64", "linux/arm64"]
   },
   "attestation": {
-    "githubId": "<githubId>",
-    "githubUrl": "https://github.com/<owner>/cicd-course-sample-app/attestations/<githubId>"
+    "githubId": "<digits>",
+    "githubUrl": "https://github.com/<owner>/cicd-course-sample-app/attestations/<digits>"
   }
 }
 ```

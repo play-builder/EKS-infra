@@ -15,32 +15,60 @@ course_validate_region "$AWS_REGION"
 course_validate_account "$AWS_ACCOUNT_ID"
 
 course_assert_json "$deployment" '
+  def canonical_ecr_repository:
+    capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
+    $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
+    ($repository.name | length <= 256);
+  def canonical_utc_seconds:
+    . as $timestamp |
+    ($timestamp | type == "string") and
+    ($timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+    (($timestamp | fromdateiso8601 | todateiso8601) == $timestamp);
   keys == ["clusterArn","evidenceGrade","gitopsRevision","image","observedAt","region","schemaVersion","source","status"] and
   .schemaVersion == "course.dev-deployment/v1" and .evidenceGrade == "CLOUD_RUNTIME" and
   (.status | keys == ["health","sync"]) and .status.sync == "Synced" and .status.health == "Healthy" and
   (.source | keys == ["repository","sha"]) and (.source.repository | type == "string" and length > 0) and
   (.source.sha | test("^[0-9a-f]{40}$")) and
   (.image | keys == ["indexDigest","repository"]) and
-  (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/.+$")) and
+  (.image.repository | canonical_ecr_repository) and
   (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
   (.gitopsRevision | test("^[0-9a-f]{40}$")) and .region == $ENV.AWS_REGION and
-  (.observedAt | fromdateiso8601) <= now
+  (.observedAt | canonical_utc_seconds) and (.observedAt | fromdateiso8601) <= now
 ' 'invalid course.dev-deployment/v1 evidence'
 
 course_assert_json "$slo" '
+  def canonical_ecr_repository:
+    capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
+    $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
+    ($repository.name | length <= 256);
+  def canonical_utc_seconds:
+    . as $timestamp |
+    ($timestamp | type == "string") and
+    ($timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+    (($timestamp | fromdateiso8601 | todateiso8601) == $timestamp);
   keys == ["clusterArn","evidenceGrade","evidenceId","expiresAt","gitopsRevision","image","observedAt","region","schemaVersion","source","status"] and
   .schemaVersion == "course.dev-slo/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "PASS" and
   (.source | keys == ["repository","sha"]) and (.source.repository | type == "string" and length > 0) and
   (.source.sha | test("^[0-9a-f]{40}$")) and
   (.image | keys == ["indexDigest","repository"]) and
-  (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/.+$")) and
+  (.image.repository | canonical_ecr_repository) and
   (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
   (.gitopsRevision | test("^[0-9a-f]{40}$")) and .region == $ENV.AWS_REGION and
   (.evidenceId | type == "string" and length > 0) and
+  (.observedAt | canonical_utc_seconds) and (.expiresAt | canonical_utc_seconds) and
   (.observedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
 ' 'invalid or expired course.dev-slo/v1 evidence'
 
 course_assert_json "$ready" '
+  def canonical_ecr_repository:
+    capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
+    $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
+    ($repository.name | length <= 256);
+  def canonical_utc_seconds:
+    . as $timestamp |
+    ($timestamp | type == "string") and
+    ($timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+    (($timestamp | fromdateiso8601 | todateiso8601) == $timestamp);
   keys == ["attestation","cluster","environment","expiresAt","gitops","image","issuedAt","region","schemaVersion","slo","sourceSha","workflow"] and
   .schemaVersion == "course.dev-ready/v1" and .environment == "dev" and .region == $ENV.AWS_REGION and
   (.sourceSha | test("^[0-9a-f]{40}$")) and
@@ -53,11 +81,11 @@ course_assert_json "$ready" '
       capture("^https://github\\.com/(?<repository>[^/]+/cicd-course-sample-app)/actions/runs/(?<url_run_id>[0-9]+)$")) as $run_url |
     ($run_url.url_run_id == .workflow.runId) and
     (.image | keys == ["indexDigest","platforms","repository"]) and
-    (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/.+$")) and
+    (.image.repository | canonical_ecr_repository) and
     (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
     .image.platforms == ["linux/amd64","linux/arm64"] and
     (.attestation | keys == ["githubId","githubUrl","ociProvenanceDigest","ociSbomDigest"]) and
-    (.attestation.githubId | type == "string" and length > 0) and
+    (.attestation.githubId | type == "string" and test("^[0-9]+$")) and
     .attestation.githubUrl == ("https://github.com/" + $run_url.repository + "/attestations/" + .attestation.githubId) and
     (.attestation.ociSbomDigest | test("^sha256:[0-9a-f]{64}$")) and
     (.attestation.ociProvenanceDigest | test("^sha256:[0-9a-f]{64}$"))
@@ -66,6 +94,7 @@ course_assert_json "$ready" '
   (.cluster | keys == ["arn"]) and
   (.cluster.arn | test("^arn:aws:eks:" + $ENV.AWS_REGION + ":" + $ENV.AWS_ACCOUNT_ID + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")) and
   (.slo | keys == ["evidenceId"]) and (.slo.evidenceId | type == "string" and length > 0) and
+  (.issuedAt | canonical_utc_seconds) and (.expiresAt | canonical_utc_seconds) and
   (.issuedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
 ' 'invalid, stale, or aliased course.dev-ready/v1 evidence'
 

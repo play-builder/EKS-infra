@@ -16,8 +16,8 @@
     "platforms": ["linux/amd64", "linux/arm64"]
   },
   "attestation": {
-    "githubId": "attestation-101",
-    "githubUrl": "https://github.com/play-builder/cicd-course-sample-app/attestations/attestation-101",
+    "githubId": "101",
+    "githubUrl": "https://github.com/play-builder/cicd-course-sample-app/attestations/101",
     "ociSbomDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "ociProvenanceDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
   },

@@ -55,7 +55,8 @@ worker node role을 사용한다는 점입니다. Pod별 AWS API 권한은 별�
 DEV_READY는 sample-app canonical workflow와 immutable image platform 집합을 함께 확인합니다.
 `workflow.name=ci`, `workflow.event=push`, digit string `runId`, positive integer
 `runAttempt`를 사용합니다. `runUrl`은 canonical sample-app repository와 `runId`에 결속하고,
-`attestation.githubUrl`은 같은 repository의 `attestations/<githubId>`에 결속해야 합니다.
+digit string `attestation.githubId`와 `attestation.githubUrl`은 같은 repository의
+`attestations/<digits>`에 결속해야 합니다.
 
 ```json
 {
@@ -70,8 +71,8 @@ DEV_READY는 sample-app canonical workflow와 immutable image platform 집합을
     "platforms": ["linux/amd64", "linux/arm64"]
   },
   "attestation": {
-    "githubId": "<githubId>",
-    "githubUrl": "https://github.com/<owner>/cicd-course-sample-app/attestations/<githubId>"
+    "githubId": "<digits>",
+    "githubUrl": "https://github.com/<owner>/cicd-course-sample-app/attestations/<digits>"
   }
 }
 ```
