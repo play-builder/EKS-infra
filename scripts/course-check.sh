@@ -3,13 +3,43 @@ set -Eeuo pipefail
 
 API_VERSION="2026-03-10"
 
+if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+  [[ -d "$COURSE_CHECK_BIN_DIR" ]] || {
+    printf 'ERROR: COURSE_CHECK_BIN_DIR가 directory가 아닙니다: %s\n' "$COURSE_CHECK_BIN_DIR" >&2
+    exit 64
+  }
+  PATH="$COURSE_CHECK_BIN_DIR:$PATH"
+fi
+
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
   exit "${2:-1}"
 }
 
 pass() {
-  printf 'PASS: %s\n' "$1"
+  printf 'DETAIL: %s\n' "$1"
+}
+
+emit_pass() {
+  local grade=$1 message=$2
+  if [[ "$grade" == "STATIC" && -n "${COURSE_CHECK_BIN_DIR:-}" && "$message" != SIMULATED_CLOUD_CONTRACT* ]]; then
+    message="SIMULATED_CLOUD_CONTRACT $message"
+  fi
+  printf 'PASS: [%s] %s\n' "$grade" "$message"
+}
+
+validate_region() {
+  local region=${1:-}
+  [[ "$region" == "ap-northeast-2" || "$region" == "us-east-1" ]] || \
+    fail "AWS_REGION은 ap-northeast-2 또는 us-east-1이어야 합니다: ${region:-<empty>}" 64
+}
+
+runtime_grade() {
+  if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+    printf 'STATIC'
+  else
+    printf 'CLOUD_RUNTIME'
+  fi
 }
 
 require_command() {
@@ -188,6 +218,7 @@ check_ch02() {
   for name in AWS_PROFILE AWS_REGION STATE_BUCKET_NAME LAB_PROJECT_NAME HOSTED_ZONE_ID ROOT_DOMAIN INFRA_GH_REPO APP_GH_REPO GITOPS_GH_REPO; do
     require_environment "$name"
   done
+  validate_region "$AWS_REGION"
 
   check_state_bucket "$AWS_PROFILE" "$AWS_REGION" "$STATE_BUCKET_NAME" "$LAB_PROJECT_NAME"
   check_dns_delegation "$AWS_PROFILE" "$HOSTED_ZONE_ID" "$ROOT_DOMAIN"
@@ -202,7 +233,7 @@ check_ch02() {
 }
 
 check_workflow_run() {
-  local chapter=$1 repository=${2:-} head_sha=${3:-} workflow=${4:-test.yml} event=${5:-push}
+  local chapter=$1 repository=${2:-} head_sha=${3:-} workflow_name=${4:-CI} event=${5:-push}
   [[ -n "$repository" && -n "$head_sha" ]] || \
     fail "사용법: bash scripts/course-check.sh $chapter <owner/repository> <commit-sha> [workflow] [event]" 64
   require_command gh
@@ -213,23 +244,30 @@ check_workflow_run() {
 
   local attempts=${COURSE_CHECK_WAIT_ATTEMPTS:-30}
   local delay=${COURSE_CHECK_WAIT_SECONDS:-2}
-  local attempt=0 runs run_id="" final
+  local attempt=0 runs run_id="" final candidates candidate_count
   while ((attempt < attempts)); do
-    runs=$(gh run list --repo "$repository" --workflow "$workflow" --event "$event" \
-      --limit 50 --json databaseId,headSha,status,conclusion,url)
-    run_id=$(jq -r --arg sha "$head_sha" --argjson before "$before_id" \
-      '[.[] | select(.headSha == $sha and .databaseId > $before)] | sort_by(.databaseId) | last | .databaseId // empty' \
+    runs=$(gh run list --repo "$repository" --workflow "$workflow_name" --event "$event" \
+      --limit 50 --json databaseId,headSha,workflowName,event,status,conclusion,url)
+    candidates=$(jq -c --arg sha "$head_sha" --arg workflow "$workflow_name" \
+      --arg event "$event" --argjson before "$before_id" \
+      '[.[] | select(.headSha == $sha and .workflowName == $workflow and .event == $event and .databaseId > $before)]' \
       <<<"$runs")
+    candidate_count=$(jq -r 'length' <<<"$candidates")
+    ((candidate_count <= 1)) || fail "AMBIGUOUS_RUN: exact workflow 후보가 ${candidate_count}개입니다."
+    run_id=$(jq -r 'if length == 1 then .[0].databaseId else empty end' <<<"$candidates")
     [[ -n "$run_id" ]] && break
     attempt=$((attempt + 1))
     ((attempt < attempts)) && sleep "$delay"
   done
-  [[ -n "$run_id" ]] || fail "$repository에서 commit SHA $head_sha workflow run을 찾지 못했습니다."
+  [[ -n "$run_id" ]] || fail "EXACT_RUN_NOT_FOUND: ${repository}에서 지정한 SHA/workflow/event의 run을 찾지 못했습니다."
 
   gh run watch "$run_id" --repo "$repository" --exit-status
   final=$(gh run view "$run_id" --repo "$repository" \
-    --json databaseId,headSha,status,conclusion,url)
-  jq -e --arg sha "$head_sha" '.headSha == $sha and .status == "completed" and .conclusion == "success"' \
+    --json databaseId,headSha,workflowName,event,status,conclusion,url)
+  jq -e --arg sha "$head_sha" --arg workflow "$workflow_name" --arg event "$event" '
+    .headSha == $sha and .workflowName == $workflow and .event == $event and
+    .status == "completed" and .conclusion == "success"
+  ' \
     <<<"$final" >/dev/null || fail "선택한 workflow run이 요청 SHA의 success 상태가 아닙니다."
   jq '{databaseId, headSha, status, conclusion, url}' <<<"$final"
   pass "$chapter exact-SHA workflow가 성공했습니다(run_id=$run_id)."
@@ -244,6 +282,7 @@ check_ch05() {
   require_command jq
   require_environment AWS_PROFILE
   require_environment AWS_REGION
+  validate_region "$AWS_REGION"
 
   local response platforms
   response=$(aws ecr batch-get-image \
@@ -275,6 +314,16 @@ check_ch05() {
 
   printf 'ECR_INDEX: repository=%s digest=%s platforms=%s\n' "$repository_name" "$digest" "$platforms"
   pass "ch05 ECR multi-architecture image index가 유효합니다."
+}
+
+check_contract_only() {
+  local chapter=$1 mode=${2:-}
+  [[ "$mode" == "--contract-only" ]] || \
+    fail "$chapter runtime checker에 필요한 인수가 없습니다. --contract-only는 offline contract test 전용입니다." 64
+  [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]] || \
+    fail "--contract-only는 COURSE_CHECK_BIN_DIR가 있는 offline test에서만 사용할 수 있습니다." 64
+  [[ -n "${AWS_REGION:-}" ]] && validate_region "$AWS_REGION"
+  printf 'DETAIL: %s public command shape is registered.\n' "$chapter"
 }
 
 cidr_range() {
@@ -404,9 +453,9 @@ usage() {
     'Usage: bash scripts/course-check.sh <chapter> [arguments]' \
     '  ch01 <three-repositories-root>' \
     '  ch02' \
-    '  ch03|ch11|ch12|ch13 <owner/repository> <commit-sha> [workflow] [event] [before-id]' \
-    '  ch05 <ecr-repository-name> <sha256-digest>' \
-    '  ch08 <first-ipv4-cidr> <second-ipv4-cidr>' \
+    '  ch05 <owner/repository> <commit-sha> <workflow-name> <event> [before-id]' \
+    '  ch06 <ecr-repository-name> <sha256-digest>' \
+    '  ch04|ch07..ch26 --contract-only (offline contract tests only)' \
     '  ch10 [kubectl-context] [namespace]' \
     '  stateful <kubectl-context> <namespace> <base-url>'
 }
@@ -419,16 +468,15 @@ chapter=${1:-}
 shift
 
 case "$chapter" in
-  ch01) check_ch01 "$@" ;;
-  ch02) check_ch02 "$@" ;;
-  ch03) check_workflow_run ch03 "$@" ;;
-  ch05) check_ch05 "$@" ;;
-  ch08) check_ch08 "$@" ;;
-  ch10) check_ch10 "$@" ;;
-  ch11) check_workflow_run ch11 "$@" ;;
-  ch12) check_workflow_run ch12 "$@" ;;
-  ch13) check_workflow_run ch13 "$@" ;;
-  stateful) check_stateful "$@" ;;
+  ch01) check_ch01 "$@"; emit_pass STATIC "ch01 repository baseline이 유효합니다." ;;
+  ch02) check_ch02 "$@"; emit_pass "$(runtime_grade)" "ch02 state, identity, governance 계약이 유효합니다." ;;
+  ch05) check_workflow_run ch05 "$@"; emit_pass "$(runtime_grade)" "ch05 exact workflow 실행이 유효합니다." ;;
+  ch06) check_ch05 "$@"; emit_pass "$(runtime_grade)" "ch06 multi-architecture image index가 유효합니다." ;;
+  ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch12|ch13|ch14|ch15|ch16|ch17|ch18|ch19|ch20|ch21|ch22|ch23|ch24|ch25|ch26)
+    check_contract_only "$chapter" "$@"
+    emit_pass STATIC "SIMULATED_CLOUD_CONTRACT $chapter dispatcher가 등록됐습니다."
+    ;;
+  stateful) check_stateful "$@"; emit_pass "$(runtime_grade)" "Stateful Mini Commerce runtime 계약이 유효합니다." ;;
   *)
     usage >&2
     fail "지원하지 않는 Chapter입니다: $chapter" 64

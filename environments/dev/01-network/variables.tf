@@ -1,6 +1,11 @@
 variable "aws_region" {
   description = "AWS Region for this environment"
   type        = string
+
+  validation {
+    condition     = contains(["ap-northeast-2", "us-east-1"], var.aws_region)
+    error_message = "aws_region must be ap-northeast-2 or us-east-1."
+  }
 }
 
 variable "project_name" {
