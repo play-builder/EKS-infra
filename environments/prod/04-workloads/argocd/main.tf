@@ -51,6 +51,21 @@ locals {
     end
     return hs
   LUA
+  volume_snapshot_health_lua = <<-LUA
+    hs = {}
+    hs.status = "Progressing"
+    hs.message = "waiting for VolumeSnapshot readiness"
+    if obj.status ~= nil then
+      if obj.status.error ~= nil then
+        hs.status = "Degraded"
+        hs.message = obj.status.error.message or "VolumeSnapshot reported an error"
+      elseif obj.status.readyToUse == true then
+        hs.status = "Healthy"
+        hs.message = "VolumeSnapshot is ready to use"
+      end
+    end
+    return hs
+  LUA
 }
 
 resource "helm_release" "argocd" {
@@ -72,6 +87,8 @@ resource "helm_release" "argocd" {
         cm = {
           "course.health.external-secret.contract"                                        = "external-secret-ready-health/v1"
           "resource.customizations.health.external-secrets.io_ExternalSecret"             = local.external_secret_health_lua
+          "course.health.volume-snapshot.contract"                                        = "volume-snapshot-ready-health/v1"
+          "resource.customizations.health.snapshot.storage.k8s.io_VolumeSnapshot"         = local.volume_snapshot_health_lua
           "resource.customizations.ignoreDifferences.gateway.networking.k8s.io_HTTPRoute" = <<-YAML
             jqPathExpressions:
               - 'select(.metadata.labels["rollouts.argoproj.io/gatewayapi-canary"] == "in-progress") | .spec.rules'
@@ -227,10 +244,6 @@ resource "kubectl_manifest" "bootstrap" {
         namespace = "argocd"
       }
       syncPolicy = {
-        automated = {
-          prune    = true
-          selfHeal = true
-        }
         syncOptions = [
           "CreateNamespace=true",
           "ServerSideApply=true",

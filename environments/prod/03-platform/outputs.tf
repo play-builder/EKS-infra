@@ -67,6 +67,16 @@ output "adot_xray_enabled" {
   value       = var.enable_adot_collector && var.enable_adot_xray
 }
 
+output "otlp_http_traces_endpoint" {
+  description = "OTLP/HTTP protobuf endpoint for the sample application"
+  value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_http_traces_endpoint : null
+}
+
+output "otlp_traces_protocol" {
+  description = "Application trace protocol"
+  value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_traces_protocol : null
+}
+
 output "amp_alerting_enabled" {
   description = "Whether AMP rules and Alertmanager are enabled"
   value       = module.amp_alerting.enabled
@@ -90,6 +100,41 @@ output "k6_operator_namespace" {
 output "k6_operator_chart_version" {
   description = "Null in Prod because the course k6 operator is forbidden"
   value       = module.k6_operator.chart_version
+}
+
+output "snapshot_controller_enabled" {
+  description = "Whether the Ch23 EKS managed snapshot-controller add-on is enabled"
+  value       = var.enable_snapshot_controller
+}
+
+output "snapshot_controller_addon_version" {
+  description = "Pinned managed snapshot-controller add-on version"
+  value       = var.enable_snapshot_controller ? var.snapshot_controller_addon_version : null
+}
+
+output "volume_snapshot_class_name" {
+  description = "Course VolumeSnapshotClass name"
+  value       = var.enable_snapshot_controller ? var.volume_snapshot_class_name : null
+}
+
+output "snapshot_driver" {
+  description = "CSI driver used by VolumeSnapshotClass"
+  value       = var.enable_snapshot_controller ? var.snapshot_driver : null
+}
+
+output "recovery_namespace" {
+  description = "Recovery namespace is intentionally unavailable in Prod"
+  value       = null
+}
+
+output "recovery_cleanup_label" {
+  description = "Recovery cleanup label is intentionally unavailable in Prod"
+  value       = null
+}
+
+output "recovery_db_secret_reader_role_arn" {
+  description = "Prod must never create a recovery DB secret reader role"
+  value       = null
 }
 
 output "amg_workspace_endpoint" {

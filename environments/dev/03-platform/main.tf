@@ -111,6 +111,97 @@ module "ebs_csi_driver" {
   tags = local.common_tags
 }
 
+resource "aws_eks_addon" "snapshot_controller" {
+  count = var.enable_snapshot_controller ? 1 : 0
+
+  cluster_name                = local.eks_cluster_name
+  addon_name                  = "snapshot-controller"
+  addon_version               = var.snapshot_controller_addon_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name}-snapshot-controller-addon"
+  })
+}
+
+resource "kubectl_manifest" "volume_snapshot_class" {
+  for_each = var.enable_snapshot_controller ? {
+    (var.volume_snapshot_class_name) = true
+  } : {}
+
+  yaml_body = yamlencode({
+    apiVersion     = "snapshot.storage.k8s.io/v1"
+    kind           = "VolumeSnapshotClass"
+    metadata       = { name = each.key }
+    driver         = var.snapshot_driver
+    deletionPolicy = "Retain"
+  })
+
+  server_side_apply = true
+  force_conflicts   = true
+  wait_for_rollout  = false
+
+  depends_on = [aws_eks_addon.snapshot_controller]
+}
+
+resource "aws_iam_role" "recovery_db_secret_reader" {
+  count = var.enable_recovery_secret_reader ? 1 : 0
+
+  name = "${local.name}-recovery-db-secret-reader-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Principal = { Federated = data.terraform_remote_state.eks.outputs.oidc_provider_arn }
+      Condition = {
+        StringEquals = {
+          "${data.terraform_remote_state.eks.outputs.oidc_provider}:sub" = "system:serviceaccount:app-recovery:sample-app-recovery-secret-reader"
+          "${data.terraform_remote_state.eks.outputs.oidc_provider}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = merge(local.common_tags, { Name = "${local.name}-recovery-db-secret-reader-role" })
+}
+
+resource "aws_iam_policy" "recovery_db_secret_reader" {
+  count = var.enable_recovery_secret_reader ? 1 : 0
+
+  name = "${local.name}-recovery-db-secret-reader-policy"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat([
+      {
+        Sid      = "ReadExactApplicationDbSecret"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+        Resource = [aws_secretsmanager_secret.sample_app_db[0].arn]
+      }
+      ], var.recovery_secret_kms_key_arn != null ? [{
+        Sid      = "DecryptConfiguredSecretKey"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = [var.recovery_secret_kms_key_arn]
+        Condition = {
+          StringEquals = { "kms:ViaService" = "secretsmanager.${var.aws_region}.amazonaws.com" }
+        }
+    }] : [])
+  })
+
+  tags = merge(local.common_tags, { Name = "${local.name}-recovery-db-secret-reader-policy" })
+}
+
+resource "aws_iam_role_policy_attachment" "recovery_db_secret_reader" {
+  count = var.enable_recovery_secret_reader ? 1 : 0
+
+  role       = aws_iam_role.recovery_db_secret_reader[0].name
+  policy_arn = aws_iam_policy.recovery_db_secret_reader[0].arn
+}
+
 module "aws_load_balancer_controller" {
   source = "../../../modules/addons/aws-load-balancer-controller"
   count  = var.enable_alb_controller ? 1 : 0

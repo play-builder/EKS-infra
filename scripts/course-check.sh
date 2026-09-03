@@ -692,6 +692,31 @@ check_ch16() {
   printf 'DEV_SLO_EVIDENCE: %s\n' "$output"
 }
 
+check_ch23() {
+  case "${1:-}" in
+    --contract-only)
+      check_contract_only ch23 "$@"
+      ;;
+    --validate-quiesce)
+      [[ $# -eq 2 ]] || fail '사용법: ch23 --validate-quiesce <snapshot-quiesce.json>' 64
+      [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]] || fail 'Ch23 fixture validation requires COURSE_CHECK_BIN_DIR; live snapshot creation must re-query Kubernetes.' 64
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/snapshot-quiesce-check.sh" "$2"
+      ;;
+    --validate-recovery)
+      [[ $# -eq 2 || $# -eq 3 ]] || fail '사용법: ch23 --validate-recovery <snapshot-recovery.json> [snapshot-quiesce.json]' 64
+      [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]] || fail 'Ch23 fixture validation requires COURSE_CHECK_BIN_DIR; live recovery evidence must be re-queried.' 64
+      if [[ $# -eq 3 ]]; then
+        COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/snapshot-recovery-check.sh" "$2" "$3"
+      else
+        COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/snapshot-recovery-check.sh" "$2"
+      fi
+      ;;
+    *)
+      fail '사용법: ch23 --contract-only | --validate-quiesce <file> | --validate-recovery <file> [quiesce-file]' 64
+      ;;
+  esac
+}
+
 usage() {
   printf '%s\n' \
     'Usage: bash scripts/course-check.sh <chapter> [arguments]' \
@@ -702,6 +727,7 @@ usage() {
     '  ch12 <context> <namespace> <externalsecret> <rollout> <runtime-secret-id> <version-id> <previous-pod-uid>' \
     '  ch15 <context> <namespace> <application> <source-repository> <source-sha> <image-repository> <image-digest> <gitops-revision> <cluster-arn> <region> --output <path>' \
     '  ch16 <ch15-evidence> <context> <k6-namespace> <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <path>' \
+    '  ch23 --validate-quiesce <snapshot-quiesce.json> | --validate-recovery <snapshot-recovery.json> [quiesce-file]' \
     '  ch04|ch07..ch26 --contract-only (offline contract tests only; implemented chapters also accept it)' \
     '  ch10 [kubectl-context] [namespace]' \
     '  stateful <kubectl-context> <namespace> <base-url>'
@@ -730,7 +756,8 @@ case "$chapter" in
     ;;
   ch15) check_ch15 "$@"; emit_pass "$(runtime_grade)" "ch15 Dev deployment evidence가 유효합니다." ;;
   ch16) check_ch16 "$@"; emit_pass "$(runtime_grade)" "ch16 Dev SLO, k6, AMP, SNS evidence가 유효합니다." ;;
-  ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch13|ch17|ch18|ch19|ch20|ch21|ch22|ch23|ch24|ch25|ch26)
+  ch23) check_ch23 "$@"; emit_pass "$(runtime_grade)" "ch23 snapshot recovery evidence가 유효합니다." ;;
+  ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch13|ch17|ch18|ch19|ch20|ch21|ch22|ch24|ch25|ch26)
     check_contract_only "$chapter" "$@"
     emit_pass STATIC "SIMULATED_CLOUD_CONTRACT $chapter dispatcher가 등록됐습니다."
     ;;

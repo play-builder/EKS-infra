@@ -243,7 +243,8 @@ resource "kubernetes_manifest" "otel_collector" {
           var.enable_xray ? {
             otlp = {
               protocols = {
-                grpc = { endpoint = "0.0.0.0:4317" }
+                # The sample application contract is OTLP/HTTP with protobuf.
+                # The SDK appends /v1/traces to this receiver endpoint.
                 http = { endpoint = "0.0.0.0:4318" }
               }
             }

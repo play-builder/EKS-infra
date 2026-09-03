@@ -33,7 +33,7 @@ GitHub OIDC + ECR
 | shared | GitHub OIDC, ECR, GitHub Actions IAM role | EKS cluster |
 | 01-network | VPC, subnet, NAT, route | EKS |
 | 02-eks | EKS 1.36, node group, Access Entry, OIDC provider | platform chart |
-| 03-platform | Gateway CRD, AWS LBC, ExternalDNS, External Secrets, AMP, ADOT, IRSA, `course-gp3` | sample-app/PVC |
+| 03-platform | Gateway CRD, AWS LBC, External Secrets, AMP/ADOT, IRSA, `course-gp3`, Ch23 snapshot add-on (opt-in) | sample-app/PVC |
 | 04-workloads | Argo CD, Argo Rollouts, Gateway plugin, bootstrap Application | app manifest 원본 |
 
 ## 전제 도구
@@ -129,6 +129,12 @@ Platform controller는 Chapter가 처음 필요로 할 때만 활성화합니다
 | Ch12 | `enable_reloader=true` | runtime secret rotation이 Rollout의 새 Pod를 생성 |
 | Ch16 Dev | `enable_k6_operator=true`, `enable_amp_alerting=true` | 제한된 부하와 SLO/alert 검증 |
 | Prod | `enable_k6_operator=false` | 강의 load controller 설치 차단 |
+| Ch23 | `enable_snapshot_controller=true` | EKS managed `snapshot-controller`와 Retain `VolumeSnapshotClass` 설치 |
+
+ADOT X-Ray trace 입력은 애플리케이션과 OTLP/HTTP protobuf 계약을 사용합니다. `enable_adot_xray=true`일
+때 platform output의 `otlp_http_traces_endpoint`를 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`에 그대로
+설정하며, endpoint는 `:4318/v1/traces`, protocol은 `http/protobuf`입니다. gRPC `4317` 입력은
+이 과정의 애플리케이션 계약에 포함하지 않습니다.
 
 Secrets Manager에는 `sample-app-runtime`과 `sample-app-db` 두 shell만 만들며 값은 Terraform으로
 전달하지 않습니다. application reader IRSA는 두 exact ARN의 `DescribeSecret`/`GetSecretValue`만

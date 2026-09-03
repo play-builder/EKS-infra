@@ -111,6 +111,40 @@ module "ebs_csi_driver" {
   tags = local.common_tags
 }
 
+resource "aws_eks_addon" "snapshot_controller" {
+  count = var.enable_snapshot_controller ? 1 : 0
+
+  cluster_name                = local.eks_cluster_name
+  addon_name                  = "snapshot-controller"
+  addon_version               = var.snapshot_controller_addon_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name}-snapshot-controller-addon"
+  })
+}
+
+resource "kubectl_manifest" "volume_snapshot_class" {
+  for_each = var.enable_snapshot_controller ? {
+    (var.volume_snapshot_class_name) = true
+  } : {}
+
+  yaml_body = yamlencode({
+    apiVersion     = "snapshot.storage.k8s.io/v1"
+    kind           = "VolumeSnapshotClass"
+    metadata       = { name = each.key }
+    driver         = var.snapshot_driver
+    deletionPolicy = "Retain"
+  })
+
+  server_side_apply = true
+  force_conflicts   = true
+  wait_for_rollout  = false
+
+  depends_on = [aws_eks_addon.snapshot_controller]
+}
+
 module "aws_load_balancer_controller" {
   source = "../../../modules/addons/aws-load-balancer-controller"
   count  = var.enable_alb_controller ? 1 : 0

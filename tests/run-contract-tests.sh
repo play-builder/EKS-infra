@@ -15,6 +15,15 @@ tests=(
   alerting-contract.sh
   k6-operator-contract.sh
   dev-evidence-handoff-contract.sh
+  snapshot-quiesce-contract.sh
+  snapshot-recovery-contract.sh
+  dev-ready-contract.sh
+  prod-bootstrap-contract.sh
+  capacity-check-contract.sh
+  prod-design-preflight-contract.sh
+  prod-preflight-contract.sh
+  prod-live-capacity-check-contract.sh
+  prod-baseline-check-contract.sh
 )
 
 for test_file in "${tests[@]}"; do

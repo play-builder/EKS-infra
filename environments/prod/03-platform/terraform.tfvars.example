@@ -19,6 +19,11 @@ enable_external_secrets         = true
 external_secrets_ownership_mode = "fresh"
 enable_reloader                 = false
 enable_k6_operator              = false
+enable_snapshot_controller      = false
+snapshot_controller_addon_version = "v8.2.0-eksbuild.1"
+volume_snapshot_class_name      = "course-ebs-snapshots"
+# Recovery DB secret reader is intentionally Dev-only.
+enable_recovery_secret_reader   = false
 enable_amp_alerting             = false
 enable_sns_alert_delivery       = false
 # sns_alert_email_endpoint      = "oncall@example.com"

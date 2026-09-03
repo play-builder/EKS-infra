@@ -67,6 +67,16 @@ output "adot_xray_enabled" {
   value       = var.enable_adot_collector && var.enable_adot_xray
 }
 
+output "otlp_http_traces_endpoint" {
+  description = "OTLP/HTTP protobuf endpoint for the sample application"
+  value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_http_traces_endpoint : null
+}
+
+output "otlp_traces_protocol" {
+  description = "Application trace protocol"
+  value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_traces_protocol : null
+}
+
 output "amp_alerting_enabled" {
   description = "Whether Ch16 AMP rules and Alertmanager are enabled"
   value       = module.amp_alerting.enabled
@@ -90,6 +100,41 @@ output "k6_operator_namespace" {
 output "k6_operator_chart_version" {
   description = "Pinned k6 operator chart version"
   value       = module.k6_operator.chart_version
+}
+
+output "snapshot_controller_enabled" {
+  description = "Whether the Ch23 EKS managed snapshot-controller add-on is enabled"
+  value       = var.enable_snapshot_controller
+}
+
+output "snapshot_controller_addon_version" {
+  description = "Pinned managed snapshot-controller add-on version"
+  value       = var.enable_snapshot_controller ? var.snapshot_controller_addon_version : null
+}
+
+output "volume_snapshot_class_name" {
+  description = "Course VolumeSnapshotClass name"
+  value       = var.enable_snapshot_controller ? var.volume_snapshot_class_name : null
+}
+
+output "snapshot_driver" {
+  description = "CSI driver used by VolumeSnapshotClass"
+  value       = var.enable_snapshot_controller ? var.snapshot_driver : null
+}
+
+output "recovery_namespace" {
+  description = "Namespace reserved for recovery workloads"
+  value       = var.enable_recovery_secret_reader ? "app-recovery" : null
+}
+
+output "recovery_cleanup_label" {
+  description = "Label used to identify disposable recovery workloads"
+  value       = var.enable_recovery_secret_reader ? "course.playdevops.io/recovery-cleanup=true" : null
+}
+
+output "recovery_db_secret_reader_role_arn" {
+  description = "Least-privilege recovery DB secret reader role"
+  value       = var.enable_recovery_secret_reader ? aws_iam_role.recovery_db_secret_reader[0].arn : null
 }
 
 output "amg_workspace_endpoint" {

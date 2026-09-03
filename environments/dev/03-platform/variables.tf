@@ -295,3 +295,50 @@ variable "k6_operator_namespace" {
     error_message = "k6_operator_namespace must be a dedicated non-application namespace."
   }
 }
+
+variable "enable_snapshot_controller" {
+  description = "Enable the EKS managed snapshot-controller add-on at Ch23"
+  type        = bool
+  default     = false
+}
+
+variable "snapshot_controller_addon_version" {
+  description = "Pinned EKS managed snapshot-controller add-on version"
+  type        = string
+  default     = "v8.2.0-eksbuild.1"
+
+  validation {
+    condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+-eksbuild\\.[0-9]+$", var.snapshot_controller_addon_version))
+    error_message = "snapshot_controller_addon_version must be a pinned EKS add-on version."
+  }
+}
+
+variable "volume_snapshot_class_name" {
+  description = "Course-owned VolumeSnapshotClass name"
+  type        = string
+  default     = "course-ebs-snapshots"
+}
+
+variable "snapshot_driver" {
+  description = "CSI driver used by the course VolumeSnapshotClass"
+  type        = string
+  default     = "ebs.csi.aws.com"
+
+  validation {
+    condition     = var.snapshot_driver == "ebs.csi.aws.com"
+    error_message = "snapshot_driver must be ebs.csi.aws.com."
+  }
+}
+
+variable "enable_recovery_secret_reader" {
+  description = "Enable the Dev-only least-privilege recovery DB secret reader IRSA role"
+  type        = bool
+  default     = false
+}
+
+variable "recovery_secret_kms_key_arn" {
+  description = "Optional exact CMK ARN used to decrypt the application DB secret"
+  type        = string
+  default     = null
+  nullable    = true
+}

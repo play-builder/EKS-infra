@@ -1,0 +1,14 @@
+{
+  "schemaVersion":"course.snapshot-recovery/v1",
+  "evidenceGrade":"CLOUD_RUNTIME",
+  "environment":"dev",
+  "region":"ap-northeast-2",
+  "clusterArn":"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks",
+  "gitopsRevision":"2222222222222222222222222222222222222222",
+  "source":{"namespace":"app-dev","pvcName":"data-sample-app-postgresql-0","pvcUid":"pvc-123","volumeName":"pvc-123"},
+  "recovery":{"namespace":"app-recovery","pvcName":"recovery-sample-app-postgresql-0","serviceAccount":"sample-app-recovery-secret-reader","roleArn":"arn:aws:iam::123456789012:role/dev-recovery-db-secret-reader-role","cleanupLabel":"course.playdevops.io/recovery-cleanup=true"},
+  "snapshot":{"name":"sample-app-db-snapshot","uid":"snapshot-123","readyToUse":true,"driver":"ebs.csi.aws.com","volumeSnapshotClassName":"course-ebs-snapshots"},
+  "integrity":{"algorithm":"sha256","value":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+  "observedAt":"2026-09-03T00:07:00Z",
+  "expiresAt":"2099-09-03T01:00:00Z"
+}

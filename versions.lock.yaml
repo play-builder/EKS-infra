@@ -58,3 +58,7 @@ platform:
   k6OperatorController: "1.6.0"
   k6OperatorChartDigest: "sha256:e721213e31989fc096233cd73ed90eac674815b66abb9aa7ac39db276414cfac"
   k6OperatorChartSource: "https://github.com/grafana/helm-charts/releases/download/helm-k6-operator-4.6.0/k6-operator-4.6.0.tgz"
+  snapshotControllerAddon: "v8.2.0-eksbuild.1"
+  snapshotControllerAddonSource: "aws eks describe-addon-versions --addon-name snapshot-controller --kubernetes-version 1.36 --region <region>"
+  snapshotControllerAddonVerificationStatus: "NOT_RUN_NO_AWS_CREDENTIALS"
+  snapshotControllerAddonVerifiedAt: "2026-09-03"
