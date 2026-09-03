@@ -17,6 +17,16 @@ for region in ap-northeast-2 us-east-1; do
   ! grep -Fq '[CLOUD_RUNTIME]' <<<"$output"
 done
 
+one_character_ready="$tmp_dir/dev-ready-one-character-cluster.json"
+one_character_deployment="$tmp_dir/deployment-one-character-cluster.json"
+one_character_slo="$tmp_dir/slo-one-character-cluster.json"
+jq '.cluster.arn="arn:aws:eks:ap-northeast-2:123456789012:cluster/a"' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$one_character_ready"
+make_dev_handoff "$one_character_ready" "$one_character_deployment" "$one_character_slo"
+AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 \
+  bash "$root/scripts/dev-ready-check.sh" \
+    "$one_character_deployment" "$one_character_slo" "$one_character_ready" >/dev/null
+
 deployment="$tmp_dir/deployment-invalid.json"
 slo="$tmp_dir/slo-invalid.json"
 make_dev_handoff "$root/tests/fixtures/dev-ready-ap-northeast-2.json" "$deployment" "$slo"
@@ -58,6 +68,12 @@ jq '.image.repository="not-an-ecr-repository"' \
   "$deployment" >"$tmp_dir/deployment-invalid-image-repository.json"
 jq '.image.repository="not-an-ecr-repository"' \
   "$slo" >"$tmp_dir/slo-invalid-image-repository.json"
+long_cluster_name=$(printf 'a%.0s' {1..101})
+jq --arg name "$long_cluster_name" \
+  '.cluster.arn="arn:aws:eks:ap-northeast-2:123456789012:cluster/"+$name' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-long-cluster-name.json"
+make_dev_handoff "$tmp_dir/dev-ready-long-cluster-name.json" \
+  "$tmp_dir/deployment-long-cluster-name.json" "$tmp_dir/slo-long-cluster-name.json"
 
 run_rejected() {
   local deployment_file=$1 ready_file=$2 status
@@ -108,6 +124,8 @@ run_rejected_with_slo "$tmp_dir/deployment-invalid-image-repository.json" \
   "$slo" "$root/tests/fixtures/dev-ready-ap-northeast-2.json"
 run_rejected_with_slo "$deployment" "$tmp_dir/slo-invalid-image-repository.json" \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json"
+run_rejected_with_slo "$tmp_dir/deployment-long-cluster-name.json" \
+  "$tmp_dir/slo-long-cluster-name.json" "$tmp_dir/dev-ready-long-cluster-name.json"
 
 grep -Fq '"name": "ci"' "$root/README.md"
 grep -Fq '"event": "push"' "$root/README.md"

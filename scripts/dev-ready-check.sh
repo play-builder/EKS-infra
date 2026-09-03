@@ -64,7 +64,7 @@ course_assert_json "$ready" '
   ) and
   (.gitops | keys == ["devRevision"]) and (.gitops.devRevision | test("^[0-9a-f]{40}$")) and
   (.cluster | keys == ["arn"]) and
-  (.cluster.arn | test("^arn:aws:eks:" + $ENV.AWS_REGION + ":" + $ENV.AWS_ACCOUNT_ID + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]+$")) and
+  (.cluster.arn | test("^arn:aws:eks:" + $ENV.AWS_REGION + ":" + $ENV.AWS_ACCOUNT_ID + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")) and
   (.slo | keys == ["evidenceId"]) and (.slo.evidenceId | type == "string" and length > 0) and
   (.issuedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
 ' 'invalid, stale, or aliased course.dev-ready/v1 evidence'

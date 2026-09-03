@@ -92,13 +92,13 @@ check_state_bucket() {
   local profile=$1 region=$2 bucket=$3 project=$4
   local tags location versioning encryption public_block
 
-  tags=$(aws s3api get-bucket-tagging --bucket "$bucket" --profile "$profile" --output json)
+  tags=$(aws s3api get-bucket-tagging --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   jq -e --arg project "$project" '
     any(.TagSet[]?; .Key == "ManagedBy" and .Value == "gitops-course") and
     any(.TagSet[]?; .Key == "Project" and .Value == $project)
   ' <<<"$tags" >/dev/null || fail "state bucket ownership tag가 일치하지 않습니다: $bucket"
 
-  location=$(aws s3api get-bucket-location --bucket "$bucket" --profile "$profile" --output json)
+  location=$(aws s3api get-bucket-location --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   if [[ "$region" == "us-east-1" ]]; then
     jq -e '.LocationConstraint == null' <<<"$location" >/dev/null || \
       fail "state bucket Region이 us-east-1이 아닙니다: $bucket"
@@ -107,14 +107,14 @@ check_state_bucket() {
       fail "state bucket Region이 일치하지 않습니다: $bucket"
   fi
 
-  versioning=$(aws s3api get-bucket-versioning --bucket "$bucket" --profile "$profile" --output json)
+  versioning=$(aws s3api get-bucket-versioning --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   jq -e '.Status == "Enabled"' <<<"$versioning" >/dev/null || fail "state bucket versioning이 Enabled가 아닙니다."
 
-  encryption=$(aws s3api get-bucket-encryption --bucket "$bucket" --profile "$profile" --output json)
+  encryption=$(aws s3api get-bucket-encryption --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   jq -e 'any(.ServerSideEncryptionConfiguration.Rules[]?; .ApplyServerSideEncryptionByDefault.SSEAlgorithm == "AES256" or .ApplyServerSideEncryptionByDefault.SSEAlgorithm == "aws:kms")' \
     <<<"$encryption" >/dev/null || fail "state bucket 기본 암호화가 없습니다."
 
-  public_block=$(aws s3api get-public-access-block --bucket "$bucket" --profile "$profile" --output json)
+  public_block=$(aws s3api get-public-access-block --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   jq -e '.PublicAccessBlockConfiguration | .BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' \
     <<<"$public_block" >/dev/null || fail "state bucket public access block 네 항목이 모두 true가 아닙니다."
 
@@ -126,7 +126,7 @@ check_dns_delegation() {
   local route53_nameservers public_nameservers
 
   route53_nameservers=$(aws route53 get-hosted-zone \
-    --id "$hosted_zone_id" --profile "$profile" --output json \
+    --id "$hosted_zone_id" --profile "$profile" --region "$AWS_REGION" --output json \
     | jq -r '.DelegationSet.NameServers[]' \
     | normalize_nameservers)
   public_nameservers=$(dig +short NS "$root_domain" | normalize_nameservers)
@@ -142,13 +142,13 @@ check_dns_delegation() {
 
 find_github_oidc_provider() {
   local profile=$1 provider_arns provider_arn provider_json count=0 selected=""
-  provider_arns=$(aws iam list-open-id-connect-providers --profile "$profile" --output json \
+  provider_arns=$(aws iam list-open-id-connect-providers --profile "$profile" --region "$AWS_REGION" --output json \
     | jq -r '.OpenIDConnectProviderList[].Arn')
 
   while IFS= read -r provider_arn; do
     [[ -n "$provider_arn" ]] || continue
     provider_json=$(aws iam get-open-id-connect-provider \
-      --open-id-connect-provider-arn "$provider_arn" --profile "$profile" --output json)
+      --open-id-connect-provider-arn "$provider_arn" --profile "$profile" --region "$AWS_REGION" --output json)
     if [[ "$(jq -r '.Url' <<<"$provider_json")" == "token.actions.githubusercontent.com" ]]; then
       count=$((count + 1))
       selected=$provider_arn
