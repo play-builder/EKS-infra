@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 API_VERSION="2026-03-10"
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$SCRIPT_DIR/lib/evidence-common.sh"
 
 if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
   [[ -d "$COURSE_CHECK_BIN_DIR" ]] || {
@@ -660,15 +661,27 @@ check_ch16() {
   fi
   [[ $# -eq 9 && "${8}" == "--output" ]] || fail "사용법: ch16 <deployment-evidence> <context> <k6-namespace> <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <path>" 64
   local deployment=$1 context=$2 namespace=$3 testrun=$4 workspace_id=$5 topic_arn=$6 region=$7 output=$9
+  local grade now expected_grade operator crd run workspace workspace_arn workspace_account rules rule_text alertmanager alertmanager_text topic subscriptions query delivery expires evidence_id payload
   for command in aws kubectl jq; do require_command "$command"; done
   require_environment AWS_PROFILE
   require_environment ALERT_DELIVERY_EVIDENCE
   validate_region "$region"
   validate_evidence_output_path "$output"
-  local grade now expected_grade operator crd run workspace workspace_arn workspace_account rules rule_text alertmanager alertmanager_text topic subscriptions query delivery expires evidence_id payload
+  course_require_file "$ALERT_DELIVERY_EVIDENCE"
+  course_assert_canonical_utc_seconds "$ALERT_DELIVERY_EVIDENCE" \
+    'alert delivery observedAt' '["observedAt"]'
+  now=${COURSE_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+  course_assert_canonical_utc_seconds_value "$now" 'Ch16 evaluation time'
+  delivery=$(cat "$ALERT_DELIVERY_EVIDENCE")
+  jq -e --arg topic "$topic_arn" --arg now "$now" '
+    (keys | sort) == (["evidenceGrade","firing","observedAt","resolved","schemaVersion","topicArn"] | sort) and
+    .schemaVersion == "course.alert-delivery/v1" and .evidenceGrade == "CLOUD_RUNTIME" and
+    .topicArn == $topic and .firing.delivered == true and .resolved.delivered == true and
+    (.observedAt | fromdateiso8601) <= ($now | fromdateiso8601)
+  ' <<<"$delivery" >/dev/null || fail "Firing/Resolved SNS delivery evidence가 모두 필요합니다."
   grade=$(runtime_grade)
   expected_grade=$grade
-  validate_dev_deployment_evidence "$deployment" "${COURSE_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" "$expected_grade"
+  validate_dev_deployment_evidence "$deployment" "$now" "$expected_grade"
   [[ "$(jq -r '.region' "$deployment")" == "$region" ]] || fail "Ch15/Ch16 Region identity가 다릅니다."
 
   operator=$(kubectl --context "$context" -n "$namespace" get deployment k6-operator-controller-manager -o json)
@@ -713,14 +726,6 @@ check_ch16() {
     <<<"$subscriptions" >/dev/null || fail "SNS subscription이 confirmed 상태가 아닙니다."
   query=$(aws amp query-metrics --workspace-id "$workspace_id" --query-string 'course:http_success_ratio:5m' --region "$region" --profile "$AWS_PROFILE" --output json)
   jq -e 'any(.data.result[]?; ((.value[1] | tonumber) >= 0.99))' <<<"$query" >/dev/null || fail "Dev SLO success ratio가 0.99 미만입니다."
-  delivery=$(cat "$ALERT_DELIVERY_EVIDENCE")
-  jq -e --arg topic "$topic_arn" '
-    (keys | sort) == (["evidenceGrade","firing","observedAt","resolved","schemaVersion","topicArn"] | sort) and
-    .schemaVersion == "course.alert-delivery/v1" and .evidenceGrade == "CLOUD_RUNTIME" and
-    .topicArn == $topic and .firing.delivered == true and .resolved.delivered == true
-  ' <<<"$delivery" >/dev/null || fail "Firing/Resolved SNS delivery evidence가 모두 필요합니다."
-
-  now=${COURSE_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
   expires=$(one_hour_after "$now")
   evidence_id="sha256:$(printf '%s\n%s\n%s\n' "$(sha256sum "$deployment" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$deployment" | awk '{print $1}')" "$workspace_id" "$now" | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print $1}')"
   payload=$(jq -n --slurpfile deployment "$deployment" --arg grade "$grade" --arg evidence_id "$evidence_id" --arg now "$now" --arg expires "$expires" '

@@ -7,16 +7,7 @@ cleanup_grade_is_valid() {
 }
 
 cleanup_assert_canonical_utc_seconds() {
-  local file=$1 label=$2 path
-  shift 2
-  for path in "$@"; do
-    jq -e --argjson path "$path" '
-      getpath($path) |
-      type == "string" and
-      test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
-      ((try (fromdateiso8601 | todateiso8601) catch "") == .)
-    ' "$file" >/dev/null || course_fail "invalid canonical UTC seconds timestamp: $label"
-  done
+  course_assert_canonical_utc_seconds "$@"
 }
 
 cleanup_normalize_absolute_path() {

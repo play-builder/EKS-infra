@@ -30,6 +30,8 @@ while [[ $# -gt 0 ]]; do
 done
 for name in approval inventory decisions output; do [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64; done
 course_require_file "$approval"
+course_assert_canonical_utc_seconds "$approval" 'checkpoint approval timestamps' \
+  '["approvedAt"]' '["expiresAt"]'
 cleanup_validate_decisions "$inventory" "$decisions"
 
 course_assert_json "$approval" '

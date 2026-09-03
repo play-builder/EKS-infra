@@ -17,6 +17,7 @@ output=$3
 : "${AWS_REGION:?AWS_REGION is required}"
 course_validate_region "$AWS_REGION"
 course_require_file "$profile"
+course_assert_canonical_utc_seconds "$profile" 'Prod live capacity profile expiresAt' '["expiresAt"]'
 course_assert_eks_cluster_arn \
   "$(jq -r '.clusterArn // empty' "$profile")" \
   "$AWS_REGION" \

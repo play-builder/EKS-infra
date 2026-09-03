@@ -25,6 +25,24 @@ jq '.subnets' "$COURSE_LIVE_FIXTURE"
 EOF
 chmod +x "$tmp_dir/bin/kubectl" "$tmp_dir/bin/aws"
 
+jq '.profile.expiresAt="2099-02-31T00:00:00Z"' \
+  "$root/tests/fixtures/game-day-live-capacity-ap-northeast-2.json" >"$tmp_dir/invalid-time-live.json"
+jq '.profile' "$tmp_dir/invalid-time-live.json" >"$tmp_dir/invalid-time-profile.json"
+: >"$tmp_dir/invalid-time-aws.log"
+: >"$tmp_dir/invalid-time-kube.log"
+if COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$tmp_dir/invalid-time-live.json" \
+  COURSE_FAKE_AWS_LOG="$tmp_dir/invalid-time-aws.log" COURSE_FAKE_KUBECTL_LOG="$tmp_dir/invalid-time-kube.log" \
+  AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
+    bash "$root/scripts/game-day-capacity-check.sh" dev-playdevops-eks "$tmp_dir/invalid-time-profile.json" \
+      "$tmp_dir/invalid-time-result.json" >/dev/null 2>&1; then
+  echo 'expected invalid-calendar capacity profile expiry to fail' >&2
+  exit 1
+fi
+if [[ -s "$tmp_dir/invalid-time-aws.log" || -s "$tmp_dir/invalid-time-kube.log" || -e "$tmp_dir/invalid-time-result.json" ]]; then
+  echo 'invalid capacity profile timestamp must fail before cloud queries or evidence output' >&2
+  exit 1
+fi
+
 for region in ap-northeast-2 us-east-1; do
   jq --arg region "$region" \
     '.profile.region=$region | .profile.clusterArn=("arn:aws:eks:"+$region+":123456789012:cluster/dev-playdevops-eks")' \

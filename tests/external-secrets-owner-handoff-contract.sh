@@ -43,6 +43,24 @@ expect_cluster_name_accepted() {
 expect_handoff_rejected trailing-cluster-path '.clusterArn += "/junk"'
 expect_handoff_rejected region-mismatch '.region = "us-east-1"'
 expect_handoff_rejected application-identity-mismatch '.application.name = "external-secrets-prod"'
+expect_handoff_rejected observed-in-future '.observedAt = "2026-09-03T12:01:00Z"'
+expect_handoff_rejected expired '.expiresAt = "2026-09-03T11:59:00Z"'
+if bash "$root/scripts/external-secrets-owner-handoff.sh" validate-handoff \
+  "$valid" "2026-02-30T12:00:00Z" >/dev/null 2>&1; then
+  echo 'noncanonical handoff evaluation time must be rejected' >&2
+  exit 1
+fi
+
+for timestamp_case in \
+  'observed-invalid-calendar|observedAt|2026-02-30T00:00:00Z' \
+  'observed-fractional|observedAt|2026-09-03T00:00:00.123Z' \
+  'observed-offset|observedAt|2026-09-03T09:00:00+09:00' \
+  'expires-invalid-calendar|expiresAt|2026-09-31T00:00:00Z' \
+  'expires-fractional|expiresAt|2026-09-04T00:00:00.123Z' \
+  'expires-offset|expiresAt|2026-09-04T09:00:00+09:00'; do
+  IFS='|' read -r label field value <<<"$timestamp_case"
+  expect_handoff_rejected "$label" ".${field} = \"${value}\""
+done
 
 one_character_name=a
 hundred_character_name=$(printf '%0100d' 0)
@@ -195,6 +213,24 @@ run_runtime_adoption() {
     bash "$root/scripts/external-secrets-owner-handoff.sh" adopt \
       "$tmp_dir/terraform-root" "$runtime_handoff" "$output" course-dev
 }
+
+invalid_runtime_handoff="$tmp_dir/runtime-handoff-invalid-time.json"
+jq '.observedAt="2020-02-30T00:00:00Z"' "$runtime_handoff" >"$invalid_runtime_handoff"
+: >"$tmp_dir/commands.log"
+rm -f -- "$tmp_dir/imported"
+set +e
+PATH="$tmp_dir/bin:$PATH" OWNER_FAKE_COMMAND_LOG="$tmp_dir/commands.log" \
+  OWNER_FAKE_IMPORTED_MARKER="$tmp_dir/imported" \
+  bash "$root/scripts/external-secrets-owner-handoff.sh" adopt \
+    "$tmp_dir/terraform-root" "$invalid_runtime_handoff" \
+    "$tmp_dir/output/rejected-invalid-time.json" course-dev >/dev/null 2>&1
+invalid_time_status=$?
+set -e
+if [[ "$invalid_time_status" -eq 0 || -s "$tmp_dir/commands.log" || \
+  -e "$tmp_dir/output/rejected-invalid-time.json" ]]; then
+  echo 'invalid handoff timestamp must fail before Kubernetes, Helm, or Terraform calls' >&2
+  exit 1
+fi
 
 : >"$tmp_dir/commands.log"
 run_runtime_adoption "$runtime_adoption" env >/dev/null

@@ -45,6 +45,34 @@ if [[ "$status" -eq 0 ]]; then
   exit 1
 fi
 
+expect_decision_timestamp_rejected() {
+  local label=$1 decision_kind=$2 field=$3 value=$4
+  local design_candidate="$tmp_dir/design-$label.json"
+  local estimate_candidate="$tmp_dir/estimate-$label.json"
+  local updated_design_sha
+  jq . "$tmp_dir/design.json" >"$design_candidate"
+  jq . "$tmp_dir/estimate.json" >"$estimate_candidate"
+  if [[ "$decision_kind" == design ]]; then
+    jq --arg field "$field" --arg value "$value" '.[$field]=$value' "$tmp_dir/design.json" >"$design_candidate"
+    updated_design_sha=$(sha256_file "$design_candidate")
+    jq --arg previous "$updated_design_sha" '.bindings.previousDecisionSha256=$previous' \
+      "$tmp_dir/estimate.json" >"$estimate_candidate"
+  else
+    jq --arg field "$field" --arg value "$value" '.[$field]=$value' "$tmp_dir/estimate.json" >"$estimate_candidate"
+  fi
+  if COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+    bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
+      "$tmp_dir/slo.json" "$ready" "$design_candidate" "$estimate_candidate" >/dev/null 2>&1; then
+    echo "expected $label decision timestamp to fail" >&2
+    exit 1
+  fi
+}
+
+expect_decision_timestamp_rejected design-issued-invalid-calendar design issuedAt '2020-02-30T00:00:00Z'
+expect_decision_timestamp_rejected design-expires-invalid-calendar design expiresAt '2099-02-31T00:00:00Z'
+expect_decision_timestamp_rejected estimate-issued-invalid-calendar estimate issuedAt '2020-02-30T00:00:00Z'
+expect_decision_timestamp_rejected estimate-expires-invalid-calendar estimate expiresAt '2099-02-31T00:00:00Z'
+
 jq '.expiresAt="2026-01-01T00:00:00Z"' "$tmp_dir/estimate.json" >"$tmp_dir/stale-estimate.json"
 set +e
 COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \

@@ -39,6 +39,7 @@ for command in aws kubectl jq; do command -v "$command" >/dev/null 2>&1 || cours
 for name in AWS_PROFILE AWS_REGION; do [[ -n "${!name:-}" ]] || course_fail "$name is required" 64; done
 course_validate_region "$AWS_REGION"
 course_require_file "$profile"
+course_assert_canonical_utc_seconds "$profile" 'game-day capacity profile expiresAt' '["expiresAt"]'
 [[ -d "$(dirname -- "$output")" ]] || course_fail "output directory not found: $(dirname -- "$output")" 66
 course_assert_eks_cluster_arn \
   "$(jq -r '.clusterArn // empty' "$profile")" \

@@ -15,6 +15,10 @@ for name in COURSE_ID AWS_ACCOUNT_ID AWS_REGION; do [[ -n "${!name:-}" ]] || cou
 course_validate_region "$AWS_REGION"
 course_validate_account "$AWS_ACCOUNT_ID"
 for file in "$network_plan" "$capacity_input"; do course_require_file "$file"; done
+course_assert_canonical_utc_seconds "$network_plan" 'Prod network plan timestamps' \
+  '["observedAt"]' '["expiresAt"]'
+course_assert_canonical_utc_seconds "$capacity_input" 'Prod design capacity timestamps' \
+  '["observedAt"]' '["expiresAt"]'
 
 COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/dev-ready-check.sh" "$deployment" "$slo" "$ready" >/dev/null
 

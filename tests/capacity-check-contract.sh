@@ -42,4 +42,21 @@ if [[ "$status" -eq 0 ]]; then
   exit 1
 fi
 
+expect_timestamp_rejected() {
+  local label=$1 field=$2 value=$3
+  jq --arg field "$field" --arg value "$value" '.[$field]=$value' \
+    "$root/tests/fixtures/capacity-go.json" >"$tmp_file"
+  if bash "$root/scripts/capacity-check.sh" --mode design --input "$tmp_file" >/dev/null 2>&1; then
+    echo "expected $label capacity timestamp to fail" >&2
+    exit 1
+  fi
+}
+
+expect_timestamp_rejected observed-invalid-calendar observedAt '2020-02-30T00:00:00Z'
+expect_timestamp_rejected observed-fractional observedAt '2020-03-01T00:00:00.123Z'
+expect_timestamp_rejected observed-offset observedAt '2020-03-01T09:00:00+09:00'
+expect_timestamp_rejected expires-invalid-calendar expiresAt '2099-02-31T00:00:00Z'
+expect_timestamp_rejected expires-fractional expiresAt '2099-03-01T00:00:00.123Z'
+expect_timestamp_rejected expires-offset expiresAt '2099-03-01T09:00:00+09:00'
+
 echo 'PASS: normalized capacity GO and NO_GO contract'

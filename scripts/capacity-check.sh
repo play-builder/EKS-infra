@@ -18,6 +18,8 @@ done
 [[ "$mode" == design || "$mode" == estimate || "$mode" == live ]] || course_fail 'mode must be design, estimate, or live' 64
 [[ -n "$input" ]] || course_fail '--input is required' 64
 course_require_file "$input"
+course_assert_canonical_utc_seconds "$input" 'capacity input timestamps' \
+  '["observedAt"]' '["expiresAt"]'
 
 CAPACITY_MODE="$mode" course_assert_json "$input" '
   keys == ["accountId","billable","courseId","daemonSets","evidenceGrade","expiresAt","mode","network","nodes","observedAt","region","reserve","rollout","schemaVersion","workload"] and

@@ -30,6 +30,25 @@ course_assert_eks_cluster_arn() {
     course_fail 'invalid canonical EKS cluster ARN'
 }
 
+course_assert_canonical_utc_seconds() {
+  local file=$1 label=$2 path value
+  shift 2
+  for path in "$@"; do
+    value=$(jq -er --argjson path "$path" 'getpath($path) | select(type == "string")' "$file") || \
+      course_fail "invalid canonical UTC seconds timestamp: $label"
+    course_assert_canonical_utc_seconds_value "$value" "$label"
+  done
+}
+
+course_assert_canonical_utc_seconds_value() {
+  local value=$1 label=$2
+  jq -en --arg value "$value" '
+    $value |
+    test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
+    ((try (fromdateiso8601 | todateiso8601) catch "") == .)
+  ' >/dev/null || course_fail "invalid canonical UTC seconds timestamp: $label"
+}
+
 course_sha256_file() {
   shasum -a 256 "$1" | awk '{print "sha256:" $1}'
 }

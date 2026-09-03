@@ -7,6 +7,7 @@ setup_ch16_fake_environment() {
   cat >"$target/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+[[ -z "${COURSE_FAKE_CLOUD_LOG:-}" ]] || printf 'kubectl %s\n' "$*" >>"$COURSE_FAKE_CLOUD_LOG"
 case "$*" in
   *"get deployment k6-operator-controller-manager"*)
     echo '{"status":{"replicas":1,"availableReplicas":1}}'
@@ -28,6 +29,7 @@ EOF
   cat >"$target/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+[[ -z "${COURSE_FAKE_CLOUD_LOG:-}" ]] || printf 'aws %s\n' "$*" >>"$COURSE_FAKE_CLOUD_LOG"
 case "$1 $2" in
   "amp describe-workspace")
     echo '{"workspace":{"arn":"arn:aws:aps:ap-northeast-2:123456789012:workspace/ws-test","workspaceId":"ws-test","status":{"statusCode":"ACTIVE"},"prometheusEndpoint":"https://aps-workspaces.ap-northeast-2.amazonaws.com/workspaces/ws-test/"}}'

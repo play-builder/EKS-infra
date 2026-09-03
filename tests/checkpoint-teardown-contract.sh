@@ -23,12 +23,44 @@ chmod +x "$tmp_dir/bin/terraform" "$tmp_dir/bin/aws"
 : >"$tmp_dir/mutations.log"
 : >"$tmp_dir/aws.log"
 
-common=(
-  --approval "$root/tests/fixtures/checkpoint-approved-destroy.json"
+approval="$root/tests/fixtures/checkpoint-approved-destroy.json"
+common_without_approval=(
   --inventory "$tmp_dir/evidence/inventory.json"
   --retain-decisions "$tmp_dir/evidence/decisions.json"
   --output "$tmp_dir/resume.json"
 )
+common=(--approval "$approval" "${common_without_approval[@]}")
+
+expect_timestamp_rejected_before_mutation() {
+  local label=$1 field=$2 value=$3 status
+  local candidate="$tmp_dir/approval-$label.json"
+  jq --arg field "$field" --arg value "$value" '.[$field]=$value' "$approval" >"$candidate"
+  : >"$tmp_dir/mutations.log"
+  : >"$tmp_dir/aws.log"
+  rm -f -- "$tmp_dir/resume.json"
+  set +e
+  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  AWS_PROFILE=course \
+    bash "$root/scripts/checkpoint-teardown.sh" --approval "$candidate" "${common_without_approval[@]}" --execute \
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 \
+      >/dev/null 2>&1
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 || -s "$tmp_dir/aws.log" || -s "$tmp_dir/mutations.log" || -e "$tmp_dir/resume.json" ]]; then
+    echo "expected $label timestamp rejection before cloud or mutation calls" >&2
+    exit 1
+  fi
+}
+
+expect_timestamp_rejected_before_mutation approved-invalid-calendar approvedAt '2020-02-30T00:00:00Z'
+expect_timestamp_rejected_before_mutation approved-fractional approvedAt '2020-03-01T00:00:00.123Z'
+expect_timestamp_rejected_before_mutation approved-offset approvedAt '2020-03-01T09:00:00+09:00'
+expect_timestamp_rejected_before_mutation expires-invalid-calendar expiresAt '2099-02-31T00:00:00Z'
+expect_timestamp_rejected_before_mutation expires-fractional expiresAt '2099-03-01T00:00:00.123Z'
+expect_timestamp_rejected_before_mutation expires-offset expiresAt '2099-03-01T09:00:00+09:00'
+
+: >"$tmp_dir/mutations.log"
+: >"$tmp_dir/aws.log"
 
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
   bash "$root/scripts/course-check.sh" ch26 --checkpoint-teardown "${common[@]}"

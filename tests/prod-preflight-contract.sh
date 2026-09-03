@@ -54,6 +54,46 @@ if grep -Fq '[CLOUD_RUNTIME]' "$tmp_dir/estimate.json"; then
   exit 1
 fi
 
+expect_preflight_timestamp_rejected_before_cloud() {
+  local label=$1 input_kind=$2 field=$3 value=$4
+  local design_candidate="$tmp_dir/design-$label.json"
+  local eks_candidate="$tmp_dir/eks-$label.json"
+  local capacity_candidate="$tmp_dir/capacity-$label.json"
+  local rejected="$tmp_dir/rejected-$label.json"
+  jq . "$tmp_dir/design.json" >"$design_candidate"
+  jq . "$tmp_dir/eks-plan.json" >"$eks_candidate"
+  jq . "$tmp_dir/capacity-estimate.json" >"$capacity_candidate"
+  if [[ "$input_kind" == design ]]; then
+    jq --arg field "$field" --arg value "$value" '.[$field]=$value' "$tmp_dir/design.json" >"$design_candidate"
+  elif [[ "$input_kind" == eks ]]; then
+    jq --arg field "$field" --arg value "$value" '.[$field]=$value' "$tmp_dir/eks-plan.json" >"$eks_candidate"
+  else
+    jq --arg field "$field" --arg value "$value" '.[$field]=$value' \
+      "$tmp_dir/capacity-estimate.json" >"$capacity_candidate"
+  fi
+  : >"$tmp_dir/aws-$label.log"
+  if COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
+    COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/aws-$label.log" \
+    COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
+    COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
+      bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
+        "$design_candidate" "$eks_candidate" "$capacity_candidate" "$rejected" >/dev/null 2>&1; then
+    echo "expected $label preflight timestamp to fail" >&2
+    exit 1
+  fi
+  if [[ -s "$tmp_dir/aws-$label.log" || -e "$rejected" ]]; then
+    echo "invalid $label timestamp must fail before AWS queries or evidence output" >&2
+    exit 1
+  fi
+}
+
+expect_preflight_timestamp_rejected_before_cloud design-issued-invalid-calendar design issuedAt '2020-02-30T00:00:00Z'
+expect_preflight_timestamp_rejected_before_cloud design-expires-invalid-calendar design expiresAt '2099-02-31T00:00:00Z'
+expect_preflight_timestamp_rejected_before_cloud eks-observed-invalid-calendar eks observedAt '2020-02-30T00:00:00Z'
+expect_preflight_timestamp_rejected_before_cloud eks-expires-invalid-calendar eks expiresAt '2099-02-31T00:00:00Z'
+expect_preflight_timestamp_rejected_before_cloud capacity-observed-invalid-calendar capacity observedAt '2020-02-30T00:00:00Z'
+expect_preflight_timestamp_rejected_before_cloud capacity-expires-invalid-calendar capacity expiresAt '2099-02-31T00:00:00Z'
+
 jq '.expiresAt="2026-01-01T00:00:00Z"' "$tmp_dir/design.json" >"$tmp_dir/stale-design.json"
 set +e
 COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \

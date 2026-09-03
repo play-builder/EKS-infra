@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$SCRIPT_DIR/lib/evidence-common.sh"
+
 fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 evidence=''
 validate_only=false
@@ -12,8 +15,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -f "$evidence" ]] || fail 'evidence file is required'
+now=${COURSE_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+course_assert_canonical_utc_seconds_value "$now" 'OIDC ownership handoff evaluation time'
+course_assert_canonical_utc_seconds "$evidence" 'OIDC ownership handoff timestamps' \
+  '["approval","approvedAt"]' '["observedAt"]' '["expiresAt"]'
 
-jq -e '
+jq -e --arg now "$now" '
   (keys | sort) == (["approval","destinationState","evidenceGrade","expiresAt","observedAt","provider","schemaVersion","sourceState","transition"] | sort) and
   .schemaVersion == "course.oidc-ownership-handoff/v1" and
   .evidenceGrade == "CLOUD_RUNTIME" and
@@ -30,7 +37,9 @@ jq -e '
   .transition.fromMode != .transition.toMode and
   .destinationState.imported == true and
   (.sourceState.sha256 | test("^[0-9a-f]{64}$")) and
-  (.expiresAt | fromdateiso8601) > (.observedAt | fromdateiso8601)
+  (.approval.approvedAt | fromdateiso8601) <= (.observedAt | fromdateiso8601) and
+  (.observedAt | fromdateiso8601) <= ($now | fromdateiso8601) and
+  ($now | fromdateiso8601) < (.expiresAt | fromdateiso8601)
 ' "$evidence" >/dev/null || fail 'OIDC_OWNERSHIP_HANDOFF_INVALID'
 
 if [[ "$validate_only" == true ]]; then

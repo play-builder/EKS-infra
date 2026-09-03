@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$SCRIPT_DIR/lib/evidence-common.sh"
+
 fail() {
   printf 'PLATFORM_OWNER_HANDOFF_BLOCKED: %s\n' "$1" >&2
   exit 1
@@ -29,6 +32,9 @@ sha256_file() {
 validate_handoff() {
   local file=$1 now=${2:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
   [[ -f "$file" ]] || fail "handoff evidence not found: $file"
+  course_assert_canonical_utc_seconds_value "$now" 'platform release handoff evaluation time'
+  course_assert_canonical_utc_seconds "$file" 'platform release handoff timestamps' \
+    '["observedAt"]' '["expiresAt"]'
   jq -e --arg now "$now" '
     (.clusterArn |
       capture("^arn:aws:eks:(?<region>ap-northeast-2|us-east-1):[0-9]{12}:cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")) as $cluster |
