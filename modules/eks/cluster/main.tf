@@ -138,8 +138,6 @@ resource "aws_iam_openid_connect_provider" "cluster" {
   )
 }
 
-# modules/eks/cluster/main.tf — Append at the end
-
 # Enable Access Entry API for EKS authentication
 # This replaces the deprecated aws-auth ConfigMap approach
 resource "aws_eks_access_entry" "cluster_creator" {

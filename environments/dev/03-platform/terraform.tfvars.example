@@ -1,4 +1,4 @@
-# Supported course Regions: ap-northeast-2 or us-east-1.
+# Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
 course_id    = "replace-with-unique-course-id"
@@ -15,7 +15,6 @@ enable_amp            = true
 enable_adot_collector = true
 enable_adot_xray      = false
 
-# Controller lifecycle: Ch03 baseline -> Ch12 Reloader -> Ch16 k6/alerting.
 enable_external_secrets         = true
 external_secrets_ownership_mode = "fresh"
 enable_reloader                 = false

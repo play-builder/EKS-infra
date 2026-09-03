@@ -13,8 +13,7 @@ resource "helm_release" "this" {
 
   values = [
     yamlencode({
-      # Keep the dashboard off: Ch25 uses the API and must not add an
-      # unbounded user-facing service to the existing EKS cluster.
+      # Disable the dashboard to avoid exposing an additional user-facing service.
       dashboard = {
         create = false
       }

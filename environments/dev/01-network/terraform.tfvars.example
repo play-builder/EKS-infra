@@ -1,4 +1,4 @@
-# Supported course Regions: ap-northeast-2 or us-east-1.
+# Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
 course_id    = "replace-with-unique-course-id"
@@ -12,7 +12,7 @@ public_subnet_cidrs   = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 private_subnet_cidrs  = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
 database_subnet_cidrs = ["10.0.21.0/24", "10.0.22.0/24", "10.0.23.0/24"]
 
-# Course cost profile: one NAT Gateway. Use one per AZ for production-grade HA.
+# A single NAT Gateway lowers cost; use one per AZ when zonal egress resilience is required.
 enable_nat_gateway     = true
 single_nat_gateway     = true
 one_nat_gateway_per_az = false

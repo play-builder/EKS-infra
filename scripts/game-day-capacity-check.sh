@@ -22,7 +22,7 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      # Keep the Ch17/Ch25 shell interface convenient for course labs.
+      # Preserve positional arguments for backward-compatible CLI invocation.
       if [[ -z "$context" ]]; then context=$1
       elif [[ -z "$profile" ]]; then profile=$1
       elif [[ -z "$output" ]]; then output=$1

@@ -1,4 +1,4 @@
-# Supported course Regions: ap-northeast-2 or us-east-1.
+# Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
 course_id    = "replace-with-unique-course-id"
@@ -17,7 +17,7 @@ cluster_admin_principal_arns = [
   "arn:aws:iam::123456789012:role/AWSReservedSSO_AdministratorAccess_REPLACE_ME",
 ]
 
-# Replace with the operator's public IP. Never use 0.0.0.0/0 for the course.
+# Restrict public API access to the operator's /32; never use 0.0.0.0/0.
 cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
 
 enable_bastion            = false
