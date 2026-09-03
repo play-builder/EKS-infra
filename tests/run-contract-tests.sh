@@ -12,6 +12,7 @@ tests=(
   saved-plan-execution-contract.sh
   platform-telemetry-output-contract.sh
   workflow-supply-chain-contract.sh
+  workflow-supply-chain-contract.test.sh
   course-check-contract.sh
   evidence-common-contract.sh
   ch10-runtime-contract.sh

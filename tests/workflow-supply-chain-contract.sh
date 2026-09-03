@@ -11,6 +11,18 @@ action_ref=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform wit
 scanner_version=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform with Trivy") | .with.version' "$workflow")
 legacy_input=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform with Trivy") | .with."trivy-version" // ""' "$workflow")
 
+[[ "$locked_version" == '0.74.0' ]] || {
+  echo 'versions.lock.yaml must retain the approved Trivy scanner release' >&2
+  exit 1
+}
+[[ "$locked_action_sha" == 'ed142fd0673e97e23eac54620cfb913e5ce36c25' ]] || {
+  echo 'versions.lock.yaml must retain the approved Trivy Action commit' >&2
+  exit 1
+}
+[[ "$locked_action_sha" =~ ^[0-9a-f]{40}$ ]] || {
+  echo 'Trivy Action lock must be a full lowercase commit SHA' >&2
+  exit 1
+}
 [[ "$action_ref" == "aquasecurity/trivy-action@$locked_action_sha" ]] || {
   echo 'Trivy Action ref must match versions.lock.yaml' >&2
   exit 1
