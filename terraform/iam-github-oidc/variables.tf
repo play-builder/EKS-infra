@@ -109,17 +109,6 @@ variable "ecr_keep_last_images" {
   }
 }
 
-variable "retained_rollback_index_digests" {
-  description = "Image-index digests that a lifecycle preview must prove will survive"
-  type        = set(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for digest in var.retained_rollback_index_digests : can(regex("^sha256:[0-9a-f]{64}$", digest))])
-    error_message = "Every retained rollback digest must be a lowercase sha256 digest."
-  }
-}
-
 variable "tags" {
   description = "Additional resource tags"
   type        = map(string)

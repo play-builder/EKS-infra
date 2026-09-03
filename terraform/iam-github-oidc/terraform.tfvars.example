@@ -9,8 +9,6 @@ github_org   = "play-builder"
 oidc_provider_mode         = "create"
 external_oidc_provider_arn = null
 
-retained_rollback_index_digests = []
-
 infra_oidc_subjects = [
   "repo:play-builder@42942042/EKS-infra@405337777:ref:refs/heads/main",
 ]

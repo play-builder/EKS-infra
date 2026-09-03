@@ -403,10 +403,3 @@ variable "enable_recovery_secret_reader" {
     error_message = "RECOVERY_SECRET_READER_DEV_ONLY: Prod must not create the recovery DB secret role."
   }
 }
-
-variable "recovery_secret_kms_key_arn" {
-  description = "Optional exact CMK ARN used to decrypt the application DB secret"
-  type        = string
-  default     = null
-  nullable    = true
-}
