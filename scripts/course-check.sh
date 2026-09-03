@@ -384,7 +384,7 @@ check_ch08() {
 }
 
 check_ch10() {
-  local context=${1:-course-dev} namespace=${2:-dev}
+  local context=${1:-course-dev} namespace=${2:-app-dev}
   require_command kubectl
   require_command jq
 
@@ -397,9 +397,9 @@ check_ch10() {
   jq -e '.status.sync.status == "Synced" and .status.health.status == "Healthy"' \
     <<<"$application" >/dev/null || fail "sample-app-dev Application이 Synced/Healthy가 아닙니다."
 
-  external_secret=$(kubectl --context "$context" -n "$namespace" get externalsecret sample-app -o json)
+  external_secret=$(kubectl --context "$context" -n "$namespace" get externalsecret sample-app-runtime -o json)
   jq -e 'any(.status.conditions[]?; .type == "Ready" and .status == "True")' \
-    <<<"$external_secret" >/dev/null || fail "sample-app ExternalSecret이 Ready가 아닙니다."
+    <<<"$external_secret" >/dev/null || fail "sample-app-runtime ExternalSecret이 Ready가 아닙니다."
 
   deployment=$(kubectl --context "$context" -n "$namespace" get deployment sample-app -o json)
   jq -e '.status.availableReplicas > 0 and .status.availableReplicas == .status.replicas' \
@@ -821,6 +821,15 @@ case "$chapter" in
   ch02) check_ch02 "$@"; emit_pass "$(runtime_grade)" "ch02 state, identity, governance 계약이 유효합니다." ;;
   ch05) check_workflow_run ch05 "$@"; emit_pass "$(runtime_grade)" "ch05 exact workflow 실행이 유효합니다." ;;
   ch06) check_ch06 "$@"; emit_pass "$(runtime_grade)" "ch06 image index와 rollback retention이 유효합니다." ;;
+  ch10)
+    if [[ "${1:-}" == "--contract-only" ]]; then
+      check_contract_only "$chapter" "$@"
+      emit_pass STATIC "SIMULATED_CLOUD_CONTRACT ch10 dispatcher가 등록됐습니다."
+    else
+      check_ch10 "$@"
+      emit_pass "$(runtime_grade)" "ch10 Dev 핵심 runtime 상태가 유효합니다."
+    fi
+    ;;
   ch12) check_ch12 "$@"; emit_pass "$(runtime_grade)" "ch12 runtime secret freshness와 Pod reload가 유효합니다." ;;
   ch14)
     if [[ "${1:-}" == "--contract-only" ]]; then
@@ -833,7 +842,7 @@ case "$chapter" in
   ch15) check_ch15 "$@"; emit_pass "$(runtime_grade)" "ch15 Dev deployment evidence가 유효합니다." ;;
   ch16) check_ch16 "$@"; emit_pass "$(runtime_grade)" "ch16 Dev SLO, k6, AMP, SNS evidence가 유효합니다." ;;
   ch23) check_ch23 "$@"; emit_pass "$(runtime_grade)" "ch23 snapshot recovery evidence가 유효합니다." ;;
-  ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch13|ch17|ch18|ch19|ch20|ch21|ch22|ch24)
+  ch03|ch04|ch07|ch08|ch09|ch11|ch13|ch17|ch18|ch19|ch20|ch21|ch22|ch24)
     check_contract_only "$chapter" "$@"
     emit_pass STATIC "SIMULATED_CLOUD_CONTRACT $chapter dispatcher가 등록됐습니다."
     ;;
