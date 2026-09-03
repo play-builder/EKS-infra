@@ -19,11 +19,15 @@ readme_line() {
 
 preflight_line=$(readme_line 'bash scripts/cleanup-preflight.sh')
 decision_line=$(readme_line 'evidence/cleanup/retain-decisions.json')
+in_flight_capture_line=$(readme_line 'bash scripts/capture-in-flight-zero.sh')
+in_flight_path_line=$(readme_line 'evidence/cleanup/in-flight-zero.json')
 freeze_line=$(readme_line 'evidence/cleanup/freeze.json')
 removal_line=$(readme_line 'evidence/cleanup/removal.json')
 final_line=$(readme_line 'bash scripts/final-cleanup.sh')
 reverse_line=$(readme_line 'environments/prod/04-workloads/argocd')
-if ! (( preflight_line < decision_line && decision_line < freeze_line && freeze_line <= removal_line \
+if ! (( preflight_line < decision_line && decision_line < in_flight_capture_line \
+  && decision_line < in_flight_path_line && in_flight_capture_line < freeze_line \
+  && in_flight_path_line < freeze_line && freeze_line <= removal_line \
   && removal_line < final_line && final_line < reverse_line )); then
   echo 'README cleanup flow is not in guarded dependency order' >&2
   exit 1
@@ -45,6 +49,9 @@ jq -n --arg plan "$plan_sha" --arg inventory "$inventory_sha" '
 jq -n '
   {schemaVersion:"course.in-flight-zero/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
    courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",
+   clusters:[
+     {environment:"dev",context:"course-dev",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks"},
+     {environment:"prod",context:"course-prod",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks"}],
    remainingWriters:{loadGenerators:0,chaosResources:0,recoveryJobs:0,migrationJobs:0},
    observedAt:"2026-09-03T00:09:00Z",expiresAt:"2099-09-03T01:00:00Z"}
 ' >"$tmp_dir/evidence/in-flight.json"
@@ -98,6 +105,35 @@ common=(
   --kubernetes-pre-destroy-output "$tmp_dir/evidence/generated-pre-destroy.json"
   --residual-output "$tmp_dir/evidence/generated-residual.json"
 )
+
+cp "$tmp_dir/evidence/in-flight.json" "$tmp_dir/evidence/in-flight-valid.json"
+assert_in_flight_rejected_before_cloud_calls() {
+  local label=$1 filter=$2
+  jq "$filter" "$tmp_dir/evidence/in-flight-valid.json" >"$tmp_dir/evidence/in-flight.json"
+  : >"$tmp_dir/mutations.log"
+  : >"$tmp_dir/kubectl.log"
+  : >"$tmp_dir/aws.log"
+  set +e
+  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
+    bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 \
+      >/dev/null 2>&1
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" || -s "$tmp_dir/kubectl.log" || -s "$tmp_dir/aws.log" ]]; then
+    echo "invalid in-flight evidence reached a cloud or mutation command: $label" >&2
+    exit 1
+  fi
+}
+
+assert_in_flight_rejected_before_cloud_calls stale '.expiresAt="2020-09-03T01:00:00Z"'
+assert_in_flight_rejected_before_cloud_calls old-schema '.schemaVersion="course.in-flight-zero/v0"'
+assert_in_flight_rejected_before_cloud_calls wrong-cluster \
+  '.clusters[1].clusterArn="arn:aws:eks:ap-northeast-2:123456789012:cluster/other-prod"'
+assert_in_flight_rejected_before_cloud_calls wrong-context '.clusters[1].context="not-course-prod"'
+cp "$tmp_dir/evidence/in-flight-valid.json" "$tmp_dir/evidence/in-flight.json"
 
 : >"$tmp_dir/mutations.log"
 : >"$tmp_dir/kubectl.log"

@@ -67,13 +67,25 @@ course_assert_json "$preflight" '
 ' 'invalid, static, or expired cleanup preflight evidence'
 course_assert_json "$in_flight" '
   def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
-  keys == ["accountId","courseId","evidenceGrade","expiresAt","observedAt","region","remainingWriters","schemaVersion","status"] and
-  .schemaVersion == "course.in-flight-zero/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "PASS" and
-  (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and
-  (.region == "ap-northeast-2" or .region == "us-east-1") and
-  (.remainingWriters | keys == ["chaosResources","loadGenerators","migrationJobs","recoveryJobs"]) and
-  ([.remainingWriters[]] | all(type == "number" and floor == . and . == 0)) and
-  (.observedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
+  def utc_seconds:
+    type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
+    (. == (fromdateiso8601 | todateiso8601));
+  . as $evidence |
+  ($evidence | keys) == ["accountId","clusters","courseId","evidenceGrade","expiresAt","observedAt","region","remainingWriters","schemaVersion","status"] and
+  $evidence.schemaVersion == "course.in-flight-zero/v1" and $evidence.evidenceGrade == "CLOUD_RUNTIME" and $evidence.status == "PASS" and
+  ($evidence.courseId | nonblank) and ($evidence.accountId | test("^[0-9]{12}$")) and
+  ($evidence.region == "ap-northeast-2" or $evidence.region == "us-east-1") and
+  [$evidence.clusters[].environment] == ["dev","prod"] and
+  all($evidence.clusters[];
+    keys == ["clusterArn","context","environment"] and
+    (.context | nonblank) and
+    (.clusterArn | test("^arn:aws:eks:" + $evidence.region + ":" + $evidence.accountId + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$"))) and
+  $evidence.clusters[0].context != $evidence.clusters[1].context and
+  $evidence.clusters[0].clusterArn != $evidence.clusters[1].clusterArn and
+  ($evidence.remainingWriters | keys == ["chaosResources","loadGenerators","migrationJobs","recoveryJobs"]) and
+  ([$evidence.remainingWriters[]] | all(type == "number" and floor == . and . == 0)) and
+  ($evidence.observedAt | utc_seconds) and ($evidence.expiresAt | utc_seconds) and
+  ($evidence.observedAt | fromdateiso8601) <= now and now < ($evidence.expiresAt | fromdateiso8601)
 ' 'invalid, static, expired, or nonzero in-flight evidence'
 
 inventory_course=$(jq -r '.courseId' "$inventory")
@@ -82,9 +94,16 @@ inventory_region=$(jq -r '.region' "$inventory")
 [[ $(jq -r '.planSha256' "$preflight") == "$(course_raw_sha256_file "$plan")" ]] || course_fail 'CLEANUP_PLAN_DIGEST_MISMATCH'
 [[ $(jq -r '.inventorySha256' "$preflight") == "$(course_raw_sha256_file "$inventory")" ]] || course_fail 'CLEANUP_INVENTORY_DIGEST_MISMATCH'
 jq -en --arg course "$inventory_course" --arg account "$inventory_account" --arg region "$inventory_region" \
-  --argjson preflight "$(jq -c . "$preflight")" --argjson inFlight "$(jq -c . "$in_flight")" '
+  --arg devContext "$dev_context" --arg prodContext "$prod_context" \
+  --argjson preflight "$(jq -c . "$preflight")" --argjson inFlight "$(jq -c . "$in_flight")" \
+  --argjson freeze "$(jq -c . "$freeze")" --argjson removal "$(jq -c . "$removal")" '
   $preflight.courseId == $course and $preflight.accountId == $account and $preflight.region == $region and
-  $inFlight.courseId == $course and $inFlight.accountId == $account and $inFlight.region == $region
+  $inFlight.courseId == $course and $inFlight.accountId == $account and $inFlight.region == $region and
+  $inFlight.clusters == [
+    {environment:"dev",context:$devContext,clusterArn:$freeze.clusters[0].clusterArn},
+    {environment:"prod",context:$prodContext,clusterArn:$freeze.clusters[1].clusterArn}
+  ] and
+  [$freeze.clusters[] | {environment,clusterArn}] == $removal.clusters
 ' >/dev/null || course_fail 'CLEANUP_GUARD_IDENTITY_MISMATCH'
 
 max_age=${CLEANUP_RUNTIME_EVIDENCE_MAX_AGE_SECONDS:-86400}

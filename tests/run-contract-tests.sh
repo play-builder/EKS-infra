@@ -33,6 +33,7 @@ tests=(
   kubernetes-pre-destroy-retained-contract.sh
   residual-retained-kubernetes-contract.sh
   cleanup-preflight-contract.sh
+  in-flight-zero-contract.sh
   checkpoint-teardown-contract.sh
   final-cleanup-contract.sh
 )

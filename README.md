@@ -286,14 +286,33 @@ delete 권한을 추가할 수 없습니다. 결정이 틀리면 source inventor
 preflight를 다시 실행합니다. 일치하는 경우에만 `status`를 `APPROVED`로, `approvedAt`을 현재
 canonical UTC seconds 값으로 바꾸고 파일 권한 `0600`을 유지합니다.
 
-다음으로 `argocd-gitops` 저장소에서 optional writer를 중지하고 Auto-Sync를 끈 뒤, 검토된
-cleanup commit을 manual full Sync/prune합니다. 두 cluster API가 모두 접근 가능한 동안 순서대로
-`evidence/cleanup/freeze.json`과 `evidence/cleanup/removal.json`을 수집합니다.
+`argocd-gitops`에서 optional load·Chaos·recovery 입력을 끄고 해당 removal을 기다린 뒤 Auto-Sync를
+끕니다. 이어 두 cluster에서 active load, Chaos, recovery, migration writer가 모두 0인지 live API로
+다시 확인합니다.
+이 producer는 EKS ARN·account·Region·CourseId tag와 각 kube context의 API endpoint를 교차 검증하고
+`evidence/cleanup/in-flight-zero.json`에만 `CLOUD_RUNTIME` 증거를 원자적으로 기록합니다.
+
+```bash
+bash scripts/capture-in-flight-zero.sh \
+  --dev-context "$DEV_KUBE_CONTEXT" \
+  --prod-context "$PROD_KUBE_CONTEXT" \
+  --dev-cluster-name "$DEV_CLUSTER_NAME" \
+  --prod-cluster-name "$PROD_CLUSTER_NAME"
+```
+
+두 cluster API가 모두 접근 가능한 동안 `argocd-gitops` 저장소에서 먼저
+`evidence/cleanup/freeze.json`을 수집합니다.
 
 ```bash
 AWS_REGION="$AWS_REGION" DEV_CLUSTER_NAME="$DEV_CLUSTER_NAME" PROD_CLUSTER_NAME="$PROD_CLUSTER_NAME" \
   bash scripts/capture-cleanup-evidence.sh freeze \
     --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
+```
+
+그 뒤에만 검토된 cleanup commit을 manual full Sync/prune하고 workload와 writer가 제거된 것을
+확인한 다음 `evidence/cleanup/removal.json`을 수집합니다.
+
+```bash
 bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$LAB_EKS_REPO" \
   --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
 ```
@@ -307,7 +326,7 @@ cleanup_args=(
   --inventory evidence/cleanup/ownership-inventory.json
   --retain-decisions evidence/cleanup/retain-decisions.json
   --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
-  --in-flight-evidence "$IN_FLIGHT_ZERO_EVIDENCE"
+  --in-flight-evidence evidence/cleanup/in-flight-zero.json
   --gitops-freeze-evidence "$ARGO_REPO/evidence/cleanup/freeze.json"
   --gitops-removal-evidence "$ARGO_REPO/evidence/cleanup/removal.json"
   --dev-context "$DEV_KUBE_CONTEXT"
