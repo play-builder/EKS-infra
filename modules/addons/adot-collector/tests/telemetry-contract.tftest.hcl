@@ -43,6 +43,14 @@ run "bounded_metrics_and_active_xray_contract" {
   }
 
   assert {
+    condition = one([
+      for relabel in kubernetes_manifest.otel_collector[0].manifest.spec.config.receivers.prometheus.config.scrape_configs[0].relabel_configs : relabel.source_labels
+      if try(relabel.target_label, "") == "app"
+    ]) == ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    error_message = "the AMP app target must discover the chart-standard app.kubernetes.io/name pod label"
+  }
+
+  assert {
     condition     = output.otlp_http_traces_endpoint == "http://adot-collector-prometheus-collector.opentelemetry-operator-system.svc.cluster.local:4318/v1/traces"
     error_message = "active X-Ray must publish the full OTLP HTTP traces endpoint"
   }

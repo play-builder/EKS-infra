@@ -188,7 +188,7 @@ resource "kubernetes_manifest" "otel_collector" {
                         target_label  = "__address__"
                       },
                       {
-                        source_labels = ["__meta_kubernetes_pod_label_app"]
+                        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
                         action        = "replace"
                         target_label  = "app"
                       },
