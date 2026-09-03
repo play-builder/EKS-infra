@@ -23,6 +23,17 @@ variable "project_name" {
   type        = string
 }
 
+variable "course_id" {
+  description = "Unique CourseId binding the remote state bucket to cleanup evidence"
+  type        = string
+  default     = "course-2026"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be a unique 8-63 character lowercase identifier."
+  }
+}
+
 variable "force_destroy" {
   description = "Whether Terraform may delete a non-empty state bucket. Keep false outside disposable sandboxes."
   type        = bool

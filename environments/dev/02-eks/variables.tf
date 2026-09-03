@@ -20,6 +20,17 @@ variable "project_name" {
   default     = "playdevops"
 }
 
+variable "course_id" {
+  description = "Unique CourseId binding all course-owned resources and cleanup evidence"
+  type        = string
+  default     = "course-2026"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be a unique 8-63 character lowercase identifier."
+  }
+}
+
 variable "division" {
   description = "Organizational or technical division responsible for this infrastructure"
   type        = string

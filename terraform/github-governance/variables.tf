@@ -14,6 +14,27 @@ variable "github_owner" {
   type        = string
 }
 
+variable "course_id" {
+  description = "Unique CourseId binding governance resources to cleanup evidence"
+  type        = string
+  default     = "course-2026"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be a unique 8-63 character lowercase identifier."
+  }
+}
+
+variable "account_id" {
+  description = "AWS account ID bound to the course governance evidence"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]{12}$", var.account_id))
+    error_message = "account_id must be a 12-digit AWS account ID."
+  }
+}
+
 variable "gitops_repository" {
   description = "Repository name without the owner"
   type        = string

@@ -42,6 +42,7 @@ locals {
   common_tags = merge(
     var.tags,
     {
+      CourseId    = var.course_id
       Environment = var.environment
       Project     = var.project_name
       division    = var.division
@@ -88,6 +89,21 @@ module "k6_operator" {
   environment        = var.environment
   namespace          = var.k6_operator_namespace
   chart_version      = var.k6_operator_chart_version
+}
+
+module "chaos_mesh" {
+  source = "../../../modules/addons/chaos-mesh"
+  count  = var.enable_chaos_mesh ? 1 : 0
+
+  enable_chaos_mesh             = var.enable_chaos_mesh
+  course_id                     = var.course_id
+  environment                   = var.environment
+  namespace                     = var.chaos_mesh_namespace
+  allowed_namespaces            = var.chaos_mesh_allowed_namespaces
+  max_fault_duration_seconds    = var.chaos_mesh_max_fault_duration_seconds
+  max_faults                    = var.chaos_mesh_max_faults
+  chart_version                 = var.chaos_mesh_chart_version
+  controller_cloud_wait_seconds = var.chaos_mesh_controller_cloud_wait_seconds
 }
 
 module "ebs_csi_driver" {

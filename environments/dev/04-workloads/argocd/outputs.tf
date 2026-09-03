@@ -3,6 +3,11 @@ output "argocd_release" {
   value       = helm_release.argocd.name
 }
 
+output "course_ownership" {
+  description = "Canonical CourseId ownership metadata for this untaggable workload root"
+  value       = terraform_data.course_ownership.input
+}
+
 output "argo_rollouts_release" {
   description = "Argo Rollouts Helm release name"
   value       = helm_release.argo_rollouts.name

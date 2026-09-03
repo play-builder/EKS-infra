@@ -20,6 +20,17 @@ variable "project_name" {
   default     = "playdevops"
 }
 
+variable "course_id" {
+  description = "Unique CourseId binding all course-owned resources and cleanup evidence"
+  type        = string
+  default     = "course-2026"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be a unique 8-63 character lowercase identifier."
+  }
+}
+
 variable "division" {
   description = "Organizational or technical division"
   type        = string
@@ -277,6 +288,53 @@ variable "enable_k6_operator" {
   description = "Enable the Dev-only k6 operator at the first Ch16 platform apply"
   type        = bool
   default     = false
+}
+
+variable "enable_chaos_mesh" {
+  description = "Enable the Ch25 Dev-only Chaos Mesh controller"
+  type        = bool
+  default     = false
+}
+
+variable "chaos_mesh_chart_version" {
+  description = "Pinned Chaos Mesh Helm chart version"
+  type        = string
+  default     = "2.8.0"
+}
+
+variable "chaos_mesh_namespace" {
+  description = "Dedicated Chaos Mesh namespace"
+  type        = string
+  default     = "chaos-mesh"
+}
+
+variable "chaos_mesh_allowed_namespaces" {
+  description = "Non-prod application namespaces eligible for Ch25 faults"
+  type        = list(string)
+  default     = ["app-dev"]
+}
+
+variable "chaos_mesh_max_fault_duration_seconds" {
+  description = "Maximum duration for one Ch25 fault"
+  type        = number
+  default     = 60
+}
+
+variable "chaos_mesh_max_faults" {
+  description = "Maximum number of simultaneous Ch25 faults"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.chaos_mesh_max_faults == 1
+    error_message = "Ch25 admits exactly one fault per game-day run."
+  }
+}
+
+variable "chaos_mesh_controller_cloud_wait_seconds" {
+  description = "Readiness wait budget declared for Chaos Mesh"
+  type        = number
+  default     = 600
 }
 
 variable "k6_operator_chart_version" {

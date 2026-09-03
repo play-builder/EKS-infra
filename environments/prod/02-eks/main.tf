@@ -15,6 +15,7 @@ locals {
   common_tags = merge(
     var.tags,
     {
+      CourseId    = var.course_id
       Environment = var.environment
       Project     = var.project_name
       division    = var.division

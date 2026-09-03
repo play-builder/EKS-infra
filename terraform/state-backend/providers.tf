@@ -3,8 +3,12 @@ provider "aws" {
 
   default_tags {
     tags = merge(var.tags, {
-      ManagedBy = "gitops-course"
-      Project   = var.project_name
+      CourseId    = var.course_id
+      Region      = var.aws_region
+      Environment = "shared"
+      Layer       = "state-backend"
+      ManagedBy   = "gitops-course"
+      Project     = var.project_name
     })
   }
 }

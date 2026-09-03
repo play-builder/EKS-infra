@@ -25,6 +25,17 @@ variable "project_name" {
   default     = "playdevops"
 }
 
+variable "course_id" {
+  description = "Unique CourseId binding this workload root to cleanup evidence"
+  type        = string
+  default     = "course-2026"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be a unique 8-63 character lowercase identifier."
+  }
+}
+
 variable "argocd_chart_version" {
   description = "Pinned argo-cd Helm chart version"
   type        = string

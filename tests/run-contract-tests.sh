@@ -24,6 +24,8 @@ tests=(
   prod-preflight-contract.sh
   prod-live-capacity-check-contract.sh
   prod-baseline-check-contract.sh
+  chaos-mesh-contract.sh
+  game-day-capacity-check-contract.sh
 )
 
 for test_file in "${tests[@]}"; do

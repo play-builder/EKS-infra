@@ -137,6 +137,16 @@ output "recovery_db_secret_reader_role_arn" {
   value       = var.enable_recovery_secret_reader ? aws_iam_role.recovery_db_secret_reader[0].arn : null
 }
 
+output "chaos_mesh_enabled" {
+  description = "Whether the Ch25 Dev-only Chaos Mesh controller is installed"
+  value       = var.enable_chaos_mesh
+}
+
+output "chaos_mesh_contract" {
+  description = "Bounded Ch25 fault admission settings"
+  value       = var.enable_chaos_mesh ? module.chaos_mesh[0].game_day_contract : null
+}
+
 output "amg_workspace_endpoint" {
   description = "Optional Amazon Managed Grafana endpoint"
   value       = var.enable_amg ? module.amg[0].workspace_endpoint : null

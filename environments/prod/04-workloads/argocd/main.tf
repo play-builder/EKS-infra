@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 data "terraform_remote_state" "eks" {
   backend = "s3"
 
@@ -19,6 +21,15 @@ data "terraform_remote_state" "platform" {
 }
 
 locals {
+  course_ownership = {
+    CourseId    = var.course_id
+    AccountId   = data.aws_caller_identity.current.account_id
+    Region      = var.aws_region
+    Project     = var.project_name
+    Environment = var.environment
+    Layer       = "workloads"
+    ManagedBy   = "Terraform"
+  }
   bootstrap_path = var.bootstrap_path != "" ? var.bootstrap_path : "argocd/bootstrap/${var.environment}"
   rollouts_annotations = try(data.terraform_remote_state.platform.outputs.rollouts_amp_role_arn, null) != null ? {
     "eks.amazonaws.com/role-arn" = data.terraform_remote_state.platform.outputs.rollouts_amp_role_arn
@@ -66,6 +77,14 @@ locals {
     end
     return hs
   LUA
+}
+
+resource "terraform_data" "course_ownership" {
+  input = local.course_ownership
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "helm_release" "argocd" {
