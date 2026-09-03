@@ -74,13 +74,14 @@ trap 'rm -rf -- "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence"
 prepare_cleanup_fixtures "$root" "$tmp_dir/evidence" ap-northeast-2
 prepare_saved_plan_manifest "$tmp_dir/plans" "$tmp_dir/saved-plans.json"
+prepare_realistic_destroy_plan_jsons "$tmp_dir/plan-json"
 
 plan_manifest="$tmp_dir/saved-plans.json"
 plan_sha=$(raw_sha256 "$plan_manifest")
 inventory_sha=$(raw_sha256 "$tmp_dir/evidence/inventory.json")
 jq -n --arg plan "$plan_sha" --arg inventory "$inventory_sha" '
   {schemaVersion:"course.cleanup-preflight/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
-   courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",
+   courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",project:"playdevops",
    planSha256:$plan,inventorySha256:$inventory,observedAt:"2026-09-03T00:05:00Z",expiresAt:"2099-09-03T01:00:00Z"}
 ' >"$tmp_dir/evidence/preflight.json"
 jq -n '
@@ -96,6 +97,13 @@ jq -n '
 cat >"$tmp_dir/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+chdir=''
+for argument in "$@"; do case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac; done
+layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
+if [[ " $* " == *" show -json "* ]]; then
+  cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
+  exit 0
+fi
 printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
 if [[ "$*" == *"/02-eks apply"* ]]; then : >"$COURSE_EKS_DELETED_SENTINEL"; fi
 EOF
@@ -134,6 +142,7 @@ common=(
   --saved-plan-manifest "$plan_manifest"
   --inventory "$tmp_dir/evidence/inventory.json"
   --retain-decisions "$tmp_dir/evidence/decisions.json"
+  --apply-progress "$tmp_dir/evidence/apply-progress.json"
   --preflight-evidence "$tmp_dir/evidence/preflight.json"
   --in-flight-evidence "$tmp_dir/evidence/in-flight.json"
   --gitops-freeze-evidence "$tmp_dir/evidence/freeze.json"
@@ -282,6 +291,7 @@ rm -f "$tmp_dir/stages.log" "$tmp_dir/evidence/generated-pre-destroy.json"
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
 COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
 COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" COURSE_CLEANUP_STAGE_LOG="$tmp_dir/stages.log" \
+COURSE_FAKE_REPO_ROOT="$root" COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" \
 AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
   bash "$root/scripts/course-check.sh" ch26 --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026

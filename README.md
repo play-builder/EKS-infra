@@ -95,7 +95,7 @@ cp environments/dev/03-platform/terraform.tfvars.example environments/dev/03-pla
 cp environments/dev/04-workloads/argocd/terraform.tfvars.example environments/dev/04-workloads/argocd/terraform.tfvars
 ```
 
-계층별 실행 패턴은 같습니다. 아래에서 `<layer>`와 backend 파일만 바꿉니다.
+계층별 backend 초기화 패턴은 같습니다. 아래에서 `<layer>`와 backend 파일만 바꿉니다.
 
 ```bash
 terraform -chdir=environments/dev/<layer> init \
@@ -104,10 +104,17 @@ terraform -chdir=environments/dev/<layer> init \
   -backend-config="region=$AWS_REGION" \
   -reconfigure
 
-terraform -chdir=environments/dev/<layer> plan \
+terraform -chdir=environments/dev/<layer> plan -out=tfplan
+terraform -chdir=environments/dev/<layer> apply tfplan
+```
+
+`01-network`에는 remote-state input이 없으므로 위 명령 그대로 실행합니다. `02-eks`,
+`03-platform`, `04-workloads/argocd` plan에만 다음 required input을 추가합니다.
+
+```bash
+terraform -chdir=environments/dev/<downstream-layer> plan \
   -var="state_bucket_name=$STATE_BUCKET_NAME" \
   -out=tfplan
-terraform -chdir=environments/dev/<layer> apply tfplan
 ```
 
 실제 매핑:
@@ -352,6 +359,7 @@ EKS 저장소로 돌아와 동일한 파일 집합으로 먼저 dry-run을 실�
 ```bash
 cleanup_args=(
   --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST"
+  --apply-progress evidence/cleanup/saved-plan-progress.json
   --inventory evidence/cleanup/ownership-inventory.json
   --retain-decisions evidence/cleanup/retain-decisions.json
   --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
@@ -372,7 +380,11 @@ bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
 ```
 
 실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist의 digest-bound saved plan을
-`terraform apply <saved-plan>`으로 정확히 한 번씩 적용합니다.
+`terraform apply <saved-plan>`으로 적용합니다. 성공한 layer/digest는 권한 `0600`인
+`saved-plan-progress.json`에 원자적으로 기록한 뒤 해당 binary plan을 즉시 삭제합니다. 중간 실패 시
+성공 prefix만 건너뛰며, 결과가 불확실한 in-flight layer는 현재 state로 새 destroy plan을 만들고
+다시 review하여 manifest digest를 갱신하기 전에는 재실행하지 않습니다. 모든 layer가 완료되면 남은
+binary plan도 제거합니다.
 
 - `environments/prod/04-workloads/argocd`
 - `environments/dev/04-workloads/argocd`

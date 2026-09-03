@@ -12,6 +12,7 @@ if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
 fi
 
 saved_plan_manifest=''
+apply_progress=''
 inventory=''
 decisions=''
 preflight=''
@@ -29,6 +30,7 @@ confirm_course=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --saved-plan-manifest) saved_plan_manifest=${2:-}; shift 2 ;;
+    --apply-progress) apply_progress=${2:-}; shift 2 ;;
     --inventory) inventory=${2:-}; shift 2 ;;
     --retain-decisions) decisions=${2:-}; shift 2 ;;
     --preflight-evidence) preflight=${2:-}; shift 2 ;;
@@ -46,11 +48,12 @@ while [[ $# -gt 0 ]]; do
     *) course_fail "unknown argument: $1" 64 ;;
   esac
 done
-for name in saved_plan_manifest inventory decisions preflight in_flight freeze removal dev_context prod_context pre_destroy_output residual_output; do
+for name in saved_plan_manifest apply_progress inventory decisions preflight in_flight freeze removal dev_context prod_context pre_destroy_output residual_output; do
   [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64
 done
 
 cleanup_validate_saved_plan_manifest "$saved_plan_manifest" "$REPO_ROOT"
+cleanup_require_canonical_runtime_output "$apply_progress" "$REPO_ROOT" saved-plan-progress.json
 cleanup_validate_decisions "$inventory" "$decisions"
 cleanup_validate_freeze_removal "$inventory" "$freeze" "$removal"
 course_require_file "$preflight"
@@ -60,8 +63,9 @@ course_require_file "$in_flight"
 
 course_assert_json "$preflight" '
   def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
-  keys == ["accountId","courseId","evidenceGrade","expiresAt","inventorySha256","observedAt","planSha256","region","schemaVersion","status"] and
+  keys == ["accountId","courseId","evidenceGrade","expiresAt","inventorySha256","observedAt","planSha256","project","region","schemaVersion","status"] and
   .schemaVersion == "course.cleanup-preflight/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "PASS" and
+  (.project | type == "string" and test("[^[:space:]\uFEFF]")) and
   (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and
   (.region == "ap-northeast-2" or .region == "us-east-1") and
   (.planSha256 | test("^[0-9a-f]{64}$")) and (.inventorySha256 | test("^[0-9a-f]{64}$")) and
@@ -181,7 +185,7 @@ fi
 stage 11
 stage 12
 stage 13
-cleanup_apply_saved_plans "$saved_plan_manifest" "$REPO_ROOT"
+cleanup_apply_saved_plans "$saved_plan_manifest" "$REPO_ROOT" "$inventory" "$apply_progress" "$(jq -r '.project' "$preflight")"
 stage 14
 echo 'PHASE 6/6 completion proof: scanning AWS residuals without Kubernetes API calls.'
 if ! bash "$SCRIPT_DIR/residual-scan.sh" \

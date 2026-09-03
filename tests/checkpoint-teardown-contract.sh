@@ -8,10 +8,22 @@ trap 'rm -rf -- "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence"
 prepare_cleanup_fixtures "$root" "$tmp_dir/evidence" ap-northeast-2
 prepare_saved_plan_manifest "$tmp_dir/plans" "$tmp_dir/saved-plans.json"
+prepare_realistic_destroy_plan_jsons "$tmp_dir/plan-json"
 
 cat >"$tmp_dir/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+chdir=''
+for argument in "$@"; do case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac; done
+layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
+if [[ " $* " == *" show -json "* ]]; then
+  if [[ -n "${COURSE_FAKE_PLAN_JSON_OVERRIDE:-}" ]]; then
+    cat "$COURSE_FAKE_PLAN_JSON_OVERRIDE"
+  else
+    cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
+  fi
+  exit 0
+fi
 printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
 EOF
 cat >"$tmp_dir/bin/aws" <<'EOF'
@@ -29,6 +41,7 @@ common_without_approval=(
   --saved-plan-manifest "$tmp_dir/saved-plans.json"
   --inventory "$tmp_dir/evidence/inventory.json"
   --retain-decisions "$tmp_dir/evidence/decisions.json"
+  --apply-progress "$tmp_dir/evidence/apply-progress.json"
   --output "$tmp_dir/resume.json"
 )
 common=(--approval "$approval" "${common_without_approval[@]}")
@@ -80,7 +93,25 @@ if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" ]]; then
   exit 1
 fi
 
+non_destroy_plan="$tmp_dir/non-destroy.json"
+jq '.resource_changes[0].change.actions=["update"]' \
+  "$tmp_dir/plan-json/environments__prod__04-workloads__argocd.json" >"$non_destroy_plan"
+set +e
+output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" COURSE_FAKE_REPO_ROOT="$root" \
+  COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" COURSE_FAKE_PLAN_JSON_OVERRIDE="$non_destroy_plan" \
+  AWS_PROFILE=course bash "$root/scripts/checkpoint-teardown.sh" "${common[@]}" --execute \
+    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 2>&1)
+status=$?
+set -e
+if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" ]] || \
+  ! grep -Fq 'SAVED_DESTROY_PLAN_NOT_DELETE_ONLY' <<<"$output"; then
+  echo 'checkpoint accepted a reviewed plan containing an update action' >&2
+  exit 1
+fi
+
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+COURSE_FAKE_REPO_ROOT="$root" COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" \
 AWS_PROFILE=course \
   bash "$root/scripts/checkpoint-teardown.sh" "${common[@]}" --execute \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026

@@ -23,8 +23,12 @@ for script in scripts/checkpoint-teardown.sh scripts/final-cleanup.sh; do
   }
 done
 
-rg -q 'terraform .*show[[:space:]]+-json' "$root/scripts/cleanup-preflight.sh" || {
-  echo 'cleanup preflight must inspect saved binary plans without retaining raw plan JSON' >&2
+rg -q 'cleanup_validate_saved_destroy_plan' "$root/scripts/cleanup-preflight.sh" || {
+  echo 'cleanup preflight must route every binary plan through the shared semantic verifier' >&2
+  exit 1
+}
+rg -q 'terraform .*show[[:space:]]+-json' "$root/scripts/lib/cleanup-evidence.sh" || {
+  echo 'shared cleanup verifier must inspect saved binary plans without retaining raw plan JSON' >&2
   exit 1
 }
 

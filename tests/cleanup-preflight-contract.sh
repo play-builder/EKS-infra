@@ -9,17 +9,27 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/fake-bin"
 prepare_saved_plan_manifest "$tmp_dir/plans" "$tmp_dir/saved-plans.json"
+prepare_realistic_destroy_plan_jsons "$tmp_dir/plan-json"
 
 cat >"$tmp_dir/fake-bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 [[ "$*" == *" show -json "* ]] || { echo "unexpected terraform command: $*" >&2; exit 97; }
-cat "${COURSE_FAKE_PLAN_JSON:?COURSE_FAKE_PLAN_JSON is required}"
+if [[ -n "${COURSE_FAKE_PLAN_JSON:-}" ]]; then
+  cat "$COURSE_FAKE_PLAN_JSON"
+  exit 0
+fi
+chdir=''
+for argument in "$@"; do case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac; done
+layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
+cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
 EOF
 chmod +x "$tmp_dir/fake-bin/terraform"
+export COURSE_FAKE_REPO_ROOT="$root"
+export COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json"
 
 run_valid() {
-  COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-course-owned.json" \
+  COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" \
   COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
   AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
     bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight --saved-plan-manifest "$tmp_dir/saved-plans.json" \
@@ -126,10 +136,16 @@ if [[ "$sentinel_digest_after" != "$sentinel_digest_before" ]]; then
 fi
 [[ "$bom_rejected" == true ]] || exit 1
 
-for plan in cleanup-external-oidc-plan.json cleanup-external-shared.json cleanup-retained.json; do
+for protected_id in \
+  arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:shared-provider \
+  arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app \
+  snap-retained-001; do
+  protected_plan="$tmp_dir/protected-plan.json"
+  jq --arg id "$protected_id" '.resource_changes[1].change.before.id=$id' \
+    "$tmp_dir/plan-json/environments__prod__04-workloads__argocd.json" >"$protected_plan"
   rm -f "$tmp_dir/rejected-inventory.json" "$tmp_dir/rejected-retain.json" "$tmp_dir/rejected-preflight.json"
   set +e
-  output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$root/tests/fixtures/$plan" \
+  output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$protected_plan" \
     COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
     AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
       bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight --saved-plan-manifest "$tmp_dir/saved-plans.json" \
@@ -139,15 +155,15 @@ for plan in cleanup-external-oidc-plan.json cleanup-external-shared.json cleanup
   status=$?
   set -e
   if [[ "$status" -eq 0 || -e "$tmp_dir/rejected-inventory.json" ]]; then
-    echo "expected protected delete rejection for $plan" >&2
+    echo "expected protected delete rejection for $protected_id" >&2
     exit 1
   fi
-  grep -Eq 'EXTERNAL_RESOURCE_DELETE_BLOCKED|RETAINED_RESOURCE_DELETE_BLOCKED' <<<"$output"
+  grep -Fq 'SAVED_DESTROY_PLAN_OWNERSHIP_MISMATCH' <<<"$output"
 done
 
 non_destroy_plan="$tmp_dir/non-destroy-plan.json"
 jq '.resource_changes[0].change.actions=["create"]' \
-  "$root/tests/fixtures/cleanup-course-owned.json" >"$non_destroy_plan"
+  "$tmp_dir/plan-json/environments__prod__04-workloads__argocd.json" >"$non_destroy_plan"
 rm -f "$tmp_dir/non-destroy-inventory.json" "$tmp_dir/non-destroy-retain.json" "$tmp_dir/non-destroy-preflight.json"
 if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$non_destroy_plan" \
   COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \

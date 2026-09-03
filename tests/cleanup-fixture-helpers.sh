@@ -34,6 +34,85 @@ prepare_saved_plan_manifest() {
   done
 }
 
+prepare_realistic_destroy_plan_jsons() {
+  local output_dir=$1 layer environment semantic_layer address type id ownership_input
+  local -a layers=(
+    environments/prod/04-workloads/argocd
+    environments/dev/04-workloads/argocd
+    environments/prod/03-platform
+    environments/dev/03-platform
+    environments/prod/02-eks
+    environments/dev/02-eks
+    environments/prod/01-network
+    environments/dev/01-network
+  )
+  mkdir -p "$output_dir"
+  for layer in "${layers[@]}"; do
+    environment=${layer#environments/}
+    environment=${environment%%/*}
+    case "$layer" in
+      */04-workloads/argocd)
+        semantic_layer=workloads
+        address=terraform_data.course_ownership
+        type=terraform_data
+        id="ownership-$environment"
+        ownership_input=$(jq -cn --arg env "$environment" '{
+          CourseId:"course-2026", AccountId:"123456789012", Region:"ap-northeast-2",
+          Project:"playdevops", Environment:$env, Layer:"workloads", ManagedBy:"Terraform"
+        }')
+        jq -n --arg address "$address" --arg type "$type" --arg id "$id" --argjson input "$ownership_input" '{
+          format_version:"1.2", resource_changes:[
+            {address:$address,mode:"managed",type:$type,name:"course_ownership",
+             change:{actions:["delete"],before:{id:$id,input:$input,output:$input},after:null}},
+            {address:"helm_release.argocd",mode:"managed",type:"helm_release",name:"argocd",
+             change:{actions:["delete"],before:{id:"argocd",name:"argocd",namespace:"argocd"},after:null}}
+          ]
+        }' >"$output_dir/${layer//\//__}.json"
+        ;;
+      */03-platform)
+        semantic_layer=platform
+        jq -n --arg env "$environment" --arg layer "$semantic_layer" '{
+          format_version:"1.2", resource_changes:[
+            {address:"terraform_data.external_secrets_ownership_gate",mode:"managed",type:"terraform_data",
+             name:"external_secrets_ownership_gate",change:{actions:["delete"],before:{id:("gate-"+$env)},after:null}},
+            {address:"module.reloader[0].helm_release.this",mode:"managed",type:"helm_release",name:"this",
+             change:{actions:["delete"],before:{id:"reloader",name:"reloader",namespace:"kube-system"},after:null}},
+            {address:"aws_secretsmanager_secret.sample_app_runtime",mode:"managed",type:"aws_secretsmanager_secret",
+             name:"sample_app_runtime",change:{actions:["delete"],before:{
+               id:("arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:"+$env+"-runtime"),
+               tags_all:{CourseId:"course-2026",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
+             },after:null}}
+          ]
+        }' >"$output_dir/${layer//\//__}.json"
+        ;;
+      */02-eks)
+        semantic_layer=eks
+        id="arn:aws:eks:ap-northeast-2:123456789012:cluster/${environment}-playdevops-eks"
+        jq -n --arg env "$environment" --arg layer "$semantic_layer" --arg id "$id" '{
+          format_version:"1.2", resource_changes:[{
+            address:"module.eks_cluster.aws_eks_cluster.cluster",mode:"managed",type:"aws_eks_cluster",name:"cluster",
+            change:{actions:["delete"],before:{id:$id,
+              tags_all:{CourseId:"course-2026",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
+            },after:null}
+          }]
+        }' >"$output_dir/${layer//\//__}.json"
+        ;;
+      */01-network)
+        semantic_layer=network
+        id="nat-${environment}-001"
+        jq -n --arg env "$environment" --arg layer "$semantic_layer" --arg id "$id" '{
+          format_version:"1.2", resource_changes:[{
+            address:"module.vpc.aws_nat_gateway.this[0]",mode:"managed",type:"aws_nat_gateway",name:"this",
+            change:{actions:["delete"],before:{id:$id,
+              tags_all:{CourseId:"course-2026",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
+            },after:null}
+          }]
+        }' >"$output_dir/${layer//\//__}.json"
+        ;;
+    esac
+  done
+}
+
 prepare_cleanup_fixtures() {
   local root=$1 output_dir=$2 region=$3
   local inventory_sha freeze_sha removal_sha decisions_sha pre_destroy_sha provider_sha

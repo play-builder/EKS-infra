@@ -34,36 +34,9 @@ cleanup_validate_saved_plan_manifest "$saved_plan_manifest" "$REPO_ROOT"
 cleanup_validate_inventory "$inventory_source"
 
 while IFS=$'\t' read -r layer saved_plan _expected_sha; do
-  plan_json=$(terraform -chdir="$REPO_ROOT/$layer" show -json "$saved_plan") || \
-    course_fail "SAVED_DESTROY_PLAN_SHOW_FAILED: $layer"
-  jq -e '.format_version | type == "string"' <<<"$plan_json" >/dev/null || course_fail 'invalid Terraform saved plan'
-  jq -e '
-    (.resource_changes | type == "array" and length > 0) and
-    all(.resource_changes[]; .change.actions == ["delete"])
-  ' <<<"$plan_json" >/dev/null || course_fail 'Terraform saved destroy plan contains a non-delete action or no changes'
-
-  while IFS= read -r change; do
-    id=$(jq -r '.change.before.id // empty' <<<"$change")
-    type=$(jq -r '.type' <<<"$change")
-    [[ -n "$id" ]] || course_fail 'UNCLASSIFIED_DELETE_HANDLE'
-    if [[ "$type" == aws_iam_openid_connect_provider ]] && \
-      ! jq -e '.change.before.oidc_provider_owned_by_course == true' <<<"$change" >/dev/null; then
-      course_fail "EXTERNAL_RESOURCE_DELETE_BLOCKED: $id"
-    fi
-    decision=$(jq -r --arg id "$id" '[.resources[] | select(.id == $id)] | if length == 1 then .[0].decision else empty end' "$inventory_source")
-    case "$decision" in
-      DELETE) ;;
-      EXTERNAL_SHARED) course_fail "EXTERNAL_RESOURCE_DELETE_BLOCKED: $id" ;;
-      RETAIN) course_fail "RETAINED_RESOURCE_DELETE_BLOCKED: $id" ;;
-      *) course_fail "UNCLASSIFIED_DELETE_HANDLE: $id" ;;
-    esac
-    jq -e --arg course "$COURSE_ID" --arg account "$AWS_ACCOUNT_ID" --arg region "$AWS_REGION" --arg project "$COURSE_PROJECT" '
-      .change.before.tags.CourseId == $course and .change.before.tags.AccountId == $account and
-      .change.before.tags.Region == $region and .change.before.tags.Project == $project and
-      (.change.before.tags.Environment == "dev" or .change.before.tags.Environment == "prod" or .change.before.tags.Environment == "shared") and
-      (.change.before.tags.Layer | type == "string" and test("[^[:space:]\uFEFF]")) and .change.before.tags.ManagedBy == "terraform"
-    ' <<<"$change" >/dev/null || course_fail "OWNERSHIP_TAG_MISMATCH: $id"
-  done < <(jq -c '.resource_changes[] | select(.change.actions | index("delete"))' <<<"$plan_json")
+  cleanup_validate_saved_plan_file "$saved_plan" "$_expected_sha" "$layer"
+  cleanup_validate_saved_destroy_plan "$layer" "$saved_plan" "$inventory_source" "$REPO_ROOT" \
+    "$COURSE_ID" "$AWS_ACCOUNT_ID" "$AWS_REGION" "$COURSE_PROJECT"
 done < <(jq -r '.plans[] | [.layer,.path,.sha256] | @tsv' "$saved_plan_manifest")
 
 grade=CLOUD_RUNTIME
@@ -90,10 +63,10 @@ retain_payload=$(jq -n --arg course "$COURSE_ID" --arg account "$AWS_ACCOUNT_ID"
   }
 ')
 preflight_payload=$(jq -n --arg grade "$grade" --arg course "$COURSE_ID" --arg account "$AWS_ACCOUNT_ID" \
-  --arg region "$AWS_REGION" --arg plan "$plan_sha" --arg inventory "$inventory_sha" \
+  --arg region "$AWS_REGION" --arg project "$COURSE_PROJECT" --arg plan "$plan_sha" --arg inventory "$inventory_sha" \
   --arg observed "$observed" --arg expires "$expires" '
   {schemaVersion:"course.cleanup-preflight/v1",evidenceGrade:$grade,status:"PASS",courseId:$course,
-   accountId:$account,region:$region,planSha256:$plan,inventorySha256:$inventory,observedAt:$observed,expiresAt:$expires}
+   accountId:$account,region:$region,project:$project,planSha256:$plan,inventorySha256:$inventory,observedAt:$observed,expiresAt:$expires}
 ')
 
 course_write_json "$inventory_output" "$inventory_payload"
