@@ -9,16 +9,15 @@ if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
   PATH="$COURSE_CHECK_BIN_DIR:$PATH"
 fi
 
-[[ $# -eq 3 || $# -eq 4 ]] || course_fail 'usage: prod-baseline-check.sh <kubectl-context> <namespace> <rollout-name> [output.json]' 64
+[[ $# -eq 2 || $# -eq 3 ]] || course_fail 'usage: prod-baseline-check.sh <kubectl-context> <rollout-name> [output.json]' 64
 context=$1
-namespace=$2
-rollout_name=$3
-output=${4:-}
+namespace=app-prod
+rollout_name=$2
+output=${3:-}
 : "${AWS_REGION:?AWS_REGION is required}"
 : "${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}"
 course_validate_region "$AWS_REGION"
 course_validate_account "$AWS_ACCOUNT_ID"
-[[ "$namespace" == prod ]] || course_fail 'baseline namespace must be prod' 64
 
 rollout=$(kubectl --context "$context" -n "$namespace" get rollout "$rollout_name" -o json)
 replicasets=$(kubectl --context "$context" -n "$namespace" get replicasets -o json)
@@ -62,7 +61,7 @@ payload=$(jq -n --arg grade "$grade" --arg region "$AWS_REGION" --arg context "$
   --arg namespace "$namespace" --arg rollout "$rollout_name" --arg uid "$rollout_uid" \
   --arg hash "$stable_hash" --arg observed "$observed_at" --argjson replicas "$desired" '
   {
-    schemaVersion:"course.prod-baseline/v1", evidenceGrade:$grade, status:"HEALTHY", region:$region,
+    schemaVersion:"course.prod-rollout-baseline/v1", evidenceGrade:$grade, status:"HEALTHY", region:$region,
     kubectlContext:$context, namespace:$namespace, rolloutName:$rollout, rolloutUid:$uid,
     stablePodHash:$hash, stableRevision:1, replicas:$replicas, analysisRunsStarted:0, observedAt:$observed
   }

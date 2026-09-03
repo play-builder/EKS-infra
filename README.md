@@ -237,6 +237,20 @@ kubectl -n app-prod get analysistemplate sample-app-success-rate
 kubectl -n argo-rollouts logs deploy/argo-rollouts | rg 'gatewayAPI|plugin'
 ```
 
+EKS-infra의 Ch17 runtime assertion은 namespace를 caller에게 받지 않고 항상 `app-prod`의
+`sample-app` Rollout을 조회하며, 필요하면 내부 record `course.prod-rollout-baseline/v1`을 씁니다.
+이 record는 infrastructure gate일 뿐 promotion evidence가 아닙니다.
+
+```bash
+bash scripts/prod-baseline-check.sh course-prod sample-app /secure/path/prod-rollout-baseline.json
+```
+
+승격용 canonical `course.prod-baseline/v1`의 유일한 producer는
+`argocd-gitops/scripts/capture-prod-baseline-evidence.sh`입니다. 이 Argo-side producer가 image,
+GitOps revision, stable Rollout revision/hash, 100% route, EKS ARN/Region을 결속해
+`argocd-gitops/evidence/prod/baseline.json`에 기록합니다. 두 schema나 output을 서로 대신 사용하지
+않습니다.
+
 ## 4. Ch14 이후 Stateful runtime 검증
 
 GitOps의 `stateful-values.yaml`을 활성화하고 Argo CD 동기화가 끝난 뒤 consolidated checker로
