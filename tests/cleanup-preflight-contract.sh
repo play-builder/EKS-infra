@@ -70,6 +70,47 @@ if [[ "$sentinel_digest_after" != "$sentinel_digest_before" ]]; then
 fi
 [[ "$whitespace_rejected" == true ]] || exit 1
 
+bom_inventory="$tmp_dir/ownership-bom.json"
+bom=$(printf '\357\273\277')
+jq --arg blank "$bom" '.resources[0].classification=$blank' \
+  "$root/tests/fixtures/cleanup-ownership-valid.json" >"$bom_inventory"
+bom_rejected=true
+if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
+    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+      --plan "$root/tests/fixtures/cleanup-course-owned.json" \
+      --inventory-source "$bom_inventory" \
+      --inventory-output "$tmp_dir/bom-inventory.json" \
+      --retain-template "$tmp_dir/bom-retain.json" \
+      --preflight-output "$tmp_dir/bom-preflight.json" >/dev/null 2>&1; then
+  echo 'cleanup preflight accepted BOM-only ownership classification' >&2
+  bom_rejected=false
+fi
+for output_path in "$tmp_dir/bom-inventory.json" "$tmp_dir/bom-retain.json" \
+  "$tmp_dir/bom-preflight.json"; do
+  if [[ -e "$output_path" ]]; then
+    echo 'BOM-only cleanup ownership created a published output' >&2
+    bom_rejected=false
+  fi
+done
+sentinel_digest_before=$(shasum -a 256 "$sentinel_inventory" "$sentinel_retain" "$sentinel_preflight")
+if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
+    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+      --plan "$root/tests/fixtures/cleanup-course-owned.json" \
+      --inventory-source "$bom_inventory" \
+      --inventory-output "$sentinel_inventory" --retain-template "$sentinel_retain" \
+      --preflight-output "$sentinel_preflight" >/dev/null 2>&1; then
+  echo 'cleanup preflight accepted BOM-only ownership over sentinel outputs' >&2
+  bom_rejected=false
+fi
+sentinel_digest_after=$(shasum -a 256 "$sentinel_inventory" "$sentinel_retain" "$sentinel_preflight")
+if [[ "$sentinel_digest_after" != "$sentinel_digest_before" ]]; then
+  echo 'BOM-only cleanup ownership replaced an existing output' >&2
+  bom_rejected=false
+fi
+[[ "$bom_rejected" == true ]] || exit 1
+
 for plan in cleanup-external-oidc-plan.json cleanup-external-shared.json cleanup-retained.json; do
   rm -f "$tmp_dir/rejected-inventory.json" "$tmp_dir/rejected-retain.json" "$tmp_dir/rejected-preflight.json"
   set +e

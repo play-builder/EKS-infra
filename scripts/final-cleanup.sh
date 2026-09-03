@@ -57,7 +57,7 @@ course_require_file "$preflight"
 course_require_file "$in_flight"
 
 course_assert_json "$preflight" '
-  def nonblank: type == "string" and test("\\S");
+  def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
   keys == ["accountId","courseId","evidenceGrade","expiresAt","inventorySha256","observedAt","planSha256","region","schemaVersion","status"] and
   .schemaVersion == "course.cleanup-preflight/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "PASS" and
   (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and
@@ -66,7 +66,7 @@ course_assert_json "$preflight" '
   (.observedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
 ' 'invalid, static, or expired cleanup preflight evidence'
 course_assert_json "$in_flight" '
-  def nonblank: type == "string" and test("\\S");
+  def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
   keys == ["accountId","courseId","evidenceGrade","expiresAt","observedAt","region","remainingWriters","schemaVersion","status"] and
   .schemaVersion == "course.in-flight-zero/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "PASS" and
   (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and

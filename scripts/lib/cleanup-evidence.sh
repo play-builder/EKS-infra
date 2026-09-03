@@ -95,7 +95,7 @@ cleanup_validate_inventory() {
   course_require_file "$inventory"
   cleanup_grade_is_valid "$inventory" || course_fail 'invalid ownership evidence grade'
   course_assert_json "$inventory" '
-    def nonblank: type == "string" and test("\\S");
+    def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
     keys == ["accountId","courseId","evidenceGrade","observedAt","region","resources","schemaVersion"] and
     .schemaVersion == "course.cleanup-ownership/v1" and
     (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and
@@ -126,7 +126,7 @@ cleanup_validate_decisions() {
   cleanup_validate_inventory "$inventory"
   course_require_file "$decisions"
   course_assert_json "$decisions" '
-    def nonblank: type == "string" and test("\\S");
+    def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
     keys == ["accountId","approvedAt","courseId","decisions","evidenceGrade","inventorySha256","region","schemaVersion","status"] and
     .schemaVersion == "course.cleanup-retain-decisions/v1" and .evidenceGrade == "LOCAL_RUNTIME" and .status == "APPROVED" and
     (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and
@@ -156,7 +156,7 @@ cleanup_validate_removal() {
   cleanup_validate_inventory "$inventory"
   course_require_file "$removal"
   course_assert_json "$removal" '
-    def nonblank: type == "string" and test("\\S");
+    def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
     keys == ["clusters","evidenceGrade","freezeEvidenceSha256","gitopsRevision","observedAt","providerSecrets","remaining","retained","schemaVersion","status"] and
     .schemaVersion == "course.gitops-removal/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "REMOVED" and
     (.gitopsRevision | test("^[0-9a-f]{40}$")) and (.freezeEvidenceSha256 | test("^[0-9a-f]{64}$")) and
@@ -237,7 +237,7 @@ cleanup_validate_pre_destroy() {
   course_require_file "$pre"
   cleanup_grade_is_valid "$pre" || course_fail 'invalid pre-destroy evidence grade'
   course_assert_json "$pre" '
-    def nonblank: type == "string" and test("\\S");
+    def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
     keys == ["accountId","clusters","courseId","evidenceGrade","gitopsRemovalSha256","observedAt","region","remainingWorkloads","remainingWriters","retainedStorage","schemaVersion","status"] and
     .schemaVersion == "course.kubernetes-pre-destroy/v1" and .status == "PASS" and
     (.gitopsRemovalSha256 | test("^[0-9a-f]{64}$")) and
@@ -272,7 +272,7 @@ cleanup_validate_residual() {
   course_require_file "$residual"
   cleanup_grade_is_valid "$residual" || course_fail 'invalid residual evidence grade'
   course_assert_json "$residual" '
-    def nonblank: type == "string" and test("\\S");
+    def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
     keys == ["accountId","courseId","evidenceGrade","externalShared","gitopsRemovalSha256","inventorySha256","kubernetesPreDestroySha256","observedAt","region","retainDecisionsSha256","retained","schemaVersion","status","unapprovedCourseOwned"] and
     .schemaVersion == "course.cleanup-residual/v1" and .status == "PASS" and
     (.unapprovedCourseOwned | keys == ["ampWorkspaces","ebsSnapshots","ebsVolumes","ecrRepositories","eksClusters","loadBalancers","natGateways","snsTopics","total"]) and

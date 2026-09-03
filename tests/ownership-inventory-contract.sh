@@ -67,6 +67,11 @@ for field in kind id classification owner reason followUpAction; do
   assert_inventory_rejected "$candidate"
 done
 
+bom=$(printf '\357\273\277')
+jq --arg blank "$bom" '.resources[0].classification=$blank' \
+  "$tmp_dir/ap-northeast-2/inventory.json" >"$tmp_dir/bom-classification.json"
+assert_inventory_rejected "$tmp_dir/bom-classification.json"
+
 cluster_prefix='arn:aws:eks:ap-northeast-2:123456789012:cluster/'
 hundred_character_name=$(printf 'a%.0s' {1..100})
 jq --arg prefix "$cluster_prefix" --arg name "$hundred_character_name" '
