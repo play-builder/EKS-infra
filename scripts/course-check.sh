@@ -474,6 +474,18 @@ validate_dev_deployment_evidence() {
   local file=${1:-} now=${2:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} expected_grade=${3:-CLOUD_RUNTIME}
   [[ -f "$file" ]] || fail "Ch15 evidence file을 찾을 수 없습니다: $file" 66
   jq -e --arg now "$now" --arg grade "$expected_grade" '
+    def canonical_ecr_repository:
+      capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") |
+      select(.name | length <= 256);
+    def canonical_eks_cluster:
+      capture("^arn:aws:eks:(?<region>ap-northeast-2|us-east-1):(?<accountId>[0-9]{12}):cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$");
+    def canonical_utc_seconds:
+      . as $timestamp |
+      ($timestamp | type == "string") and
+      ($timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+      (try (($timestamp | fromdateiso8601 | todateiso8601) == $timestamp) catch false);
+    (.image.repository | canonical_ecr_repository) as $repository |
+    (.clusterArn | canonical_eks_cluster) as $cluster |
     (keys | sort) == (["clusterArn","evidenceGrade","gitopsRevision","image","observedAt","region","schemaVersion","source","status"] | sort) and
     .schemaVersion == "course.dev-deployment/v1" and
     .evidenceGrade == $grade and
@@ -482,12 +494,14 @@ validate_dev_deployment_evidence() {
     (.source.repository | type == "string" and length > 0) and
     (.source.sha | test("^[0-9a-f]{40}$")) and
     (.image | keys | sort) == ["indexDigest","repository"] and
-    (.image.repository | type == "string" and length > 0) and
     (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
     (.gitopsRevision | test("^[0-9a-f]{40}$")) and
-    (.clusterArn | test("^arn:aws:eks:(ap-northeast-2|us-east-1):[0-9]{12}:cluster/")) and
     (.region == "ap-northeast-2" or .region == "us-east-1") and
-    (.clusterArn | split(":")[3]) == .region and
+    $repository.region == .region and
+    $cluster.region == .region and
+    $cluster.accountId == $repository.accountId and
+    (.observedAt | canonical_utc_seconds) and
+    ($now | canonical_utc_seconds) and
     ((.observedAt | fromdateiso8601) <= ($now | fromdateiso8601))
   ' "$file" >/dev/null || fail "Ch15 evidence schema, grade, identity, or Synced/Healthy status is invalid."
 }
@@ -497,6 +511,11 @@ validate_dev_slo_evidence() {
   validate_dev_deployment_evidence "$deployment" "$now" "$expected_grade"
   [[ -f "$slo" ]] || fail "Ch16 evidence file을 찾을 수 없습니다: $slo" 66
   jq -e --arg now "$now" --arg grade "$expected_grade" --slurpfile deployment "$deployment" '
+    def canonical_utc_seconds:
+      . as $timestamp |
+      ($timestamp | type == "string") and
+      ($timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+      (try (($timestamp | fromdateiso8601 | todateiso8601) == $timestamp) catch false);
     (keys | sort) == (["clusterArn","evidenceGrade","evidenceId","expiresAt","gitopsRevision","image","observedAt","region","schemaVersion","source","status"] | sort) and
     .schemaVersion == "course.dev-slo/v1" and
     .evidenceGrade == $grade and
@@ -509,6 +528,9 @@ validate_dev_slo_evidence() {
     .gitopsRevision == $deployment[0].gitopsRevision and
     .clusterArn == $deployment[0].clusterArn and
     .region == $deployment[0].region and
+    (.observedAt | canonical_utc_seconds) and
+    (.expiresAt | canonical_utc_seconds) and
+    ($now | canonical_utc_seconds) and
     ((.observedAt | fromdateiso8601) <= ($now | fromdateiso8601)) and
     ((.observedAt | fromdateiso8601) < (.expiresAt | fromdateiso8601)) and
     (($now | fromdateiso8601) < (.expiresAt | fromdateiso8601))
