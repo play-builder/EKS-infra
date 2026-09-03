@@ -1,10 +1,11 @@
-# Supported course Regions: ap-northeast-2 or us-east-1.
+# Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 bucket_name  = "replace-with-a-globally-unique-state-bucket"
 project_name = "replace-with-your-course-project-name"
+course_id    = "replace-with-unique-course-id"
 
-# Disposable course accounts only. This lets the final Terraform destroy
-# remove versioned state objects after every dependent root is destroyed.
+# Enable only in disposable accounts. This permits Terraform to remove versioned
+# state objects after every dependent root has been destroyed.
 force_destroy = true
 
 tags = {

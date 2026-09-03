@@ -25,6 +25,15 @@ output "helm_chart_ecr_repository_url" {
 
 output "oidc_provider_arn" {
   description = "GitHub Actions OIDC provider ARN"
-  value       = aws_iam_openid_connect_provider.github.arn
+  value       = local.oidc_provider_arn
 }
 
+output "oidc_provider_owned_by_course" {
+  description = "Whether this Terraform state owns the account-wide OIDC provider"
+  value       = var.oidc_provider_mode == "create"
+}
+
+output "oidc_ownership_mode" {
+  description = "Persisted OIDC ownership mode"
+  value       = var.oidc_provider_mode
+}

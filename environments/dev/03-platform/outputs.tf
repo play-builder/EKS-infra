@@ -43,6 +43,110 @@ output "adot_addon_version" {
   value       = var.enable_adot_collector ? module.adot_collector[0].addon_version : null
 }
 
+output "external_secrets_release" {
+  description = "Terraform-owned External Secrets release identity"
+  value = var.enable_external_secrets ? {
+    name         = module.external_secrets[0].release_name
+    namespace    = module.external_secrets[0].namespace
+    chartVersion = module.external_secrets[0].chart_version
+  } : null
+}
+
+output "reloader_enabled" {
+  description = "Whether the Ch12 Reloader controller is installed"
+  value       = var.enable_reloader
+}
+
+output "reloader_chart_version" {
+  description = "Pinned Reloader chart version when enabled"
+  value       = var.enable_reloader ? module.reloader[0].chart_version : null
+}
+
+output "adot_xray_enabled" {
+  description = "Whether the ADOT X-Ray trace pipeline is enabled"
+  value       = var.enable_adot_collector && var.enable_adot_xray
+}
+
+output "otlp_http_traces_endpoint" {
+  description = "OTLP/HTTP protobuf endpoint for the sample application"
+  value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_http_traces_endpoint : null
+}
+
+output "otlp_traces_protocol" {
+  description = "Application trace protocol"
+  value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_traces_protocol : null
+}
+
+output "amp_alerting_enabled" {
+  description = "Whether Ch16 AMP rules and Alertmanager are enabled"
+  value       = module.amp_alerting.enabled
+}
+
+output "sns_alert_topic_arn" {
+  description = "Region-local SNS topic used by AMP Alertmanager"
+  value       = module.amp_alerting.sns_topic_arn
+}
+
+output "k6_operator_enabled" {
+  description = "Whether the Dev-only k6 operator is installed"
+  value       = module.k6_operator.enabled
+}
+
+output "k6_operator_namespace" {
+  description = "Dedicated k6 operator controller namespace"
+  value       = module.k6_operator.namespace
+}
+
+output "k6_operator_chart_version" {
+  description = "Pinned k6 operator chart version"
+  value       = module.k6_operator.chart_version
+}
+
+output "snapshot_controller_enabled" {
+  description = "Whether the Ch23 EKS managed snapshot-controller add-on is enabled"
+  value       = var.enable_snapshot_controller
+}
+
+output "snapshot_controller_addon_version" {
+  description = "Pinned managed snapshot-controller add-on version"
+  value       = var.enable_snapshot_controller ? var.snapshot_controller_addon_version : null
+}
+
+output "volume_snapshot_class_name" {
+  description = "Course VolumeSnapshotClass name"
+  value       = var.enable_snapshot_controller ? var.volume_snapshot_class_name : null
+}
+
+output "snapshot_driver" {
+  description = "CSI driver used by VolumeSnapshotClass"
+  value       = var.enable_snapshot_controller ? var.snapshot_driver : null
+}
+
+output "recovery_namespace" {
+  description = "Namespace reserved for recovery workloads"
+  value       = var.enable_recovery_secret_reader ? "app-recovery" : null
+}
+
+output "recovery_cleanup_label" {
+  description = "Label used to identify disposable recovery workloads"
+  value       = var.enable_recovery_secret_reader ? "course.playdevops.io/recovery-cleanup=true" : null
+}
+
+output "recovery_db_secret_reader_role_arn" {
+  description = "Least-privilege recovery DB secret reader role"
+  value       = var.enable_recovery_secret_reader ? aws_iam_role.recovery_db_secret_reader[0].arn : null
+}
+
+output "chaos_mesh_enabled" {
+  description = "Whether the Ch25 Dev-only Chaos Mesh controller is installed"
+  value       = var.enable_chaos_mesh
+}
+
+output "chaos_mesh_contract" {
+  description = "Bounded Ch25 fault admission settings"
+  value       = var.enable_chaos_mesh ? module.chaos_mesh[0].game_day_contract : null
+}
+
 output "amg_workspace_endpoint" {
   description = "Optional Amazon Managed Grafana endpoint"
   value       = var.enable_amg ? module.amg[0].workspace_endpoint : null
@@ -60,4 +164,3 @@ output "verification_commands" {
     kubectl -n opentelemetry-operator-system get pods
   EOT
 }
-

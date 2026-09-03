@@ -14,3 +14,7 @@ output "repository_delivery_settings" {
     vulnerability_alerts   = github_repository_vulnerability_alerts.gitops.enabled
   }
 }
+output "course_ownership" {
+  description = "Canonical CourseId ownership metadata for untaggable GitHub governance resources"
+  value       = terraform_data.course_ownership.input
+}

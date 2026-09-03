@@ -90,6 +90,41 @@ resource "aws_eks_cluster" "cluster" {
     aws_cloudwatch_log_group.cluster,
   ]
 }
+
+locals {
+  vpc_cni_strict_gate = try(jsondecode(file(coalesce(var.vpc_cni_strict_gate_evidence_file, "__missing__"))), null)
+}
+
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name                = aws_eks_cluster.cluster.name
+  addon_name                  = "vpc-cni"
+  addon_version               = var.vpc_cni_addon_version
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  configuration_values = jsonencode({
+    enableNetworkPolicy = tostring(var.vpc_cni_enable_network_policy)
+    env = {
+      NETWORK_POLICY_ENFORCING_MODE = var.vpc_cni_network_policy_enforcing_mode
+    }
+  })
+
+  tags = var.tags
+
+  lifecycle {
+    precondition {
+      condition = var.vpc_cni_network_policy_enforcing_mode != "strict" || (
+        local.vpc_cni_strict_gate != null &&
+        try(local.vpc_cni_strict_gate.schemaVersion, "") == "course.network-policy-strict-gate/v1" &&
+        try(local.vpc_cni_strict_gate.evidenceGrade, "") == "CLOUD_RUNTIME" &&
+        try(local.vpc_cni_strict_gate.status, "") == "APPROVED"
+      )
+      error_message = "VPC_CNI_STRICT_GATE_REQUIRED"
+    }
+  }
+
+  depends_on = [aws_eks_cluster.cluster]
+}
 resource "aws_iam_openid_connect_provider" "cluster" {
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = []
@@ -102,8 +137,6 @@ resource "aws_iam_openid_connect_provider" "cluster" {
     }
   )
 }
-
-# modules/eks/cluster/main.tf — Append at the end
 
 # Enable Access Entry API for EKS authentication
 # This replaces the deprecated aws-auth ConfigMap approach

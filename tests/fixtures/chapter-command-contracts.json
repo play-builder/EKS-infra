@@ -1,0 +1,26 @@
+{
+  "chapters": [
+    {"chapter":"ch04","mode":"contract"},
+    {"chapter":"ch05","mode":"workflow"},
+    {"chapter":"ch07","mode":"contract"},
+    {"chapter":"ch08","mode":"contract"},
+    {"chapter":"ch09","mode":"contract"},
+    {"chapter":"ch10","mode":"contract"},
+    {"chapter":"ch11","mode":"contract"},
+    {"chapter":"ch12","mode":"contract"},
+    {"chapter":"ch13","mode":"contract"},
+    {"chapter":"ch14","mode":"contract"},
+    {"chapter":"ch15","mode":"contract"},
+    {"chapter":"ch16","mode":"contract"},
+    {"chapter":"ch17","mode":"contract"},
+    {"chapter":"ch18","mode":"contract"},
+    {"chapter":"ch19","mode":"contract"},
+    {"chapter":"ch20","mode":"contract"},
+    {"chapter":"ch21","mode":"contract"},
+    {"chapter":"ch22","mode":"contract"},
+    {"chapter":"ch23","mode":"contract"},
+    {"chapter":"ch24","mode":"contract"},
+    {"chapter":"ch25","mode":"contract"},
+    {"chapter":"ch26","mode":"contract"}
+  ]
+}

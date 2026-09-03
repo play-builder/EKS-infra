@@ -1,6 +1,7 @@
-# Supported course Regions: ap-northeast-2 or us-east-1.
+# Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
+course_id    = "replace-with-unique-course-id"
 environment  = "prod"
 
 acm_domain_name = "example.com"
@@ -12,6 +13,22 @@ enable_external_dns   = true
 enable_metrics_server = true
 enable_amp            = true
 enable_adot_collector = true
+enable_adot_xray      = false
+
+# Terraform is the sole platform-controller writer; load generation remains disabled in production.
+enable_external_secrets         = true
+external_secrets_ownership_mode = "fresh"
+enable_reloader                 = false
+enable_k6_operator              = false
+enable_snapshot_controller      = false
+snapshot_controller_addon_version = "v8.2.0-eksbuild.1"
+volume_snapshot_class_name      = "course-ebs-snapshots"
+# Recovery DB secret reader is intentionally Dev-only.
+enable_recovery_secret_reader   = false
+enable_chaos_mesh               = false
+enable_amp_alerting             = false
+enable_sns_alert_delivery       = false
+# sns_alert_email_endpoint      = "oncall@example.com"
 
 enable_cluster_autoscaler = false
 enable_amg                = false

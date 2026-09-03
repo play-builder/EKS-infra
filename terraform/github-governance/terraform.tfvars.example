@@ -1,3 +1,5 @@
 github_owner      = "REPLACE_ME"
 gitops_repository = "argocd-gitops"
 required_check    = "validate"
+course_id         = "replace-with-unique-course-id"
+account_id        = "123456789012"

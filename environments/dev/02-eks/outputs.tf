@@ -100,3 +100,15 @@ output "bastion_security_group_id" {
   description = "Bastion Host security group ID"
   value       = var.enable_bastion ? module.bastion[0].security_group_id : null
 }
+
+output "vpc_cni_addon_version" {
+  value = module.eks_cluster.vpc_cni_addon_version
+}
+
+output "vpc_cni_network_policy_enabled" {
+  value = module.eks_cluster.vpc_cni_network_policy_enabled
+}
+
+output "vpc_cni_network_policy_enforcing_mode" {
+  value = module.eks_cluster.vpc_cni_network_policy_enforcing_mode
+}

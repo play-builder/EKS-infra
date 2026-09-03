@@ -2,6 +2,11 @@
 variable "aws_region" {
   description = "AWS Region"
   type        = string
+
+  validation {
+    condition     = contains(["ap-northeast-2", "us-east-1"], var.aws_region)
+    error_message = "aws_region must be ap-northeast-2 or us-east-1."
+  }
 }
 
 variable "environment" {
@@ -14,6 +19,17 @@ variable "project_name" {
   description = "Project name"
   type        = string
   default     = "playdevops"
+}
+
+variable "course_id" {
+  description = "Unique CourseId binding all course-owned resources and cleanup evidence"
+  type        = string
+  default     = "course-2026"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be a unique 8-63 character lowercase identifier."
+  }
 }
 
 variable "division" {
@@ -189,6 +205,35 @@ variable "cluster_log_retention_in_days" {
   description = "CloudWatch log retention in days"
   type        = number
   default     = 30
+}
+
+variable "vpc_cni_addon_version" {
+  description = "VPC CNI add-on version resolved for EKS 1.36 in the selected Region"
+  type        = string
+}
+
+variable "vpc_cni_enable_network_policy" {
+  description = "False in Ch03; changed to true in Ch14"
+  type        = bool
+  default     = false
+}
+
+variable "vpc_cni_network_policy_enforcing_mode" {
+  description = "Start with standard; strict requires a separate approved gate"
+  type        = string
+  default     = "standard"
+
+  validation {
+    condition     = contains(["standard", "strict"], var.vpc_cni_network_policy_enforcing_mode)
+    error_message = "vpc_cni_network_policy_enforcing_mode must be standard or strict."
+  }
+}
+
+variable "vpc_cni_strict_gate_evidence_file" {
+  description = "Strict-mode approval evidence; null for standard mode"
+  type        = string
+  default     = null
+  nullable    = true
 }
 
 variable "tags" {

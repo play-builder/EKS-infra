@@ -1,6 +1,11 @@
 variable "aws_region" {
   description = "AWS Region"
   type        = string
+
+  validation {
+    condition     = contains(["ap-northeast-2", "us-east-1"], var.aws_region)
+    error_message = "aws_region must be ap-northeast-2 or us-east-1."
+  }
 }
 
 variable "environment" {
@@ -18,6 +23,17 @@ variable "project_name" {
   description = "Project name used by the remote-state bucket"
   type        = string
   default     = "playdevops"
+}
+
+variable "course_id" {
+  description = "Unique CourseId binding this workload root to cleanup evidence"
+  type        = string
+  default     = "course-2026"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be a unique 8-63 character lowercase identifier."
+  }
 }
 
 variable "argocd_chart_version" {

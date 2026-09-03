@@ -1,8 +1,14 @@
-# Supported course Regions: ap-northeast-2 or us-east-1.
+# Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
+course_id    = "replace-with-unique-course-id"
 environment  = "prod"
 cluster_name = "prod-playdevops-eks"
+
+# Resolve this value with aws eks describe-addon-versions for EKS 1.36 in the selected Region.
+vpc_cni_addon_version                 = "REPLACE_WITH_COMPATIBLE_EKS_ADDON_VERSION"
+vpc_cni_enable_network_policy         = false
+vpc_cni_network_policy_enforcing_mode = "standard"
 
 cluster_version                            = "1.36"
 authentication_mode                        = "API"

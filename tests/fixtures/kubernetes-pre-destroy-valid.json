@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "course.kubernetes-pre-destroy/v1",
+  "evidenceGrade": "CLOUD_RUNTIME",
+  "status": "PASS",
+  "courseId": "course-2026",
+  "accountId": "123456789012",
+  "region": "ap-northeast-2",
+  "gitopsRemovalSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "clusters": [
+    {"environment":"dev","clusterArn":"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks"},
+    {"environment":"prod","clusterArn":"arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks"}
+  ],
+  "remainingWriters": {"loadGenerators":0,"chaosResources":0,"recoveryJobs":0,"migrationJobs":0},
+  "remainingWorkloads": {"applications":0,"rollouts":0,"deployments":0,"statefulSets":0,"jobs":0,"externalSecrets":0,"chaosResources":0,"volumeAttachments":0},
+  "retainedStorage": [],
+  "observedAt": "2026-09-03T00:20:00Z"
+}

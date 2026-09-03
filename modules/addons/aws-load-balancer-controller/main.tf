@@ -1,13 +1,3 @@
-# Leave it in-case of changing iam policy
-# ----------------------------
-# data "http" "lbc_iam_policy" {
-#   url = "https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json"
-
-#   request_headers = {
-#     Accept = "application/json"
-#   }
-# }
-
 resource "aws_iam_policy" "lbc" {
   name        = "${var.name}-AWSLoadBalancerControllerIAMPolicy"
   path        = "/"

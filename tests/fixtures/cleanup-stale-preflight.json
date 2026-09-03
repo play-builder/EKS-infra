@@ -1,0 +1,12 @@
+{
+  "schemaVersion":"course.cleanup-preflight/v1",
+  "evidenceGrade":"CLOUD_RUNTIME",
+  "status":"PASS",
+  "courseId":"course-2026",
+  "accountId":"123456789012",
+  "region":"ap-northeast-2",
+  "planSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+  "inventorySha256":"0000000000000000000000000000000000000000000000000000000000000000",
+  "observedAt":"2026-01-01T00:00:00Z",
+  "expiresAt":"2026-01-01T01:00:00Z"
+}

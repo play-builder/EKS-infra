@@ -2,19 +2,21 @@
 
 ## 핵심 요약
 
-항상 `01 → 02 → 03 → 04` 순서로 적용하고 `04 → 03 → 02 → 01` 역순으로 제거합니다.
+적용은 `01 → 02 → 03 → 04` 순서로 수행합니다. 제거는 raw `terraform destroy`나 개별
+Kubernetes 리소스 삭제가 아니라 아래 Ch26 guarded cleanup만 사용합니다.
 장애 대응 전에는 AWS identity, kube context, 대상 environment를 먼저 확인합니다.
 
 과정에서 검증한 `ap-northeast-2` 또는 `us-east-1` 중 클러스터를 만든 Region을 사용합니다.
 
 ```bash
 export AWS_REGION="ap-northeast-2"
+export AWS_PROFILE="course"
 ```
 
 ## 안전 확인
 
 ```bash
-aws sts get-caller-identity
+aws sts get-caller-identity --region "$AWS_REGION" --profile "$AWS_PROFILE"
 kubectl config current-context
 kubectl cluster-info
 ```
@@ -26,6 +28,7 @@ prod 작업 전에는 출력의 account ID와 cluster name을 작업 티켓의 �
 ```bash
 aws eks update-kubeconfig \
   --region "$AWS_REGION" \
+  --profile "$AWS_PROFILE" \
   --name dev-playdevops-eks \
   --alias course-dev
 
@@ -139,10 +142,95 @@ EKS는 한 minor씩 올리고 control plane → add-on compatibility → node gr
 
 ## 제거와 비용
 
-1. GitOps Application과 Gateway를 삭제합니다.
-2. ALB와 target group 삭제를 확인합니다.
-3. `04 → 03 → 02 → 01` 순서로 destroy합니다.
-4. prod와 dev state를 각각 확인합니다.
+Ch26 cleanup은 개별 Application, Gateway, PVC를 직접 삭제하거나 각 Terraform root에서 raw
+destroy하지 않습니다. `COURSE_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`,
+`COURSE_PROJECT`를 설정하고, 검토한 destroy plan과 현재 cloud inventory로 preflight를 먼저
+실행합니다.
+
+```bash
+bash scripts/cleanup-preflight.sh \
+  --plan "$REVIEWED_DESTROY_PLAN_JSON" \
+  --inventory-source "$LIVE_OWNERSHIP_INPUT" \
+  --inventory-output evidence/cleanup/ownership-inventory.json \
+  --retain-template evidence/cleanup/retain-decisions.json \
+  --preflight-output "$CLEANUP_PREFLIGHT_EVIDENCE"
+```
+
+`evidence/cleanup/retain-decisions.json`의 retained/shared 항목만 승인합니다. `DELETE` 권한을
+추가하거나 identity가 다른 기존 evidence를 덮어쓰지 않습니다. 결정이 맞으면 `status`를
+`APPROVED`로, `approvedAt`을 현재 canonical UTC seconds로 바꾸고 파일 권한 `0600`을 유지합니다.
+
+다음으로 두 cluster의 load, Chaos, recovery, migration writer가 모두 0인지 live API로 확인해
+canonical evidence를 생성합니다. optional k6/Chaos CRD가 없으면 empty로 처리되지만 API query
+오류는 fail closed입니다.
+
+```bash
+bash scripts/capture-in-flight-zero.sh \
+  --dev-context "$DEV_KUBE_CONTEXT" \
+  --prod-context "$PROD_KUBE_CONTEXT" \
+  --dev-cluster-name "$DEV_CLUSTER_NAME" \
+  --prod-cluster-name "$PROD_CLUSTER_NAME"
+```
+
+두 cluster API가 모두 접근 가능한 동안 `argocd-gitops` 저장소에서 freeze evidence를 먼저
+수집합니다.
+
+```bash
+cd "$ARGO_REPO"
+AWS_REGION="$AWS_REGION" DEV_CLUSTER_NAME="$DEV_CLUSTER_NAME" PROD_CLUSTER_NAME="$PROD_CLUSTER_NAME" \
+  bash scripts/capture-cleanup-evidence.sh freeze \
+    --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
+```
+
+검토된 cleanup commit을 manual full Sync/prune하고 workload와 writer 제거를 확인한 뒤 removal
+evidence를 수집합니다.
+
+```bash
+bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$LAB_EKS_REPO" \
+  --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
+```
+
+EKS 저장소로 돌아와 동일한 evidence 집합으로 dry-run을 먼저 실행합니다. `--execute`와 세
+confirmation을 추가한 두 번째 호출만 실제 제거를 허용합니다.
+
+```bash
+cd "$LAB_EKS_REPO"
+cleanup_args=(
+  --plan "$REVIEWED_DESTROY_PLAN_JSON"
+  --inventory evidence/cleanup/ownership-inventory.json
+  --retain-decisions evidence/cleanup/retain-decisions.json
+  --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
+  --in-flight-evidence evidence/cleanup/in-flight-zero.json
+  --gitops-freeze-evidence "$ARGO_REPO/evidence/cleanup/freeze.json"
+  --gitops-removal-evidence "$ARGO_REPO/evidence/cleanup/removal.json"
+  --dev-context "$DEV_KUBE_CONTEXT"
+  --prod-context "$PROD_KUBE_CONTEXT"
+  --kubernetes-pre-destroy-output evidence/cleanup/kubernetes-pre-destroy.json
+  --residual-output evidence/cleanup/residual.json
+)
+
+bash scripts/final-cleanup.sh "${cleanup_args[@]}"
+bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
+  --confirm-account-id "$AWS_ACCOUNT_ID" \
+  --confirm-region "$AWS_REGION" \
+  --confirm-course-id "$COURSE_ID"
+```
+
+`final-cleanup.sh`는 모든 identity, time, digest 검증과 Kubernetes pre-destroy 관찰을 첫 mutation
+전에 끝낸 뒤 다음 allowlist만 내부에서 역순으로 destroy합니다.
+
+- `environments/prod/04-workloads/argocd`
+- `environments/dev/04-workloads/argocd`
+- `environments/prod/03-platform`
+- `environments/dev/03-platform`
+- `environments/prod/02-eks`
+- `environments/dev/02-eks`
+- `environments/prod/01-network`
+- `environments/dev/01-network`
+
+EKS 삭제 전 `evidence/cleanup/kubernetes-pre-destroy.json`, 삭제 후 AWS/Terraform API만 사용하는
+`evidence/cleanup/residual.json`을 원자적으로 기록합니다. Gateway가 만든 ALB·target group 또는
+미승인 billable residual이 남으면 완료 evidence를 생성하지 않습니다.
 
 NAT Gateway, EKS control plane, EC2 node, ALB, AMP는 실행 시간 동안 비용이 발생합니다.
 ECR은 `force_delete=false`, Secrets Manager는 recovery window를 사용하므로 별도 정리가 필요할

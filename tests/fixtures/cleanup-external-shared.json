@@ -1,0 +1,6 @@
+{
+  "format_version":"1.2",
+  "resource_changes":[
+    {"address":"aws_secretsmanager_secret.provider","type":"aws_secretsmanager_secret","change":{"actions":["delete"],"before":{"id":"arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:shared-provider","tags":{"CourseId":"course-2026","AccountId":"123456789012","Region":"ap-northeast-2","Project":"playdevops","Environment":"shared","Layer":"identity","ManagedBy":"terraform","Owner":"external"}}}}
+  ]
+}

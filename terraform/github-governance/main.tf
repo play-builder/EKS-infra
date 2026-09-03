@@ -1,3 +1,19 @@
+resource "terraform_data" "course_ownership" {
+  input = {
+    CourseId    = var.course_id
+    AccountId   = var.account_id
+    Region      = var.aws_region
+    Project     = var.gitops_repository
+    Environment = "shared"
+    Layer       = "governance"
+    ManagedBy   = "Terraform"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "github_repository" "gitops_settings" {
   name = var.gitops_repository
 

@@ -1,0 +1,9 @@
+{
+  "InstanceTypes": [
+    {
+      "InstanceType": "m6i.large",
+      "VCpuInfo": {"DefaultVCpus": 2},
+      "MemoryInfo": {"SizeInMiB": 8192}
+    }
+  ]
+}

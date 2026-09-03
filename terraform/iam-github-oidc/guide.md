@@ -3,6 +3,18 @@
 이 root는 course AWS 계정에서 한 번만 적용합니다. dev/prod cluster가 공통으로 사용할 ECR과
 GitHub Actions OIDC role을 만듭니다.
 
+먼저 계정에 GitHub issuer가 이미 있는지 확인합니다. account-wide provider는 repository마다
+새로 만드는 resource가 아닙니다.
+
+```bash
+aws iam list-open-id-connect-providers --region "$AWS_REGION" --profile "$AWS_PROFILE"
+```
+
+- 전용 실습 계정에 provider가 없으면 `oidc_provider_mode="create"`를 사용합니다.
+- 기존 provider가 있으면 삭제하지 않고 `oidc_provider_mode="external"`과 ARN을 지정합니다.
+- `EntityAlreadyExists`를 피하려고 기존 provider를 임의 삭제하면 그 provider를 신뢰하는 다른
+  workflow가 동시에 중단될 수 있습니다.
+
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 export AWS_REGION="ap-northeast-2"
@@ -15,6 +27,26 @@ terraform init -reconfigure \
   -backend-config="use_lockfile=true"
 terraform plan -out=tfplan
 terraform apply tfplan
+```
+
+create/external mode는 최초 ownership 결정입니다. mode 변경은 일반 apply가 아니라
+`course.oidc-ownership-handoff/v1` evidence, source state backup, destination import와 no-op plan을
+먼저 확보한 뒤 수행합니다. 검증 명령은 다음과 같습니다.
+
+```bash
+bash ../../scripts/oidc-ownership-handoff.sh \
+  --evidence /secure/path/oidc-handoff.json --validate-only
+```
+
+`terraform state rm`은 IAM provider를 삭제하지 않고 state의 bookkeeping만 이전합니다. 실제 provider
+삭제는 course-owned 전용 계정임을 확인한 별도 cleanup에서만 허용하며, `prevent_destroy`를 임시 해제한
+변경은 반드시 별도 review를 거칩니다.
+
+ECR lifecycle policy를 적용하기 전 retained rollback digest를 preview로 보호합니다.
+
+```bash
+bash ../../scripts/ecr-lifecycle-preview.sh \
+  "$ECR_REPOSITORY" "$V1_INDEX_DIGEST" "$V2_PRIME_INDEX_DIGEST"
 ```
 
 필수 출력:

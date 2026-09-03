@@ -1,0 +1,18 @@
+{
+  "schemaVersion":"course.checkpoint-resume/v1",
+  "evidenceGrade":"LOCAL_RUNTIME",
+  "status":"PARTIAL_TEARDOWN",
+  "courseId":"course-2026",
+  "accountId":"123456789012",
+  "region":"ap-northeast-2",
+  "stateKeys":["dev/01-network/terraform.tfstate","dev/02-eks/terraform.tfstate","dev/03-platform/terraform.tfstate","dev/04-workloads/argocd/terraform.tfstate","prod/01-network/terraform.tfstate","prod/02-eks/terraform.tfstate","prod/03-platform/terraform.tfstate","prod/04-workloads/argocd/terraform.tfstate"],
+  "retained":[
+    {"kind":"EbsSnapshot","id":"snap-retained-001","owner":"course","reason":"recovery checkpoint","followUpAction":"delete after course review"},
+    {"kind":"EcrRepository","id":"arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app","owner":"course","reason":"rollback digest retention","followUpAction":"delete after evidence export"},
+    {"kind":"SecretsManagerSecret","id":"arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:shared-provider","owner":"external","reason":"shared provider secret","followUpAction":"retain and review separately"}
+  ],
+  "versions":{"eks":"1.36","terraform":"1.16.0"},
+  "flags":{"enableChaosMesh":false,"enableSnapshotController":true},
+  "dependencyOrder":["state-backend","shared-identity","network","eks","platform","controllers","applications"],
+  "observedAt":"2026-09-03T00:25:00Z"
+}

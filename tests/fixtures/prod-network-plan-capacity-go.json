@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "course.prod-network-plan/v1",
+  "evidenceGrade": "STATIC",
+  "courseId": "course-2026",
+  "accountId": "123456789012",
+  "environment": "prod",
+  "region": "ap-northeast-2",
+  "savedPlan": {"path": "__PLAN_FILE__", "sha256": "__PLAN_SHA256__"},
+  "network": {
+    "vpcCidr": "10.20.0.0/16",
+    "availabilityZones": ["ap-northeast-2a", "ap-northeast-2b", "ap-northeast-2c"],
+    "natGatewayCount": 3
+  },
+  "billableResources": ["nat-gateway"],
+  "observedAt": "2026-09-03T00:00:00Z",
+  "expiresAt": "2099-09-03T01:00:00Z"
+}

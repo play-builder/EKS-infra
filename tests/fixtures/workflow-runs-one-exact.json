@@ -1,0 +1,5 @@
+[
+  {"databaseId":101,"headSha":"0123456789abcdef0123456789abcdef01234567","workflowName":"CI","event":"push","status":"completed","conclusion":"success","url":"https://example.invalid/run/101"},
+  {"databaseId":102,"headSha":"0123456789abcdef0123456789abcdef01234567","workflowName":"Lint","event":"push","status":"completed","conclusion":"success","url":"https://example.invalid/run/102"},
+  {"databaseId":103,"headSha":"0123456789abcdef0123456789abcdef01234567","workflowName":"CI","event":"pull_request","status":"completed","conclusion":"success","url":"https://example.invalid/run/103"}
+]

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "course.prod-eks-plan/v1",
+  "evidenceGrade": "STATIC",
+  "courseId": "course-2026",
+  "accountId": "123456789012",
+  "environment": "prod",
+  "region": "ap-northeast-2",
+  "savedPlan": {"path": "__PLAN_FILE__", "sha256": "__PLAN_SHA256__"},
+  "nodeGroups": [{"instanceType": "m6i.large", "desiredCount": 3}],
+  "subnetIds": ["subnet-001", "subnet-002", "subnet-003"],
+  "maxPodsPerNode": 29,
+  "observedAt": "2026-09-03T00:00:00Z",
+  "expiresAt": "2099-09-03T01:00:00Z"
+}

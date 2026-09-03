@@ -1,4 +1,4 @@
-# bucket and region are learner-specific and must be passed to terraform init.
+# The backend bucket and Region are deployment-specific and supplied during terraform init.
 key          = "prod/02-eks/terraform.tfstate"
 encrypt      = true
 use_lockfile = true

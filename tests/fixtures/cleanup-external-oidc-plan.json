@@ -1,0 +1,6 @@
+{
+  "format_version":"1.2",
+  "resource_changes":[
+    {"address":"aws_iam_openid_connect_provider.github","type":"aws_iam_openid_connect_provider","change":{"actions":["delete"],"before":{"id":"arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com","oidc_provider_owned_by_course":false,"tags":{"CourseId":"external-platform","AccountId":"123456789012","Region":"ap-northeast-2","Project":"shared","Environment":"shared","Layer":"identity","ManagedBy":"terraform"}}}}
+  ]
+}

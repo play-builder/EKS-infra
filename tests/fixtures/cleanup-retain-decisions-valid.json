@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "course.cleanup-retain-decisions/v1",
+  "evidenceGrade": "LOCAL_RUNTIME",
+  "status": "APPROVED",
+  "courseId": "course-2026",
+  "accountId": "123456789012",
+  "region": "ap-northeast-2",
+  "inventorySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "decisions": [
+    {"kind":"EbsSnapshot","id":"snap-retained-001","decision":"RETAIN","reason":"recovery checkpoint","followUpAction":"delete after course review"},
+    {"kind":"EcrRepository","id":"arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app","decision":"RETAIN","reason":"rollback digest retention","followUpAction":"delete after evidence export"},
+    {"kind":"SecretsManagerSecret","id":"arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:shared-provider","decision":"EXTERNAL_SHARED","reason":"shared provider secret","followUpAction":"retain and review separately"}
+  ],
+  "approvedAt": "2026-09-03T00:05:00Z"
+}

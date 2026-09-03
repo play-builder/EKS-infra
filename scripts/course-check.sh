@@ -2,6 +2,16 @@
 set -Eeuo pipefail
 
 API_VERSION="2026-03-10"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$SCRIPT_DIR/lib/evidence-common.sh"
+
+if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+  [[ -d "$COURSE_CHECK_BIN_DIR" ]] || {
+    printf 'ERROR: COURSE_CHECK_BIN_DIR가 directory가 아닙니다: %s\n' "$COURSE_CHECK_BIN_DIR" >&2
+    exit 64
+  }
+  PATH="$COURSE_CHECK_BIN_DIR:$PATH"
+fi
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -9,7 +19,29 @@ fail() {
 }
 
 pass() {
-  printf 'PASS: %s\n' "$1"
+  printf 'DETAIL: %s\n' "$1"
+}
+
+emit_pass() {
+  local grade=$1 message=$2
+  if [[ "$grade" == "STATIC" && -n "${COURSE_CHECK_BIN_DIR:-}" && "$message" != SIMULATED_CLOUD_CONTRACT* ]]; then
+    message="SIMULATED_CLOUD_CONTRACT $message"
+  fi
+  printf 'PASS: [%s] %s\n' "$grade" "$message"
+}
+
+validate_region() {
+  local region=${1:-}
+  [[ "$region" == "ap-northeast-2" || "$region" == "us-east-1" ]] || \
+    fail "AWS_REGION은 ap-northeast-2 또는 us-east-1이어야 합니다: ${region:-<empty>}" 64
+}
+
+runtime_grade() {
+  if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+    printf 'STATIC'
+  else
+    printf 'CLOUD_RUNTIME'
+  fi
 }
 
 require_command() {
@@ -61,13 +93,13 @@ check_state_bucket() {
   local profile=$1 region=$2 bucket=$3 project=$4
   local tags location versioning encryption public_block
 
-  tags=$(aws s3api get-bucket-tagging --bucket "$bucket" --profile "$profile" --output json)
+  tags=$(aws s3api get-bucket-tagging --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   jq -e --arg project "$project" '
     any(.TagSet[]?; .Key == "ManagedBy" and .Value == "gitops-course") and
     any(.TagSet[]?; .Key == "Project" and .Value == $project)
   ' <<<"$tags" >/dev/null || fail "state bucket ownership tag가 일치하지 않습니다: $bucket"
 
-  location=$(aws s3api get-bucket-location --bucket "$bucket" --profile "$profile" --output json)
+  location=$(aws s3api get-bucket-location --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   if [[ "$region" == "us-east-1" ]]; then
     jq -e '.LocationConstraint == null' <<<"$location" >/dev/null || \
       fail "state bucket Region이 us-east-1이 아닙니다: $bucket"
@@ -76,14 +108,14 @@ check_state_bucket() {
       fail "state bucket Region이 일치하지 않습니다: $bucket"
   fi
 
-  versioning=$(aws s3api get-bucket-versioning --bucket "$bucket" --profile "$profile" --output json)
+  versioning=$(aws s3api get-bucket-versioning --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   jq -e '.Status == "Enabled"' <<<"$versioning" >/dev/null || fail "state bucket versioning이 Enabled가 아닙니다."
 
-  encryption=$(aws s3api get-bucket-encryption --bucket "$bucket" --profile "$profile" --output json)
+  encryption=$(aws s3api get-bucket-encryption --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   jq -e 'any(.ServerSideEncryptionConfiguration.Rules[]?; .ApplyServerSideEncryptionByDefault.SSEAlgorithm == "AES256" or .ApplyServerSideEncryptionByDefault.SSEAlgorithm == "aws:kms")' \
     <<<"$encryption" >/dev/null || fail "state bucket 기본 암호화가 없습니다."
 
-  public_block=$(aws s3api get-public-access-block --bucket "$bucket" --profile "$profile" --output json)
+  public_block=$(aws s3api get-public-access-block --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   jq -e '.PublicAccessBlockConfiguration | .BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' \
     <<<"$public_block" >/dev/null || fail "state bucket public access block 네 항목이 모두 true가 아닙니다."
 
@@ -95,7 +127,7 @@ check_dns_delegation() {
   local route53_nameservers public_nameservers
 
   route53_nameservers=$(aws route53 get-hosted-zone \
-    --id "$hosted_zone_id" --profile "$profile" --output json \
+    --id "$hosted_zone_id" --profile "$profile" --region "$AWS_REGION" --output json \
     | jq -r '.DelegationSet.NameServers[]' \
     | normalize_nameservers)
   public_nameservers=$(dig +short NS "$root_domain" | normalize_nameservers)
@@ -111,13 +143,13 @@ check_dns_delegation() {
 
 find_github_oidc_provider() {
   local profile=$1 provider_arns provider_arn provider_json count=0 selected=""
-  provider_arns=$(aws iam list-open-id-connect-providers --profile "$profile" --output json \
+  provider_arns=$(aws iam list-open-id-connect-providers --profile "$profile" --region "$AWS_REGION" --output json \
     | jq -r '.OpenIDConnectProviderList[].Arn')
 
   while IFS= read -r provider_arn; do
     [[ -n "$provider_arn" ]] || continue
     provider_json=$(aws iam get-open-id-connect-provider \
-      --open-id-connect-provider-arn "$provider_arn" --profile "$profile" --output json)
+      --open-id-connect-provider-arn "$provider_arn" --profile "$profile" --region "$AWS_REGION" --output json)
     if [[ "$(jq -r '.Url' <<<"$provider_json")" == "token.actions.githubusercontent.com" ]]; then
       count=$((count + 1))
       selected=$provider_arn
@@ -166,19 +198,33 @@ check_ruleset() {
 }
 
 check_secret_json() {
-  local secret_file=$1 secret_directory
+  local secret_file=$1 secret_class=$2 expected_keys=$3 secret_directory
   [[ -f "$secret_file" ]] || fail "secret JSON 파일을 찾을 수 없습니다: $secret_file"
   secret_directory=$(cd "$(dirname "$secret_file")" && pwd -P)
   if git -C "$secret_directory" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     fail "secret JSON은 Git worktree 밖에 두어야 합니다: $secret_file"
   fi
-  jq -e '
+  jq -e --argjson expected_keys "$expected_keys" '
     type == "object" and
-    (keys | sort == ["API_KEY", "DB_HOST", "DB_PASSWORD"]) and
+    (keys | sort == ($expected_keys | sort)) and
     all(.[]; type == "string" and length > 0)
   ' "$secret_file" >/dev/null || \
-    fail "secret JSON은 API_KEY, DB_HOST, DB_PASSWORD의 비어 있지 않은 문자열만 포함해야 합니다."
+    fail "$secret_class secret JSON은 $(jq -r --argjson keys "$expected_keys" '$keys | join(", ")' <<< '{}')만 포함해야 합니다."
   pass "secret JSON key 구조가 유효하며 값은 출력하지 않았습니다."
+}
+
+check_secret_json_pair() {
+  local runtime_file=${RUNTIME_SECRET_JSON_FILE:-}
+  local database_file=${DB_SECRET_JSON_FILE:-}
+
+  [[ -z "${SECRET_JSON_FILE:-}" ]] || \
+    fail "SECRET_JSON_FILE은 더 이상 지원하지 않습니다. RUNTIME_SECRET_JSON_FILE과 DB_SECRET_JSON_FILE을 사용하십시오." 64
+  if [[ -n "$runtime_file" || -n "$database_file" ]]; then
+    [[ -n "$runtime_file" && -n "$database_file" ]] || \
+      fail "RUNTIME_SECRET_JSON_FILE과 DB_SECRET_JSON_FILE은 함께 설정해야 합니다." 64
+    check_secret_json "$runtime_file" runtime '["API_KEY"]'
+    check_secret_json "$database_file" database '["DB_HOST","DB_PORT","DB_NAME","DB_USER","DB_PASSWORD"]'
+  fi
 }
 
 check_ch02() {
@@ -188,6 +234,7 @@ check_ch02() {
   for name in AWS_PROFILE AWS_REGION STATE_BUCKET_NAME LAB_PROJECT_NAME HOSTED_ZONE_ID ROOT_DOMAIN INFRA_GH_REPO APP_GH_REPO GITOPS_GH_REPO; do
     require_environment "$name"
   done
+  validate_region "$AWS_REGION"
 
   check_state_bucket "$AWS_PROFILE" "$AWS_REGION" "$STATE_BUCKET_NAME" "$LAB_PROJECT_NAME"
   check_dns_delegation "$AWS_PROFILE" "$HOSTED_ZONE_ID" "$ROOT_DOMAIN"
@@ -195,14 +242,12 @@ check_ch02() {
   check_immutable_subject "$INFRA_GH_REPO"
   check_immutable_subject "$APP_GH_REPO"
   check_ruleset "$GITOPS_GH_REPO"
-  if [[ -n "${SECRET_JSON_FILE:-}" ]]; then
-    check_secret_json "$SECRET_JSON_FILE"
-  fi
+  check_secret_json_pair
   pass "ch02 외부 상태와 보안 계약이 유효합니다."
 }
 
 check_workflow_run() {
-  local chapter=$1 repository=${2:-} head_sha=${3:-} workflow=${4:-test.yml} event=${5:-push}
+  local chapter=$1 repository=${2:-} head_sha=${3:-} workflow_name=${4:-ci} event=${5:-push}
   [[ -n "$repository" && -n "$head_sha" ]] || \
     fail "사용법: bash scripts/course-check.sh $chapter <owner/repository> <commit-sha> [workflow] [event]" 64
   require_command gh
@@ -213,23 +258,30 @@ check_workflow_run() {
 
   local attempts=${COURSE_CHECK_WAIT_ATTEMPTS:-30}
   local delay=${COURSE_CHECK_WAIT_SECONDS:-2}
-  local attempt=0 runs run_id="" final
+  local attempt=0 runs run_id="" final candidates candidate_count
   while ((attempt < attempts)); do
-    runs=$(gh run list --repo "$repository" --workflow "$workflow" --event "$event" \
-      --limit 50 --json databaseId,headSha,status,conclusion,url)
-    run_id=$(jq -r --arg sha "$head_sha" --argjson before "$before_id" \
-      '[.[] | select(.headSha == $sha and .databaseId > $before)] | sort_by(.databaseId) | last | .databaseId // empty' \
+    runs=$(gh run list --repo "$repository" --workflow "$workflow_name" --event "$event" \
+      --limit 50 --json databaseId,headSha,workflowName,event,status,conclusion,url)
+    candidates=$(jq -c --arg sha "$head_sha" --arg workflow "$workflow_name" \
+      --arg event "$event" --argjson before "$before_id" \
+      '[.[] | select(.headSha == $sha and .workflowName == $workflow and .event == $event and .databaseId > $before)]' \
       <<<"$runs")
+    candidate_count=$(jq -r 'length' <<<"$candidates")
+    ((candidate_count <= 1)) || fail "AMBIGUOUS_RUN: exact workflow 후보가 ${candidate_count}개입니다."
+    run_id=$(jq -r 'if length == 1 then .[0].databaseId else empty end' <<<"$candidates")
     [[ -n "$run_id" ]] && break
     attempt=$((attempt + 1))
     ((attempt < attempts)) && sleep "$delay"
   done
-  [[ -n "$run_id" ]] || fail "$repository에서 commit SHA $head_sha workflow run을 찾지 못했습니다."
+  [[ -n "$run_id" ]] || fail "EXACT_RUN_NOT_FOUND: ${repository}에서 지정한 SHA/workflow/event의 run을 찾지 못했습니다."
 
   gh run watch "$run_id" --repo "$repository" --exit-status
   final=$(gh run view "$run_id" --repo "$repository" \
-    --json databaseId,headSha,status,conclusion,url)
-  jq -e --arg sha "$head_sha" '.headSha == $sha and .status == "completed" and .conclusion == "success"' \
+    --json databaseId,headSha,workflowName,event,status,conclusion,url)
+  jq -e --arg sha "$head_sha" --arg workflow "$workflow_name" --arg event "$event" '
+    .headSha == $sha and .workflowName == $workflow and .event == $event and
+    .status == "completed" and .conclusion == "success"
+  ' \
     <<<"$final" >/dev/null || fail "선택한 workflow run이 요청 SHA의 success 상태가 아닙니다."
   jq '{databaseId, headSha, status, conclusion, url}' <<<"$final"
   pass "$chapter exact-SHA workflow가 성공했습니다(run_id=$run_id)."
@@ -244,6 +296,7 @@ check_ch05() {
   require_command jq
   require_environment AWS_PROFILE
   require_environment AWS_REGION
+  validate_region "$AWS_REGION"
 
   local response platforms
   response=$(aws ecr batch-get-image \
@@ -275,6 +328,25 @@ check_ch05() {
 
   printf 'ECR_INDEX: repository=%s digest=%s platforms=%s\n' "$repository_name" "$digest" "$platforms"
   pass "ch05 ECR multi-architecture image index가 유효합니다."
+}
+
+check_ch06() {
+  if [[ "${1:-}" == "--lifecycle-preview" ]]; then
+    shift
+    COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/ecr-lifecycle-preview.sh" "$@"
+  else
+    check_ch05 "$@"
+  fi
+}
+
+check_contract_only() {
+  local chapter=$1 mode=${2:-}
+  [[ "$mode" == "--contract-only" ]] || \
+    fail "$chapter runtime checker에 필요한 인수가 없습니다. --contract-only는 offline contract test 전용입니다." 64
+  [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]] || \
+    fail "--contract-only는 COURSE_CHECK_BIN_DIR가 있는 offline test에서만 사용할 수 있습니다." 64
+  [[ -n "${AWS_REGION:-}" ]] && validate_region "$AWS_REGION"
+  printf 'DETAIL: %s public command shape is registered.\n' "$chapter"
 }
 
 cidr_range() {
@@ -313,7 +385,7 @@ check_ch08() {
 }
 
 check_ch10() {
-  local context=${1:-course-dev} namespace=${2:-dev}
+  local context=${1:-course-dev} namespace=${2:-app-dev}
   require_command kubectl
   require_command jq
 
@@ -326,9 +398,9 @@ check_ch10() {
   jq -e '.status.sync.status == "Synced" and .status.health.status == "Healthy"' \
     <<<"$application" >/dev/null || fail "sample-app-dev Application이 Synced/Healthy가 아닙니다."
 
-  external_secret=$(kubectl --context "$context" -n "$namespace" get externalsecret sample-app -o json)
+  external_secret=$(kubectl --context "$context" -n "$namespace" get externalsecret sample-app-runtime -o json)
   jq -e 'any(.status.conditions[]?; .type == "Ready" and .status == "True")' \
-    <<<"$external_secret" >/dev/null || fail "sample-app ExternalSecret이 Ready가 아닙니다."
+    <<<"$external_secret" >/dev/null || fail "sample-app-runtime ExternalSecret이 Ready가 아닙니다."
 
   deployment=$(kubectl --context "$context" -n "$namespace" get deployment sample-app -o json)
   jq -e '.status.availableReplicas > 0 and .status.availableReplicas == .status.replicas' \
@@ -399,14 +471,345 @@ check_stateful() {
   pass "Stateful Mini Commerce storage, migration, Pod, 상품·재고·주문 API가 유효합니다."
 }
 
+validate_dev_deployment_evidence() {
+  local file=${1:-} now=${2:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} expected_grade=${3:-CLOUD_RUNTIME}
+  [[ -f "$file" ]] || fail "Ch15 evidence file을 찾을 수 없습니다: $file" 66
+  jq -e --arg now "$now" --arg grade "$expected_grade" '
+    def canonical_ecr_repository:
+      capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") |
+      select((.name | length) >= 2 and (.name | length) <= 256);
+    def canonical_eks_cluster:
+      capture("^arn:aws:eks:(?<region>ap-northeast-2|us-east-1):(?<accountId>[0-9]{12}):cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$");
+    def canonical_utc_seconds:
+      . as $timestamp |
+      ($timestamp | type == "string") and
+      ($timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+      (try (($timestamp | fromdateiso8601 | todateiso8601) == $timestamp) catch false);
+    (.image.repository | canonical_ecr_repository) as $repository |
+    (.clusterArn | canonical_eks_cluster) as $cluster |
+    (keys | sort) == (["clusterArn","evidenceGrade","gitopsRevision","image","observedAt","region","schemaVersion","source","status"] | sort) and
+    .schemaVersion == "course.dev-deployment/v1" and
+    .evidenceGrade == $grade and
+    .status == {"sync":"Synced","health":"Healthy"} and
+    (.source | keys | sort) == ["repository","sha"] and
+    (.source.repository | type == "string" and length > 0) and
+    (.source.sha | test("^[0-9a-f]{40}$")) and
+    (.image | keys | sort) == ["indexDigest","repository"] and
+    (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
+    (.gitopsRevision | test("^[0-9a-f]{40}$")) and
+    (.region == "ap-northeast-2" or .region == "us-east-1") and
+    $repository.region == .region and
+    $cluster.region == .region and
+    $cluster.accountId == $repository.accountId and
+    (.observedAt | canonical_utc_seconds) and
+    ($now | canonical_utc_seconds) and
+    ((.observedAt | fromdateiso8601) <= ($now | fromdateiso8601))
+  ' "$file" >/dev/null || fail "Ch15 evidence schema, grade, identity, or Synced/Healthy status is invalid."
+}
+
+validate_dev_slo_evidence() {
+  local deployment=${1:-} slo=${2:-} now=${3:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} expected_grade=${4:-CLOUD_RUNTIME}
+  validate_dev_deployment_evidence "$deployment" "$now" "$expected_grade"
+  [[ -f "$slo" ]] || fail "Ch16 evidence file을 찾을 수 없습니다: $slo" 66
+  jq -e --arg now "$now" --arg grade "$expected_grade" --slurpfile deployment "$deployment" '
+    def canonical_utc_seconds:
+      . as $timestamp |
+      ($timestamp | type == "string") and
+      ($timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+      (try (($timestamp | fromdateiso8601 | todateiso8601) == $timestamp) catch false);
+    (keys | sort) == (["clusterArn","evidenceGrade","evidenceId","expiresAt","gitopsRevision","image","observedAt","region","schemaVersion","source","status"] | sort) and
+    .schemaVersion == "course.dev-slo/v1" and
+    .evidenceGrade == $grade and
+    .status == "PASS" and
+    (.source | keys | sort) == ["repository","sha"] and
+    (.image | keys | sort) == ["indexDigest","repository"] and
+    (.evidenceId | test("^sha256:[0-9a-f]{64}$")) and
+    .source == $deployment[0].source and
+    .image == $deployment[0].image and
+    .gitopsRevision == $deployment[0].gitopsRevision and
+    .clusterArn == $deployment[0].clusterArn and
+    .region == $deployment[0].region and
+    (.observedAt | canonical_utc_seconds) and
+    (.expiresAt | canonical_utc_seconds) and
+    ($now | canonical_utc_seconds) and
+    ((.observedAt | fromdateiso8601) <= ($now | fromdateiso8601)) and
+    ((.observedAt | fromdateiso8601) < (.expiresAt | fromdateiso8601)) and
+    (($now | fromdateiso8601) < (.expiresAt | fromdateiso8601))
+  ' "$slo" >/dev/null || fail "Ch16 evidence schema, grade, PASS status, identity, or validity interval is invalid."
+}
+
+validate_evidence_output_path() {
+  local output=${1:-}
+  [[ -n "$output" ]] || fail "--output path가 필요합니다." 64
+  case "$output" in
+    argocd-gitops/evidence/dev/deployment.json|argocd-gitops/evidence/dev/slo.json|*/argocd-gitops/evidence/dev/deployment.json|*/argocd-gitops/evidence/dev/slo.json)
+      fail "EKS-infra checker는 GitOps handoff 경로를 직접 쓰지 않습니다: $output" 64
+      ;;
+  esac
+  [[ -d "$(dirname -- "$output")" ]] || fail "output directory가 없습니다: $(dirname -- "$output")" 66
+}
+
+write_json_atomic() {
+  local output=$1 payload=$2 tmp
+  validate_evidence_output_path "$output"
+  tmp=$(mktemp "${output}.tmp.XXXXXX")
+  trap 'rm -f -- "$tmp"' RETURN
+  printf '%s\n' "$payload" >"$tmp"
+  jq -e . "$tmp" >/dev/null || fail "생성된 evidence JSON이 유효하지 않습니다."
+  mv -- "$tmp" "$output"
+  trap - RETURN
+}
+
+one_hour_after() {
+  local now=$1
+  date -u -j -v+1H -f '%Y-%m-%dT%H:%M:%SZ' "$now" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || \
+    date -u -d "$now + 1 hour" '+%Y-%m-%dT%H:%M:%SZ'
+}
+
+check_ch12() {
+  if [[ "${1:-}" == "--contract-only" ]]; then
+    check_contract_only ch12 "$@"
+    return
+  fi
+  local context=${1:-} namespace=${2:-} external_secret=${3:-} rollout=${4:-}
+  local runtime_secret=${5:-} expected_version=${6:-} previous_pod_uid=${7:-}
+  [[ $# -eq 7 ]] || fail "사용법: ch12 <context> <namespace> <externalsecret> <rollout> <runtime-secret-id> <version-id> <previous-pod-uid>" 64
+  [[ "$runtime_secret" == */sample-app-runtime ]] || fail "Ch12 reload target은 sample-app-runtime secret이어야 합니다." 64
+  for command in aws kubectl jq; do require_command "$command"; done
+  for name in AWS_PROFILE AWS_REGION; do require_environment "$name"; done
+  validate_region "$AWS_REGION"
+
+  local secret external rollout_json pods current_hash
+  secret=$(aws secretsmanager describe-secret --secret-id "$runtime_secret" --region "$AWS_REGION" --profile "$AWS_PROFILE" --output json)
+  jq -e --arg version "$expected_version" '.VersionIdsToStages[$version] | index("AWSCURRENT") != null' \
+    <<<"$secret" >/dev/null || fail "expected runtime secret VersionId가 AWSCURRENT가 아닙니다."
+  external=$(kubectl --context "$context" -n "$namespace" get externalsecret "$external_secret" -o json)
+  jq -e --arg version "$expected_version" '
+    .metadata.generation as $generation |
+    any(.status.conditions[]?; .type == "Ready" and .status == "True" and ((.observedGeneration // $generation) == $generation)) and
+    (.status.syncedResourceVersion == $version)
+  ' <<<"$external" >/dev/null || fail "ExternalSecret이 current generation/VersionId를 Ready로 동기화하지 않았습니다."
+  rollout_json=$(kubectl --context "$context" -n "$namespace" get rollout "$rollout" -o json)
+  current_hash=$(jq -r '.status.currentPodHash // empty' <<<"$rollout_json")
+  [[ -n "$current_hash" ]] || fail "Rollout currentPodHash가 없습니다."
+  pods=$(kubectl --context "$context" -n "$namespace" get pods -l "rollouts-pod-template-hash=$current_hash" -o json)
+  jq -e --arg previous "$previous_pod_uid" '
+    (.items | length) > 0 and all(.items[]; any(.status.conditions[]?; .type == "Ready" and .status == "True")) and
+    any(.items[]; .metadata.uid != $previous)
+  ' <<<"$pods" >/dev/null || fail "runtime secret 변경 후 새 Ready Pod UID를 확인하지 못했습니다."
+  printf 'SECRET_RELOAD: version=%s currentPodHash=%s\n' "$expected_version" "$current_hash"
+}
+
+check_ch15() {
+  if [[ "${1:-}" == "--contract-only" ]]; then
+    check_contract_only ch15 "$@"
+    return
+  fi
+  if [[ "${1:-}" == "--validate-evidence" ]]; then
+    [[ $# -eq 3 ]] || fail "사용법: ch15 --validate-evidence <file> <now>" 64
+    validate_dev_deployment_evidence "$2" "$3" CLOUD_RUNTIME
+    return
+  fi
+  [[ $# -eq 12 && "${11}" == "--output" ]] || fail "사용법: ch15 <context> <app-namespace> <application> <source-repository> <source-sha> <image-repository> <image-digest> <gitops-revision> <cluster-arn> <region> --output <path>" 64
+  local context=$1 namespace=$2 application=$3 source_repository=$4 source_sha=$5 image_repository=$6
+  local image_digest=$7 gitops_revision=$8 cluster_arn=$9 region=${10} output=${12}
+  validate_region "$region"
+  [[ "$source_sha" =~ ^[0-9a-f]{40}$ && "$gitops_revision" =~ ^[0-9a-f]{40}$ ]] || fail "source와 GitOps revision은 40-char SHA여야 합니다." 64
+  [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "image digest가 유효하지 않습니다." 64
+  for command in aws kubectl jq; do require_command "$command"; done
+  require_environment AWS_PROFILE
+  validate_evidence_output_path "$output"
+
+  local app cluster cluster_name now grade payload
+  app=$(kubectl --context "$context" -n argocd get application "$application" -o json)
+  jq -e --arg revision "$gitops_revision" '
+    .status.sync.status == "Synced" and .status.health.status == "Healthy" and
+    .status.sync.revision == $revision
+  ' <<<"$app" >/dev/null || fail "Dev Argo Application이 요청 GitOps revision에서 Synced/Healthy가 아닙니다."
+  cluster_name=${cluster_arn##*/}
+  cluster=$(aws eks describe-cluster --name "$cluster_name" --region "$region" --profile "$AWS_PROFILE" --output json)
+  jq -e --arg arn "$cluster_arn" --arg region "$region" \
+    '.cluster.arn == $arn and .cluster.status == "ACTIVE" and (.cluster.arn | contains(":"+$region+":"))' \
+    <<<"$cluster" >/dev/null || fail "Dev EKS cluster ARN/Region/ACTIVE 상태가 일치하지 않습니다."
+  now=${COURSE_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+  grade=$(runtime_grade)
+  payload=$(jq -n --arg grade "$grade" --arg source_repository "$source_repository" --arg source_sha "$source_sha" \
+    --arg image_repository "$image_repository" --arg image_digest "$image_digest" --arg gitops_revision "$gitops_revision" \
+    --arg cluster_arn "$cluster_arn" --arg region "$region" --arg now "$now" '
+      {schemaVersion:"course.dev-deployment/v1",evidenceGrade:$grade,status:{sync:"Synced",health:"Healthy"},
+       source:{repository:$source_repository,sha:$source_sha},image:{repository:$image_repository,indexDigest:$image_digest},
+       gitopsRevision:$gitops_revision,clusterArn:$cluster_arn,region:$region,observedAt:$now}')
+  (
+    candidate=$(mktemp "${output}.candidate.XXXXXX")
+    trap 'rm -f -- "$candidate"' EXIT
+    printf '%s\n' "$payload" >"$candidate"
+    validate_dev_deployment_evidence "$candidate" "$now" "$grade"
+  )
+  write_json_atomic "$output" "$payload"
+  printf 'DEV_DEPLOYMENT_EVIDENCE: %s\n' "$output"
+}
+
+check_ch16() {
+  if [[ "${1:-}" == "--contract-only" ]]; then
+    check_contract_only ch16 "$@"
+    return
+  fi
+  if [[ "${1:-}" == "--validate-evidence" ]]; then
+    [[ $# -eq 4 ]] || fail "사용법: ch16 --validate-evidence <deployment> <slo> <now>" 64
+    validate_dev_slo_evidence "$2" "$3" "$4" CLOUD_RUNTIME
+    return
+  fi
+  [[ $# -eq 9 && "${8}" == "--output" ]] || fail "사용법: ch16 <deployment-evidence> <context> <k6-namespace> <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <path>" 64
+  local deployment=$1 context=$2 namespace=$3 testrun=$4 workspace_id=$5 topic_arn=$6 region=$7 output=$9
+  local grade now expected_grade operator crd run workspace workspace_arn workspace_account rules rule_text alertmanager alertmanager_text topic subscriptions query delivery expires evidence_id payload
+  for command in aws kubectl jq; do require_command "$command"; done
+  require_environment AWS_PROFILE
+  require_environment ALERT_DELIVERY_EVIDENCE
+  validate_region "$region"
+  validate_evidence_output_path "$output"
+  course_require_file "$ALERT_DELIVERY_EVIDENCE"
+  course_assert_canonical_utc_seconds "$ALERT_DELIVERY_EVIDENCE" \
+    'alert delivery observedAt' '["observedAt"]'
+  now=${COURSE_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+  course_assert_canonical_utc_seconds_value "$now" 'Ch16 evaluation time'
+  delivery=$(cat "$ALERT_DELIVERY_EVIDENCE")
+  jq -e --arg topic "$topic_arn" --arg now "$now" '
+    (keys | sort) == (["evidenceGrade","firing","observedAt","resolved","schemaVersion","topicArn"] | sort) and
+    .schemaVersion == "course.alert-delivery/v1" and .evidenceGrade == "CLOUD_RUNTIME" and
+    .topicArn == $topic and .firing.delivered == true and .resolved.delivered == true and
+    (.observedAt | fromdateiso8601) <= ($now | fromdateiso8601)
+  ' <<<"$delivery" >/dev/null || fail "Firing/Resolved SNS delivery evidence가 모두 필요합니다."
+  grade=$(runtime_grade)
+  expected_grade=$grade
+  validate_dev_deployment_evidence "$deployment" "$now" "$expected_grade"
+  [[ "$(jq -r '.region' "$deployment")" == "$region" ]] || fail "Ch15/Ch16 Region identity가 다릅니다."
+
+  operator=$(kubectl --context "$context" -n "$namespace" get deployment k6-operator-controller-manager -o json)
+  jq -e '.status.availableReplicas >= 1 and .status.availableReplicas == .status.replicas' <<<"$operator" >/dev/null || fail "k6 operator Deployment가 Available이 아닙니다."
+  crd=$(kubectl --context "$context" get crd testruns.k6.io -o json)
+  jq -e 'any(.status.conditions[]?; .type == "Established" and .status == "True")' <<<"$crd" >/dev/null || fail "k6 TestRun CRD가 Established가 아닙니다."
+  run=$(kubectl --context "$context" -n "$namespace" get testrun "$testrun" -o json)
+  jq -e '
+    .status.stage == "finished" and
+    .metadata.annotations["course.platform/max-duration"] != null and
+    .metadata.annotations["course.platform/max-rate"] != null and
+    .metadata.annotations["course.platform/cost-boundary"] == "existing-eks-compute"
+  ' <<<"$run" >/dev/null || fail "k6 run이 finished가 아니거나 duration/rate/cost boundary metadata가 없습니다."
+
+  workspace=$(aws amp describe-workspace --workspace-id "$workspace_id" --region "$region" --profile "$AWS_PROFILE" --output json)
+  jq -e --arg region "$region" --arg workspace_id "$workspace_id" '
+    .workspace.status.statusCode == "ACTIVE" and
+    .workspace.workspaceId == $workspace_id and
+    (.workspace.prometheusEndpoint | contains("." + $region + ".")) and
+    (.workspace.arn | test("^arn:aws:aps:" + $region + ":[0-9]{12}:workspace/" + $workspace_id + "$"))
+  ' <<<"$workspace" >/dev/null || fail "AMP workspace ARN/endpoint/status/Region이 유효하지 않습니다."
+  workspace_arn=$(jq -r '.workspace.arn' <<<"$workspace")
+  workspace_account=$(jq -r '.workspace.arn | split(":")[4]' <<<"$workspace")
+  rules=$(aws amp get-rule-groups-namespace --workspace-id "$workspace_id" --name course-release-slo --region "$region" --profile "$AWS_PROFILE" --output json)
+  rule_text=$(jq -r '.data | @base64d' <<<"$rules")
+  [[ "$rule_text" == *"course:http_success_ratio:5m"* && "$rule_text" == *"CourseDeadman"* ]] || fail "AMP recording rule/deadman alert가 없습니다."
+  alertmanager=$(aws amp get-alert-manager-definition --workspace-id "$workspace_id" --region "$region" --profile "$AWS_PROFILE" --output json)
+  jq -e '.status.statusCode == "ACTIVE" and (.data | length > 0)' <<<"$alertmanager" >/dev/null || fail "AMP Alertmanager definition이 ACTIVE가 아닙니다."
+  alertmanager_text=$(jq -r '.data | @base64d' <<<"$alertmanager")
+  [[ "$alertmanager_text" == *"sigv4"* && "$alertmanager_text" == *"region: $region"* && "$alertmanager_text" == *"$topic_arn"* ]] || fail "Alertmanager SNS topic/SigV4 Region 설정이 일치하지 않습니다."
+  topic=$(aws sns get-topic-attributes --topic-arn "$topic_arn" --region "$region" --profile "$AWS_PROFILE" --output json)
+  jq -e --arg topic "$topic_arn" --arg workspace "$workspace_arn" --arg account "$workspace_account" '
+    .Attributes.TopicArn == $topic and
+    (.Attributes.Policy | fromjson | any(.Statement[]?;
+      .Principal.Service == "aps.amazonaws.com" and .Action == "sns:Publish" and
+      .Resource == $topic and
+      .Condition.ArnEquals["AWS:SourceArn"] == $workspace and
+      .Condition.StringEquals["AWS:SourceAccount"] == $account))
+  ' <<<"$topic" >/dev/null || fail "SNS topic 또는 exact AMP workspace/account-scoped delivery policy가 유효하지 않습니다."
+  subscriptions=$(aws sns list-subscriptions-by-topic --topic-arn "$topic_arn" --region "$region" --profile "$AWS_PROFILE" --output json)
+  jq -e 'any(.Subscriptions[]?; .SubscriptionArn != "PendingConfirmation" and (.SubscriptionArn | length > 0))' \
+    <<<"$subscriptions" >/dev/null || fail "SNS subscription이 confirmed 상태가 아닙니다."
+  query=$(aws amp query-metrics --workspace-id "$workspace_id" --query-string 'course:http_success_ratio:5m' --region "$region" --profile "$AWS_PROFILE" --output json)
+  jq -e 'any(.data.result[]?; ((.value[1] | tonumber) >= 0.99))' <<<"$query" >/dev/null || fail "Dev SLO success ratio가 0.99 미만입니다."
+  expires=$(one_hour_after "$now")
+  evidence_id="sha256:$(printf '%s\n%s\n%s\n' "$(sha256sum "$deployment" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$deployment" | awk '{print $1}')" "$workspace_id" "$now" | { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi; } | awk '{print $1}')"
+  payload=$(jq -n --slurpfile deployment "$deployment" --arg grade "$grade" --arg evidence_id "$evidence_id" --arg now "$now" --arg expires "$expires" '
+    $deployment[0] as $d |
+    {schemaVersion:"course.dev-slo/v1",evidenceGrade:$grade,status:"PASS",source:$d.source,image:$d.image,
+     gitopsRevision:$d.gitopsRevision,clusterArn:$d.clusterArn,region:$d.region,evidenceId:$evidence_id,observedAt:$now,expiresAt:$expires}')
+  write_json_atomic "$output" "$payload"
+  validate_dev_slo_evidence "$deployment" "$output" "$now" "$grade"
+  printf 'DEV_SLO_EVIDENCE: %s\n' "$output"
+}
+
+check_ch23() {
+  case "${1:-}" in
+    --contract-only)
+      check_contract_only ch23 "$@"
+      ;;
+    --validate-quiesce)
+      [[ $# -eq 2 ]] || fail '사용법: ch23 --validate-quiesce <snapshot-quiesce.json>' 64
+      [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]] || fail 'Ch23 fixture validation requires COURSE_CHECK_BIN_DIR; live snapshot creation must re-query Kubernetes.' 64
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/snapshot-quiesce-check.sh" "$2"
+      ;;
+    --validate-recovery)
+      [[ $# -eq 2 || $# -eq 3 ]] || fail '사용법: ch23 --validate-recovery <snapshot-recovery.json> [snapshot-quiesce.json]' 64
+      [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]] || fail 'Ch23 fixture validation requires COURSE_CHECK_BIN_DIR; live recovery evidence must be re-queried.' 64
+      if [[ $# -eq 3 ]]; then
+        COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/snapshot-recovery-check.sh" "$2" "$3"
+      else
+        COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/snapshot-recovery-check.sh" "$2"
+      fi
+      ;;
+    *)
+      fail '사용법: ch23 --contract-only | --validate-quiesce <file> | --validate-recovery <file> [quiesce-file]' 64
+      ;;
+  esac
+}
+
+check_ch25() {
+  if [[ "${1:-}" == "--contract-only" ]]; then
+    check_contract_only ch25 "$@"
+    return
+  fi
+  COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/game-day-capacity-check.sh" "$@"
+}
+
+check_ch26() {
+  case "${1:-}" in
+    --contract-only)
+      check_contract_only ch26 "$@"
+      ;;
+    --ownership-inventory|--cleanup-preflight)
+      shift
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/cleanup-preflight.sh" "$@"
+      ;;
+    --checkpoint-teardown)
+      shift
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/checkpoint-teardown.sh" "$@"
+      ;;
+    --final-cleanup|--dry-run)
+      shift
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/final-cleanup.sh" "$@"
+      ;;
+    --execute)
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/final-cleanup.sh" "$@"
+      ;;
+    *)
+      fail '사용법: ch26 --contract-only | --cleanup-preflight <args> | --checkpoint-teardown <args> | --final-cleanup [--execute] <args>' 64
+      ;;
+  esac
+}
+
 usage() {
   printf '%s\n' \
     'Usage: bash scripts/course-check.sh <chapter> [arguments]' \
     '  ch01 <three-repositories-root>' \
-    '  ch02' \
-    '  ch03|ch11|ch12|ch13 <owner/repository> <commit-sha> [workflow] [event] [before-id]' \
-    '  ch05 <ecr-repository-name> <sha256-digest>' \
-    '  ch08 <first-ipv4-cidr> <second-ipv4-cidr>' \
+    '  ch02 [RUNTIME_SECRET_JSON_FILE=<path> DB_SECRET_JSON_FILE=<path>]' \
+    '  ch05 <owner/repository> <commit-sha> <workflow-name> <event> [before-id]' \
+    '  ch06 <ecr-repository-name> <sha256-digest>' \
+    '  ch12 <context> <namespace> <externalsecret> <rollout> <runtime-secret-id> <version-id> <previous-pod-uid>' \
+    '  ch15 <context> <namespace> <application> <source-repository> <source-sha> <image-repository> <image-digest> <gitops-revision> <cluster-arn> <region> --output <path>' \
+    '  ch16 <ch15-evidence> <context> <k6-namespace> <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <path>' \
+    '  ch23 --validate-quiesce <snapshot-quiesce.json> | --validate-recovery <snapshot-recovery.json> [quiesce-file]' \
+    '  ch25 <kubectl-context> <ch17-profile.json> <output.json>' \
+    '  ch26 --cleanup-preflight <args> | --checkpoint-teardown <args> | --final-cleanup [--execute] <args>' \
+    '  ch04|ch07..ch26 --contract-only (offline contract tests only; implemented chapters also accept it)' \
     '  ch10 [kubectl-context] [namespace]' \
     '  stateful <kubectl-context> <namespace> <base-url>'
 }
@@ -419,16 +822,46 @@ chapter=${1:-}
 shift
 
 case "$chapter" in
-  ch01) check_ch01 "$@" ;;
-  ch02) check_ch02 "$@" ;;
-  ch03) check_workflow_run ch03 "$@" ;;
-  ch05) check_ch05 "$@" ;;
-  ch08) check_ch08 "$@" ;;
-  ch10) check_ch10 "$@" ;;
-  ch11) check_workflow_run ch11 "$@" ;;
-  ch12) check_workflow_run ch12 "$@" ;;
-  ch13) check_workflow_run ch13 "$@" ;;
-  stateful) check_stateful "$@" ;;
+  ch01) check_ch01 "$@"; emit_pass STATIC "ch01 repository baseline이 유효합니다." ;;
+  ch02) check_ch02 "$@"; emit_pass "$(runtime_grade)" "ch02 state, identity, governance 계약이 유효합니다." ;;
+  ch05) check_workflow_run ch05 "$@"; emit_pass "$(runtime_grade)" "ch05 exact workflow 실행이 유효합니다." ;;
+  ch06) check_ch06 "$@"; emit_pass "$(runtime_grade)" "ch06 image index와 rollback retention이 유효합니다." ;;
+  ch10)
+    if [[ "${1:-}" == "--contract-only" ]]; then
+      check_contract_only "$chapter" "$@"
+      emit_pass STATIC "SIMULATED_CLOUD_CONTRACT ch10 dispatcher가 등록됐습니다."
+    else
+      check_ch10 "$@"
+      emit_pass "$(runtime_grade)" "ch10 Dev 핵심 runtime 상태가 유효합니다."
+    fi
+    ;;
+  ch12) check_ch12 "$@"; emit_pass "$(runtime_grade)" "ch12 runtime secret freshness와 Pod reload가 유효합니다." ;;
+  ch14)
+    if [[ "${1:-}" == "--contract-only" ]]; then
+      check_contract_only "$chapter" "$@"
+    else
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/network-policy-runtime.sh" "$@"
+    fi
+    emit_pass "$(runtime_grade)" "ch14 VPC CNI NetworkPolicy runtime 계약이 유효합니다."
+    ;;
+  ch15) check_ch15 "$@"; emit_pass "$(runtime_grade)" "ch15 Dev deployment evidence가 유효합니다." ;;
+  ch16) check_ch16 "$@"; emit_pass "$(runtime_grade)" "ch16 Dev SLO, k6, AMP, SNS evidence가 유효합니다." ;;
+  ch23) check_ch23 "$@"; emit_pass "$(runtime_grade)" "ch23 snapshot recovery evidence가 유효합니다." ;;
+  ch03|ch04|ch07|ch08|ch09|ch11|ch13|ch17|ch18|ch19|ch20|ch21|ch22|ch24)
+    check_contract_only "$chapter" "$@"
+    emit_pass STATIC "SIMULATED_CLOUD_CONTRACT $chapter dispatcher가 등록됐습니다."
+    ;;
+  ch25) check_ch25 "$@"; emit_pass "$(runtime_grade)" "ch25 game-day capacity와 Chaos Mesh readiness 계약이 유효합니다." ;;
+  ch26)
+    if [[ "${1:-}" == "--contract-only" ]]; then
+      check_ch26 "$@"
+      emit_pass STATIC "SIMULATED_CLOUD_CONTRACT ch26 dispatcher가 등록됐습니다."
+    else
+      check_ch26 "$@"
+      emit_pass "$(runtime_grade)" "ch26 guarded cleanup workflow가 유효합니다."
+    fi
+    ;;
+  stateful) check_stateful "$@"; emit_pass "$(runtime_grade)" "Stateful Mini Commerce runtime 계약이 유효합니다." ;;
   *)
     usage >&2
     fail "지원하지 않는 Chapter입니다: $chapter" 64

@@ -64,3 +64,18 @@ output "cluster_iam_role_arn" {
   description = "IAM role ARN of the EKS cluster"
   value       = aws_iam_role.cluster.arn
 }
+
+output "vpc_cni_addon_version" {
+  description = "Applied VPC CNI add-on version"
+  value       = aws_eks_addon.vpc_cni.addon_version
+}
+
+output "vpc_cni_network_policy_enabled" {
+  description = "Whether VPC CNI NetworkPolicy support is enabled"
+  value       = var.vpc_cni_enable_network_policy
+}
+
+output "vpc_cni_network_policy_enforcing_mode" {
+  description = "Configured VPC CNI NetworkPolicy enforcement mode"
+  value       = var.vpc_cni_network_policy_enforcing_mode
+}

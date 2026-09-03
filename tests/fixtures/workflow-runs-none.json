@@ -1,0 +1,4 @@
+[
+  {"databaseId":99,"headSha":"0123456789abcdef0123456789abcdef01234567","workflowName":"CI","event":"push","status":"completed","conclusion":"success","url":"https://example.invalid/run/99"},
+  {"databaseId":101,"headSha":"ffffffffffffffffffffffffffffffffffffffff","workflowName":"CI","event":"push","status":"completed","conclusion":"success","url":"https://example.invalid/run/101"}
+]

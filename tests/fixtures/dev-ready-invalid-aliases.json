@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "course.dev-ready/v1",
+  "environment": "dev",
+  "region": "ap-northeast-2",
+  "workflowRunId": 101,
+  "imageIndexDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "clusterArn": "arn:aws:eks:ap-northeast-2:123456789012:cluster/course-dev",
+  "promotionEvidence": {}
+}

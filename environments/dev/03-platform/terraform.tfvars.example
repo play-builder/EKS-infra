@@ -1,6 +1,7 @@
-# Supported course Regions: ap-northeast-2 or us-east-1.
+# Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
+course_id    = "replace-with-unique-course-id"
 environment  = "dev"
 
 acm_domain_name = "example.com"
@@ -12,6 +13,21 @@ enable_external_dns   = true
 enable_metrics_server = true
 enable_amp            = true
 enable_adot_collector = true
+enable_adot_xray      = false
+
+enable_external_secrets         = true
+external_secrets_ownership_mode = "fresh"
+enable_reloader                 = false
+enable_k6_operator              = false
+enable_snapshot_controller      = false
+snapshot_controller_addon_version = "v8.2.0-eksbuild.1"
+volume_snapshot_class_name      = "course-ebs-snapshots"
+enable_recovery_secret_reader   = false
+# recovery_secret_kms_key_arn   = "arn:aws:kms:<region>:<account>:key/<uuid>"
+enable_chaos_mesh               = false
+enable_amp_alerting             = false
+enable_sns_alert_delivery       = false
+# sns_alert_email_endpoint      = "oncall@example.com"
 
 # The available chart release targets Kubernetes 1.35; keep it off for EKS 1.36.
 enable_cluster_autoscaler = false
