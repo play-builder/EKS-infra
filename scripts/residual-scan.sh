@@ -192,8 +192,10 @@ payload=$(jq -n --arg grade "$grade" --arg course "$COURSE_ID" --arg account "$A
 ')
 course_write_json "$output" "$payload"
 cleanup_validate_residual "$inventory" "$decisions" "$pre_destroy" "$removal" "$output"
-if [[ "$grade" == STATIC ]]; then
-  echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT cleanup residual scan passed.'
-else
-  echo 'PASS: [CLOUD_RUNTIME] cleanup residual scan passed.'
+if [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" != true ]]; then
+  if [[ "$grade" == STATIC ]]; then
+    echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT cleanup residual scan passed.'
+  else
+    echo 'PASS: [CLOUD_RUNTIME] cleanup residual scan passed.'
+  fi
 fi

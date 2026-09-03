@@ -9,7 +9,7 @@ mkdir -p "$tmp_dir/fake-bin"
 run_valid() {
   COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
   AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-    bash "$root/scripts/cleanup-preflight.sh" --plan "$root/tests/fixtures/cleanup-course-owned.json" \
+    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight --plan "$root/tests/fixtures/cleanup-course-owned.json" \
       --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
       --inventory-output "$tmp_dir/inventory.json" --retain-template "$tmp_dir/retain-template.json" \
       --preflight-output "$tmp_dir/preflight.json"
@@ -25,7 +25,7 @@ for plan in cleanup-external-oidc-plan.json cleanup-external-shared.json cleanup
   set +e
   output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
     AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-      bash "$root/scripts/cleanup-preflight.sh" --plan "$root/tests/fixtures/$plan" \
+      bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight --plan "$root/tests/fixtures/$plan" \
         --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
         --inventory-output "$tmp_dir/rejected-inventory.json" --retain-template "$tmp_dir/rejected-retain.json" \
         --preflight-output "$tmp_dir/rejected-preflight.json" 2>&1)

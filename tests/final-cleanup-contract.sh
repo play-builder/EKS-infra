@@ -74,12 +74,12 @@ common=(
 )
 
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  bash "$root/scripts/final-cleanup.sh" "${common[@]}"
+  bash "$root/scripts/course-check.sh" ch26 --final-cleanup "${common[@]}"
 [[ ! -s "$tmp_dir/mutations.log" && ! -e "$tmp_dir/evidence/generated-residual.json" ]]
 
 set +e
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  bash "$root/scripts/final-cleanup.sh" "${common[@]}" --execute \
+  bash "$root/scripts/course-check.sh" ch26 --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 >/dev/null 2>&1
 status=$?
 set -e
@@ -93,7 +93,7 @@ COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations
 COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
 COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" COURSE_FAKE_KUBECTL_FAIL=true \
 AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
-  bash "$root/scripts/final-cleanup.sh" "${common[@]}" --execute \
+  bash "$root/scripts/course-check.sh" ch26 --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 \
     >/dev/null 2>&1
 status=$?
@@ -108,7 +108,7 @@ COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations
 COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
 COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" COURSE_CLEANUP_STAGE_LOG="$tmp_dir/stages.log" \
 AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
-  bash "$root/scripts/final-cleanup.sh" "${common[@]}" --execute \
+  bash "$root/scripts/course-check.sh" ch26 --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026
 
 jq -e '.evidenceGrade == "STATIC" and .status == "PASS" and .unapprovedCourseOwned.total == 0' \

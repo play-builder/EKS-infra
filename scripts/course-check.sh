@@ -725,6 +725,32 @@ check_ch25() {
   COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/game-day-capacity-check.sh" "$@"
 }
 
+check_ch26() {
+  case "${1:-}" in
+    --contract-only)
+      check_contract_only ch26 "$@"
+      ;;
+    --ownership-inventory|--cleanup-preflight)
+      shift
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/cleanup-preflight.sh" "$@"
+      ;;
+    --checkpoint-teardown)
+      shift
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/checkpoint-teardown.sh" "$@"
+      ;;
+    --final-cleanup|--dry-run)
+      shift
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/final-cleanup.sh" "$@"
+      ;;
+    --execute)
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/final-cleanup.sh" "$@"
+      ;;
+    *)
+      fail '사용법: ch26 --contract-only | --cleanup-preflight <args> | --checkpoint-teardown <args> | --final-cleanup [--execute] <args>' 64
+      ;;
+  esac
+}
+
 usage() {
   printf '%s\n' \
     'Usage: bash scripts/course-check.sh <chapter> [arguments]' \
@@ -737,6 +763,7 @@ usage() {
     '  ch16 <ch15-evidence> <context> <k6-namespace> <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <path>' \
     '  ch23 --validate-quiesce <snapshot-quiesce.json> | --validate-recovery <snapshot-recovery.json> [quiesce-file]' \
     '  ch25 <kubectl-context> <ch17-profile.json> <output.json>' \
+    '  ch26 --cleanup-preflight <args> | --checkpoint-teardown <args> | --final-cleanup [--execute] <args>' \
     '  ch04|ch07..ch26 --contract-only (offline contract tests only; implemented chapters also accept it)' \
     '  ch10 [kubectl-context] [namespace]' \
     '  stateful <kubectl-context> <namespace> <base-url>'
@@ -766,11 +793,20 @@ case "$chapter" in
   ch15) check_ch15 "$@"; emit_pass "$(runtime_grade)" "ch15 Dev deployment evidence가 유효합니다." ;;
   ch16) check_ch16 "$@"; emit_pass "$(runtime_grade)" "ch16 Dev SLO, k6, AMP, SNS evidence가 유효합니다." ;;
   ch23) check_ch23 "$@"; emit_pass "$(runtime_grade)" "ch23 snapshot recovery evidence가 유효합니다." ;;
-  ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch13|ch17|ch18|ch19|ch20|ch21|ch22|ch24|ch26)
+  ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch13|ch17|ch18|ch19|ch20|ch21|ch22|ch24)
     check_contract_only "$chapter" "$@"
     emit_pass STATIC "SIMULATED_CLOUD_CONTRACT $chapter dispatcher가 등록됐습니다."
     ;;
   ch25) check_ch25 "$@"; emit_pass "$(runtime_grade)" "ch25 game-day capacity와 Chaos Mesh readiness 계약이 유효합니다." ;;
+  ch26)
+    if [[ "${1:-}" == "--contract-only" ]]; then
+      check_ch26 "$@"
+      emit_pass STATIC "SIMULATED_CLOUD_CONTRACT ch26 dispatcher가 등록됐습니다."
+    else
+      check_ch26 "$@"
+      emit_pass "$(runtime_grade)" "ch26 guarded cleanup workflow가 유효합니다."
+    fi
+    ;;
   stateful) check_stateful "$@"; emit_pass "$(runtime_grade)" "Stateful Mini Commerce runtime 계약이 유효합니다." ;;
   *)
     usage >&2

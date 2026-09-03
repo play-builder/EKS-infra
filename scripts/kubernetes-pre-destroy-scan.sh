@@ -121,8 +121,10 @@ payload=$(jq -n --arg grade "$grade" --arg course "$course_id" --arg account "$a
   }
 ')
 course_write_json "$output" "$payload"
-if [[ "$grade" == STATIC ]]; then
-  echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT Kubernetes pre-destroy scan passed.'
-else
-  echo 'PASS: [CLOUD_RUNTIME] Kubernetes pre-destroy scan passed.'
+if [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" != true ]]; then
+  if [[ "$grade" == STATIC ]]; then
+    echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT Kubernetes pre-destroy scan passed.'
+  else
+    echo 'PASS: [CLOUD_RUNTIME] Kubernetes pre-destroy scan passed.'
+  fi
 fi

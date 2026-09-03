@@ -90,8 +90,10 @@ preflight_payload=$(jq -n --arg grade "$grade" --arg course "$COURSE_ID" --arg a
 course_write_json "$inventory_output" "$inventory_payload"
 course_write_json "$retain_template" "$retain_payload"
 course_write_json "$preflight_output" "$preflight_payload"
-if [[ "$grade" == STATIC ]]; then
-  echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT cleanup ownership preflight passed.'
-else
-  echo 'PASS: [CLOUD_RUNTIME] cleanup ownership preflight passed.'
+if [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" != true ]]; then
+  if [[ "$grade" == STATIC ]]; then
+    echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT cleanup ownership preflight passed.'
+  else
+    echo 'PASS: [CLOUD_RUNTIME] cleanup ownership preflight passed.'
+  fi
 fi

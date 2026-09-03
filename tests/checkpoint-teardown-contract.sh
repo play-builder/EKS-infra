@@ -31,7 +31,7 @@ common=(
 )
 
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-  bash "$root/scripts/checkpoint-teardown.sh" "${common[@]}"
+  bash "$root/scripts/course-check.sh" ch26 --checkpoint-teardown "${common[@]}"
 [[ ! -s "$tmp_dir/mutations.log" && ! -e "$tmp_dir/resume.json" ]]
 
 set +e

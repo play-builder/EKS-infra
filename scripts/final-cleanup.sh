@@ -99,7 +99,7 @@ print_dry_run() {
   echo 'DRY-RUN phase 4/6: consume the reviewed desired-state removal evidence.'
   echo 'DRY-RUN phase 5/6: scan Kubernetes before EKS deletion, then destroy allowlisted runtime layers.'
   echo 'DRY-RUN phase 6/6: scan AWS residuals without kubectl and write completion evidence.'
-  echo 'PASS: [STATIC] final cleanup plan validated without mutation.'
+  [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] final cleanup plan validated without mutation.'
 }
 
 if [[ "$execute" != true ]]; then
@@ -181,8 +181,10 @@ if ! bash "$SCRIPT_DIR/residual-scan.sh" \
 fi
 stage 15
 cleanup_validate_residual "$inventory" "$decisions" "$pre_destroy_output" "$removal" "$residual_output"
-if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
-  echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT guarded final cleanup workflow passed.'
-else
-  echo 'PASS: [CLOUD_RUNTIME] final cleanup completed with zero unapproved billable residuals.'
+if [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" != true ]]; then
+  if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+    echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT guarded final cleanup workflow passed.'
+  else
+    echo 'PASS: [CLOUD_RUNTIME] final cleanup completed with zero unapproved billable residuals.'
+  fi
 fi

@@ -53,7 +53,7 @@ jq -en --argjson approval "$(jq -c . "$approval")" --argjson inventory "$(jq -c 
 
 if [[ "$execute" != true ]]; then
   echo 'DRY-RUN: checkpoint teardown would destroy eight allowlisted runtime layers and retain state, evidence, Secret, snapshot, and ECR handles.'
-  echo 'PASS: [STATIC] checkpoint teardown plan validated without mutation.'
+  [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] checkpoint teardown plan validated without mutation.'
   exit 0
 fi
 
@@ -90,4 +90,4 @@ payload=$(jq -n --argjson approval "$(jq -c . "$approval")" --argjson inventory 
   }
 ')
 course_write_json "$output" "$payload"
-echo 'PASS: [LOCAL_RUNTIME] checkpoint partial teardown completed; this is not Ch26 completion evidence.'
+[[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [LOCAL_RUNTIME] checkpoint partial teardown completed; this is not Ch26 completion evidence.'
