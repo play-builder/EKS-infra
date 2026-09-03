@@ -9,6 +9,7 @@ tests=(
   oidc-external-provider-contract.sh
   oidc-ownership-handoff-contract.sh
   ecr-lifecycle-preview-contract.sh
+  secret-json-contract.sh
   network-policy-runtime-contract.sh
   external-secrets-owner-handoff-contract.sh
   secret-freshness-contract.sh

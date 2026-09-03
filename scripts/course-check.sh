@@ -197,19 +197,33 @@ check_ruleset() {
 }
 
 check_secret_json() {
-  local secret_file=$1 secret_directory
+  local secret_file=$1 secret_class=$2 expected_keys=$3 secret_directory
   [[ -f "$secret_file" ]] || fail "secret JSON 파일을 찾을 수 없습니다: $secret_file"
   secret_directory=$(cd "$(dirname "$secret_file")" && pwd -P)
   if git -C "$secret_directory" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     fail "secret JSON은 Git worktree 밖에 두어야 합니다: $secret_file"
   fi
-  jq -e '
+  jq -e --argjson expected_keys "$expected_keys" '
     type == "object" and
-    (keys | sort == ["API_KEY", "DB_HOST", "DB_PASSWORD"]) and
+    (keys | sort == ($expected_keys | sort)) and
     all(.[]; type == "string" and length > 0)
   ' "$secret_file" >/dev/null || \
-    fail "secret JSON은 API_KEY, DB_HOST, DB_PASSWORD의 비어 있지 않은 문자열만 포함해야 합니다."
+    fail "$secret_class secret JSON은 $(jq -r --argjson keys "$expected_keys" '$keys | join(", ")' <<< '{}')만 포함해야 합니다."
   pass "secret JSON key 구조가 유효하며 값은 출력하지 않았습니다."
+}
+
+check_secret_json_pair() {
+  local runtime_file=${RUNTIME_SECRET_JSON_FILE:-}
+  local database_file=${DB_SECRET_JSON_FILE:-}
+
+  [[ -z "${SECRET_JSON_FILE:-}" ]] || \
+    fail "SECRET_JSON_FILE은 더 이상 지원하지 않습니다. RUNTIME_SECRET_JSON_FILE과 DB_SECRET_JSON_FILE을 사용하십시오." 64
+  if [[ -n "$runtime_file" || -n "$database_file" ]]; then
+    [[ -n "$runtime_file" && -n "$database_file" ]] || \
+      fail "RUNTIME_SECRET_JSON_FILE과 DB_SECRET_JSON_FILE은 함께 설정해야 합니다." 64
+    check_secret_json "$runtime_file" runtime '["API_KEY"]'
+    check_secret_json "$database_file" database '["DB_HOST","DB_PORT","DB_NAME","DB_USER","DB_PASSWORD"]'
+  fi
 }
 
 check_ch02() {
@@ -227,9 +241,7 @@ check_ch02() {
   check_immutable_subject "$INFRA_GH_REPO"
   check_immutable_subject "$APP_GH_REPO"
   check_ruleset "$GITOPS_GH_REPO"
-  if [[ -n "${SECRET_JSON_FILE:-}" ]]; then
-    check_secret_json "$SECRET_JSON_FILE"
-  fi
+  check_secret_json_pair
   pass "ch02 외부 상태와 보안 계약이 유효합니다."
 }
 
@@ -755,7 +767,7 @@ usage() {
   printf '%s\n' \
     'Usage: bash scripts/course-check.sh <chapter> [arguments]' \
     '  ch01 <three-repositories-root>' \
-    '  ch02' \
+    '  ch02 [RUNTIME_SECRET_JSON_FILE=<path> DB_SECRET_JSON_FILE=<path>]' \
     '  ch05 <owner/repository> <commit-sha> <workflow-name> <event> [before-id]' \
     '  ch06 <ecr-repository-name> <sha256-digest>' \
     '  ch12 <context> <namespace> <externalsecret> <rollout> <runtime-secret-id> <version-id> <previous-pod-uid>' \
