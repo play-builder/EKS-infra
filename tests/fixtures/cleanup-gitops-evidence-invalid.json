@@ -1,0 +1,10 @@
+{
+  "schemaVersion":"course.gitops-freeze/v1",
+  "evidenceGrade":"STATIC",
+  "status":"FROZEN",
+  "gitopsRevision":"5555555555555555555555555555555555555555",
+  "clusters":[],
+  "writers":{"loadGenerators":1,"chaosResources":0,"recoveryJobs":0,"migrationJobs":0},
+  "observedAt":"2026-09-03T00:10:00Z",
+  "unexpected":true
+}

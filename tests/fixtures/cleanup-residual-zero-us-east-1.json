@@ -1,0 +1,19 @@
+{
+  "schemaVersion":"course.cleanup-residual/v1",
+  "evidenceGrade":"CLOUD_RUNTIME",
+  "status":"PASS",
+  "courseId":"course-2026",
+  "accountId":"123456789012",
+  "region":"us-east-1",
+  "inventorySha256":"0000000000000000000000000000000000000000000000000000000000000000",
+  "retainDecisionsSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+  "kubernetesPreDestroySha256":"0000000000000000000000000000000000000000000000000000000000000000",
+  "gitopsRemovalSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+  "unapprovedCourseOwned":{"loadBalancers":0,"natGateways":0,"eksClusters":0,"ebsVolumes":0,"ebsSnapshots":0,"ampWorkspaces":0,"snsTopics":0,"ecrRepositories":0,"total":0},
+  "externalShared":[{"kind":"SecretsManagerSecret","id":"arn:aws:secretsmanager:us-east-1:123456789012:secret:shared-provider","owner":"external","deletePlanned":false,"presentAfterCleanup":true}],
+  "retained":[
+    {"kind":"EbsSnapshot","id":"snap-retained-001","owner":"course","reason":"recovery checkpoint","followUpAction":"delete after course review","presentAfterCleanup":true},
+    {"kind":"EcrRepository","id":"arn:aws:ecr:us-east-1:123456789012:repository/course/sample-app","owner":"course","reason":"rollback digest retention","followUpAction":"delete after evidence export","presentAfterCleanup":true}
+  ],
+  "observedAt":"2026-09-03T00:30:00Z"
+}

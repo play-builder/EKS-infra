@@ -23,6 +23,10 @@ course_sha256_file() {
   shasum -a 256 "$1" | awk '{print "sha256:" $1}'
 }
 
+course_raw_sha256_file() {
+  shasum -a 256 "$1" | awk '{print $1}'
+}
+
 course_now() {
   jq -nr 'now | todateiso8601'
 }
@@ -51,6 +55,7 @@ course_write_json() {
     course_fail "refusing to write invalid JSON"
   }
   mv -f -- "$tmp_file" "$output"
+  chmod 600 "$output"
 }
 
 course_assert_json() {

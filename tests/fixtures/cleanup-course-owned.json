@@ -1,0 +1,7 @@
+{
+  "format_version":"1.2",
+  "resource_changes":[
+    {"address":"module.dev.aws_eks_cluster.this","type":"aws_eks_cluster","change":{"actions":["delete"],"before":{"id":"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks","tags":{"CourseId":"course-2026","AccountId":"123456789012","Region":"ap-northeast-2","Project":"playdevops","Environment":"dev","Layer":"02-eks","ManagedBy":"terraform"}}}},
+    {"address":"module.dev.aws_nat_gateway.this","type":"aws_nat_gateway","change":{"actions":["delete"],"before":{"id":"nat-dev-001","tags":{"CourseId":"course-2026","AccountId":"123456789012","Region":"ap-northeast-2","Project":"playdevops","Environment":"dev","Layer":"01-network","ManagedBy":"terraform"}}}}
+  ]
+}

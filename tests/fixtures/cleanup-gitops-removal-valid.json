@@ -1,0 +1,15 @@
+{
+  "schemaVersion":"course.gitops-removal/v1",
+  "evidenceGrade":"CLOUD_RUNTIME",
+  "status":"REMOVED",
+  "gitopsRevision":"6666666666666666666666666666666666666666",
+  "freezeEvidenceSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+  "clusters":[
+    {"environment":"dev","clusterArn":"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks"},
+    {"environment":"prod","clusterArn":"arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks"}
+  ],
+  "remaining":{"rollouts":0,"deployments":0,"statefulSets":0,"jobs":0,"externalSecrets":0,"chaosResources":0},
+  "retained":[],
+  "providerSecrets":{"retained":true,"inventorySha256":"0000000000000000000000000000000000000000000000000000000000000000"},
+  "observedAt":"2026-09-03T00:15:00Z"
+}

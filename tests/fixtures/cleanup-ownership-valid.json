@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "course.cleanup-ownership/v1",
+  "evidenceGrade": "CLOUD_RUNTIME",
+  "courseId": "course-2026",
+  "accountId": "123456789012",
+  "region": "ap-northeast-2",
+  "resources": [
+    {"kind":"EbsSnapshot","id":"snap-retained-001","environment":"dev","classification":"recovery-snapshot","owner":"course","managedBy":"terraform","billable":true,"decision":"RETAIN","reason":"recovery checkpoint","followUpAction":"delete after course review"},
+    {"kind":"EcrRepository","id":"arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app","environment":"shared","classification":"rollback-artifact","owner":"course","managedBy":"terraform","billable":false,"decision":"RETAIN","reason":"rollback digest retention","followUpAction":"delete after evidence export"},
+    {"kind":"EksCluster","id":"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks","environment":"dev","classification":"runtime","owner":"course","managedBy":"terraform","billable":true,"decision":"DELETE","reason":"","followUpAction":""},
+    {"kind":"EksCluster","id":"arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks","environment":"prod","classification":"runtime","owner":"course","managedBy":"terraform","billable":true,"decision":"DELETE","reason":"","followUpAction":""},
+    {"kind":"NatGateway","id":"nat-dev-001","environment":"dev","classification":"runtime-network","owner":"course","managedBy":"terraform","billable":true,"decision":"DELETE","reason":"","followUpAction":""},
+    {"kind":"NatGateway","id":"nat-prod-001","environment":"prod","classification":"runtime-network","owner":"course","managedBy":"terraform","billable":true,"decision":"DELETE","reason":"","followUpAction":""},
+    {"kind":"SecretsManagerSecret","id":"arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:shared-provider","environment":"shared","classification":"provider-secret","owner":"external","managedBy":"terraform","billable":false,"decision":"EXTERNAL_SHARED","reason":"shared provider secret","followUpAction":"retain and review separately"}
+  ],
+  "observedAt": "2026-09-03T00:00:00Z"
+}
