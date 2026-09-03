@@ -78,7 +78,7 @@ course_assert_json "$ready" '
   (.workflow.runAttempt | type == "number" and floor == . and . > 0) and
   (
     (.workflow.runUrl |
-      capture("^https://github\\.com/(?<repository>[^/]+/cicd-course-sample-app)/actions/runs/(?<url_run_id>[0-9]+)$")) as $run_url |
+      capture("^https://github\\.com/(?<repository>[^/\\s]+/cicd-course-sample-app)/actions/runs/(?<url_run_id>[0-9]+)$")) as $run_url |
     ($run_url.url_run_id == .workflow.runId) and
     (.image | keys == ["indexDigest","platforms","repository"]) and
     (.image.repository | canonical_ecr_repository) and
@@ -101,7 +101,7 @@ course_assert_json "$ready" '
 jq -en --slurpfile deployment "$deployment" --slurpfile slo "$slo" --slurpfile ready "$ready" '
   ($deployment[0]) as $d | ($slo[0]) as $s | ($ready[0]) as $r |
   ($r.workflow.runUrl |
-    capture("^https://github\\.com/(?<repository>[^/]+/cicd-course-sample-app)/actions/runs/[0-9]+$").repository) as $workflow_repository |
+    capture("^https://github\\.com/(?<repository>[^/\\s]+/cicd-course-sample-app)/actions/runs/[0-9]+$").repository) as $workflow_repository |
   $d.source == $s.source and $d.image == $s.image and
   $d.source.repository == $workflow_repository and $s.source.repository == $workflow_repository and
   $d.gitopsRevision == $s.gitopsRevision and $d.clusterArn == $s.clusterArn and $d.region == $s.region and

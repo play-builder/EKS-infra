@@ -64,6 +64,16 @@ jq '.source.repository="attacker/cicd-course-sample-app"' \
   "$deployment" >"$tmp_dir/deployment-wrong-source-repository.json"
 jq '.source.repository="attacker/cicd-course-sample-app"' \
   "$slo" >"$tmp_dir/slo-wrong-source-repository.json"
+jq '
+  .workflow.runUrl="https://github.com/play builder/cicd-course-sample-app/actions/runs/101" |
+  .attestation.githubUrl="https://github.com/play builder/cicd-course-sample-app/attestations/101"
+' "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-whitespace-owner.json"
+make_dev_handoff "$tmp_dir/dev-ready-whitespace-owner.json" \
+  "$tmp_dir/deployment-whitespace-owner-base.json" "$tmp_dir/slo-whitespace-owner-base.json"
+jq '.source.repository="play builder/cicd-course-sample-app"' \
+  "$tmp_dir/deployment-whitespace-owner-base.json" >"$tmp_dir/deployment-whitespace-owner.json"
+jq '.source.repository="play builder/cicd-course-sample-app"' \
+  "$tmp_dir/slo-whitespace-owner-base.json" >"$tmp_dir/slo-whitespace-owner.json"
 jq '.image.repository="123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-registry-root-only.json"
 make_dev_handoff "$tmp_dir/dev-ready-registry-root-only.json" \
@@ -146,6 +156,8 @@ run_rejected "$deployment" "$tmp_dir/dev-ready-empty-attestation-id.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-nondigit-attestation-id.json"
 run_rejected_with_slo "$tmp_dir/deployment-wrong-source-repository.json" \
   "$tmp_dir/slo-wrong-source-repository.json" "$root/tests/fixtures/dev-ready-ap-northeast-2.json"
+run_rejected_with_slo "$tmp_dir/deployment-whitespace-owner.json" \
+  "$tmp_dir/slo-whitespace-owner.json" "$tmp_dir/dev-ready-whitespace-owner.json"
 run_rejected_with_slo "$tmp_dir/deployment-registry-root-only.json" \
   "$tmp_dir/slo-registry-root-only.json" "$tmp_dir/dev-ready-registry-root-only.json"
 run_rejected_with_slo "$tmp_dir/deployment-invalid-image-repository.json" \
