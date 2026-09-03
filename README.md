@@ -290,13 +290,16 @@ repository import와 위 설정 외의 예상하지 않은 변경이 없는지 �
 ## 제거 순서와 비용
 
 Ch26 제거는 개별 Kubernetes 리소스를 직접 삭제하지 않고, digest로 결속된 ownership·GitOps
-증거를 `final-cleanup.sh`가 검증한 뒤에만 수행합니다. 먼저 검토한 Terraform destroy plan과 현재
-cloud inventory를 입력으로 preflight를 실행합니다. 이 명령에는 `COURSE_ID`, `AWS_ACCOUNT_ID`,
-`AWS_REGION`, `COURSE_PROJECT`가 설정되어 있어야 합니다.
+증거를 `final-cleanup.sh`가 검증한 뒤에만 수행합니다. 각 allowlisted root에서 `terraform plan
+-destroy -out=<absolute-path>`로 binary plan을 저장하고 `terraform show <absolute-path>`를 사람이
+검토한 뒤, exact layer·absolute path·SHA-256을 `course.saved-destroy-plans/v1` 형식의
+`SAVED_DESTROY_PLAN_MANIFEST`에 기록합니다. raw plan JSON은 보관하지 않습니다. 현재 cloud
+inventory와 함께 preflight를 실행하며 `COURSE_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`,
+`COURSE_PROJECT`가 설정되어 있어야 합니다.
 
 ```bash
 bash scripts/cleanup-preflight.sh \
-  --plan "$REVIEWED_DESTROY_PLAN_JSON" \
+  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST" \
   --inventory-source "$LIVE_OWNERSHIP_INPUT" \
   --inventory-output evidence/cleanup/ownership-inventory.json \
   --retain-template evidence/cleanup/retain-decisions.json \
@@ -345,7 +348,7 @@ EKS 저장소로 돌아와 동일한 파일 집합으로 먼저 dry-run을 실�
 
 ```bash
 cleanup_args=(
-  --plan "$REVIEWED_DESTROY_PLAN_JSON"
+  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST"
   --inventory evidence/cleanup/ownership-inventory.json
   --retain-decisions evidence/cleanup/retain-decisions.json
   --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
@@ -365,7 +368,8 @@ bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
   --confirm-course-id "$COURSE_ID"
 ```
 
-실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist를 내부에서만 역순으로 제거합니다.
+실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist의 digest-bound saved plan을
+`terraform apply <saved-plan>`으로 정확히 한 번씩 적용합니다.
 
 - `environments/prod/04-workloads/argocd`
 - `environments/dev/04-workloads/argocd`

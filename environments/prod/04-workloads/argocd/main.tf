@@ -81,10 +81,6 @@ locals {
 
 resource "terraform_data" "course_ownership" {
   input = local.course_ownership
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "helm_release" "argocd" {

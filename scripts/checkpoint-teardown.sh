@@ -8,6 +8,7 @@ source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
 
 if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then PATH="$COURSE_CHECK_BIN_DIR:$PATH"; fi
 approval=''
+saved_plan_manifest=''
 inventory=''
 decisions=''
 output=''
@@ -18,6 +19,7 @@ confirm_course=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --approval) approval=${2:-}; shift 2 ;;
+    --saved-plan-manifest) saved_plan_manifest=${2:-}; shift 2 ;;
     --inventory) inventory=${2:-}; shift 2 ;;
     --retain-decisions) decisions=${2:-}; shift 2 ;;
     --output) output=${2:-}; shift 2 ;;
@@ -28,11 +30,12 @@ while [[ $# -gt 0 ]]; do
     *) course_fail "unknown argument: $1" 64 ;;
   esac
 done
-for name in approval inventory decisions output; do [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64; done
+for name in approval saved_plan_manifest inventory decisions output; do [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64; done
 course_require_file "$approval"
 course_assert_canonical_utc_seconds "$approval" 'checkpoint approval timestamps' \
   '["approvedAt"]' '["expiresAt"]'
 cleanup_validate_decisions "$inventory" "$decisions"
+cleanup_validate_saved_plan_manifest "$saved_plan_manifest" "$REPO_ROOT"
 
 course_assert_json "$approval" '
   keys == ["accountId","approvedAt","courseId","evidenceGrade","expiresAt","flags","layers","region","retainedKinds","schemaVersion","stateKeys","status","versions"] and
@@ -54,7 +57,7 @@ jq -en --argjson approval "$(jq -c . "$approval")" --argjson inventory "$(jq -c 
 ' >/dev/null || course_fail 'CHECKPOINT_IDENTITY_MISMATCH'
 
 if [[ "$execute" != true ]]; then
-  echo 'DRY-RUN: checkpoint teardown would destroy eight allowlisted runtime layers and retain state, evidence, Secret, snapshot, and ECR handles.'
+  echo 'DRY-RUN: checkpoint teardown would apply eight reviewed saved plans and retain state, evidence, Secret, snapshot, and ECR handles.'
   [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] checkpoint teardown plan validated without mutation.'
   exit 0
 fi
@@ -69,13 +72,9 @@ course_validate_account "$confirm_account"
 caller=$(aws sts get-caller-identity --profile "$AWS_PROFILE" --region "$confirm_region" --output json)
 [[ $(jq -r '.Account' <<<"$caller") == "$confirm_account" ]] || course_fail 'CHECKPOINT_CALLER_ACCOUNT_MISMATCH'
 
-while IFS= read -r layer; do
-  [[ -d "$REPO_ROOT/$layer" ]] || course_fail "checkpoint layer not found: $layer"
-done < <(jq -r '.layers[]' "$approval")
-
-while IFS= read -r layer; do
-  terraform -chdir="$REPO_ROOT/$layer" destroy -auto-approve
-done < <(jq -r '.layers[]' "$approval")
+[[ $(jq -c '.layers' "$approval") == "$(cleanup_expected_destroy_layers_json)" ]] || \
+  course_fail 'CHECKPOINT_SAVED_PLAN_LAYER_MISMATCH'
+cleanup_apply_saved_plans "$saved_plan_manifest" "$REPO_ROOT"
 
 observed=$(course_now)
 payload=$(jq -n --argjson approval "$(jq -c . "$approval")" --argjson inventory "$(jq -c . "$inventory")" \

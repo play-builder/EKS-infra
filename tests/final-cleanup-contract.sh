@@ -73,9 +73,10 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence"
 prepare_cleanup_fixtures "$root" "$tmp_dir/evidence" ap-northeast-2
+prepare_saved_plan_manifest "$tmp_dir/plans" "$tmp_dir/saved-plans.json"
 
-plan="$root/tests/fixtures/cleanup-course-owned.json"
-plan_sha=$(raw_sha256 "$plan")
+plan_manifest="$tmp_dir/saved-plans.json"
+plan_sha=$(raw_sha256 "$plan_manifest")
 inventory_sha=$(raw_sha256 "$tmp_dir/evidence/inventory.json")
 jq -n --arg plan "$plan_sha" --arg inventory "$inventory_sha" '
   {schemaVersion:"course.cleanup-preflight/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
@@ -96,7 +97,7 @@ cat >"$tmp_dir/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
-if [[ "$*" == *"/02-eks destroy"* ]]; then : >"$COURSE_EKS_DELETED_SENTINEL"; fi
+if [[ "$*" == *"/02-eks apply"* ]]; then : >"$COURSE_EKS_DELETED_SENTINEL"; fi
 EOF
 cat >"$tmp_dir/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -130,7 +131,7 @@ chmod +x "$tmp_dir/bin/terraform" "$tmp_dir/bin/kubectl" "$tmp_dir/bin/aws"
 : >"$tmp_dir/aws.log"
 
 common=(
-  --plan "$plan"
+  --saved-plan-manifest "$plan_manifest"
   --inventory "$tmp_dir/evidence/inventory.json"
   --retain-decisions "$tmp_dir/evidence/decisions.json"
   --preflight-evidence "$tmp_dir/evidence/preflight.json"
@@ -290,5 +291,8 @@ jq -e '.evidenceGrade == "STATIC" and .status == "PASS" and .unapprovedCourseOwn
 [[ $(paste -sd',' "$tmp_dir/stages.log") == '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15' ]]
 [[ -s "$tmp_dir/kubectl.log" ]]
 grep -Fq -- '--region ap-northeast-2' "$tmp_dir/aws.log"
+while IFS= read -r saved_plan; do
+  grep -Fq "apply $saved_plan" "$tmp_dir/mutations.log"
+done < <(jq -r '.plans[].path' "$plan_manifest")
 
 echo 'PASS: guarded ordered final cleanup contract'

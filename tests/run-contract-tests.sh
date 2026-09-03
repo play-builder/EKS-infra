@@ -6,6 +6,7 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tests=(
   state-backend-contract.sh
   cluster-identity-contract.sh
+  saved-plan-cleanup-contract.sh
   course-check-contract.sh
   evidence-common-contract.sh
   ch10-runtime-contract.sh

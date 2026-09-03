@@ -7,6 +7,7 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence"
 prepare_cleanup_fixtures "$root" "$tmp_dir/evidence" ap-northeast-2
+prepare_saved_plan_manifest "$tmp_dir/plans" "$tmp_dir/saved-plans.json"
 
 cat >"$tmp_dir/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
@@ -25,6 +26,7 @@ chmod +x "$tmp_dir/bin/terraform" "$tmp_dir/bin/aws"
 
 approval="$root/tests/fixtures/checkpoint-approved-destroy.json"
 common_without_approval=(
+  --saved-plan-manifest "$tmp_dir/saved-plans.json"
   --inventory "$tmp_dir/evidence/inventory.json"
   --retain-decisions "$tmp_dir/evidence/decisions.json"
   --output "$tmp_dir/resume.json"
@@ -92,6 +94,9 @@ jq -e '
 expected='environments/prod/04-workloads/argocd environments/dev/04-workloads/argocd environments/prod/03-platform environments/dev/03-platform environments/prod/02-eks environments/dev/02-eks environments/prod/01-network environments/dev/01-network'
 actual=$(sed -E 's/^-chdir=([^ ]+) .*/\1/' "$tmp_dir/mutations.log" | sed "s#^$root/##" | paste -sd' ' -)
 [[ "$actual" == "$expected" ]]
+while IFS= read -r saved_plan; do
+  grep -Fq "apply $saved_plan" "$tmp_dir/mutations.log"
+done < <(jq -r '.plans[].path' "$tmp_dir/saved-plans.json")
 ! grep -Eq 'state-backend|iam-github-oidc|snapshot|ecr|secret' "$tmp_dir/mutations.log"
 
 echo 'PASS: guarded checkpoint partial teardown and resume contract'

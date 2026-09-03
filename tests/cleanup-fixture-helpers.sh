@@ -10,6 +10,30 @@ provider_secret_projection_sha256() {
     "$inventory" | shasum -a 256 | awk '{print $1}'
 }
 
+prepare_saved_plan_manifest() {
+  local output_dir=$1 manifest=$2 layer plan_path plan_sha
+  local -a layers=(
+    environments/prod/04-workloads/argocd
+    environments/dev/04-workloads/argocd
+    environments/prod/03-platform
+    environments/dev/03-platform
+    environments/prod/02-eks
+    environments/dev/02-eks
+    environments/prod/01-network
+    environments/dev/01-network
+  )
+  mkdir -p "$output_dir"
+  jq -n '{schemaVersion:"course.saved-destroy-plans/v1",status:"REVIEWED",reviewedAt:"2026-09-03T00:10:00Z",plans:[]}' >"$manifest"
+  for layer in "${layers[@]}"; do
+    plan_path="$output_dir/${layer//\//__}.tfplan"
+    printf 'saved destroy plan for %s\n' "$layer" >"$plan_path"
+    plan_sha=$(raw_sha256 "$plan_path")
+    jq --arg layer "$layer" --arg path "$plan_path" --arg sha "$plan_sha" \
+      '.plans += [{layer:$layer,path:$path,sha256:$sha}]' "$manifest" >"$manifest.tmp"
+    mv "$manifest.tmp" "$manifest"
+  done
+}
+
 prepare_cleanup_fixtures() {
   local root=$1 output_dir=$2 region=$3
   local inventory_sha freeze_sha removal_sha decisions_sha pre_destroy_sha provider_sha

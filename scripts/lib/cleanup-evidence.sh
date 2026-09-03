@@ -10,6 +10,64 @@ cleanup_assert_canonical_utc_seconds() {
   course_assert_canonical_utc_seconds "$@"
 }
 
+cleanup_expected_destroy_layers_json() {
+  jq -cn '[
+    "environments/prod/04-workloads/argocd",
+    "environments/dev/04-workloads/argocd",
+    "environments/prod/03-platform",
+    "environments/dev/03-platform",
+    "environments/prod/02-eks",
+    "environments/dev/02-eks",
+    "environments/prod/01-network",
+    "environments/dev/01-network"
+  ]'
+}
+
+cleanup_validate_saved_plan_manifest() {
+  local manifest=$1 repo_root=$2 layer saved_plan expected_sha actual_sha
+  course_require_file "$manifest"
+  cleanup_assert_canonical_utc_seconds "$manifest" 'saved destroy plans reviewedAt' '["reviewedAt"]'
+  course_assert_json "$manifest" '
+    def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
+    keys == ["plans","reviewedAt","schemaVersion","status"] and
+    .schemaVersion == "course.saved-destroy-plans/v1" and .status == "REVIEWED" and
+    (.reviewedAt | fromdateiso8601) <= now and
+    (.plans | type == "array" and length == 8) and
+    ([.plans[].layer] == [
+      "environments/prod/04-workloads/argocd",
+      "environments/dev/04-workloads/argocd",
+      "environments/prod/03-platform",
+      "environments/dev/03-platform",
+      "environments/prod/02-eks",
+      "environments/dev/02-eks",
+      "environments/prod/01-network",
+      "environments/dev/01-network"
+    ]) and
+    all(.plans[];
+      keys == ["layer","path","sha256"] and
+      (.layer | nonblank) and (.path | startswith("/")) and
+      (.sha256 | test("^[0-9a-f]{64}$")))
+  ' 'invalid reviewed saved destroy plan manifest'
+
+  while IFS=$'\t' read -r layer saved_plan expected_sha; do
+    [[ -d "$repo_root/$layer" ]] || course_fail "cleanup layer not found: $layer"
+    [[ -f "$saved_plan" && ! -L "$saved_plan" ]] || course_fail "SAVED_DESTROY_PLAN_INVALID: $saved_plan"
+    actual_sha=$(course_raw_sha256_file "$saved_plan")
+    [[ "$actual_sha" == "$expected_sha" ]] || course_fail "SAVED_DESTROY_PLAN_DIGEST_MISMATCH: $layer"
+  done < <(jq -r '.plans[] | [.layer,.path,.sha256] | @tsv' "$manifest")
+}
+
+cleanup_apply_saved_plans() {
+  local manifest=$1 repo_root=$2 layer saved_plan expected_sha
+  cleanup_validate_saved_plan_manifest "$manifest" "$repo_root"
+  while IFS=$'\t' read -r layer saved_plan expected_sha; do
+    [[ $(course_raw_sha256_file "$saved_plan") == "$expected_sha" ]] || \
+      course_fail "SAVED_DESTROY_PLAN_DIGEST_MISMATCH: $layer"
+    terraform -chdir="$repo_root/$layer" apply "$saved_plan" || \
+      course_fail "TERRAFORM_SAVED_PLAN_APPLY_FAILED: $layer"
+  done < <(jq -r '.plans[] | [.layer,.path,.sha256] | @tsv' "$manifest")
+}
+
 cleanup_normalize_absolute_path() {
   local input=$1 segment normalized='' depth=0 index
   local -a parts=() stack=()
