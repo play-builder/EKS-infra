@@ -55,7 +55,7 @@ while IFS= read -r change; do
     .change.before.tags.CourseId == $course and .change.before.tags.AccountId == $account and
     .change.before.tags.Region == $region and .change.before.tags.Project == $project and
     (.change.before.tags.Environment == "dev" or .change.before.tags.Environment == "prod" or .change.before.tags.Environment == "shared") and
-    (.change.before.tags.Layer | type == "string" and length > 0) and .change.before.tags.ManagedBy == "terraform"
+    (.change.before.tags.Layer | type == "string" and test("\\S")) and .change.before.tags.ManagedBy == "terraform"
   ' <<<"$change" >/dev/null || course_fail "OWNERSHIP_TAG_MISMATCH: $id"
 done < <(jq -c '.resource_changes[] | select(.change.actions | index("delete"))' "$plan")
 

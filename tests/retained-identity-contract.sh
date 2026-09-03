@@ -59,4 +59,12 @@ jq '.retained += [{environment:"shared",namespace:"",kind:"SecretsManagerSecret"
   "$tmp_dir/removal.json" >"$tmp_dir/provider-in-retained.json"
 assert_rejected "$tmp_dir/inventory.json" "$tmp_dir/provider-in-retained.json"
 
+for field in classification name uid; do
+  jq --arg field "$field" '.retained[0][$field]=" "' \
+    "$tmp_dir/removal.json" >"$tmp_dir/whitespace-$field.json"
+  assert_rejected "$tmp_dir/inventory.json" "$tmp_dir/whitespace-$field.json"
+done
+jq '.retained[0].namespace=" "' "$tmp_dir/removal.json" >"$tmp_dir/whitespace-namespace.json"
+assert_rejected "$tmp_dir/inventory.json" "$tmp_dir/whitespace-namespace.json"
+
 echo 'PASS: retained cleanup identities are complete, typed, and exact'

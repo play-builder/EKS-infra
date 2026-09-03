@@ -42,6 +42,31 @@ assert_rejected "$tmp_dir/delete-decision.json" "$tmp_dir/ap-northeast-2/pre-des
 assert_rejected "$tmp_dir/ap-northeast-2/decisions.json" "$tmp_dir/nonzero-pre.json" "$tmp_dir/ap-northeast-2/residual.json"
 assert_rejected "$tmp_dir/ap-northeast-2/decisions.json" "$tmp_dir/ap-northeast-2/pre-destroy.json" "$tmp_dir/missing-external.json"
 
+assert_inventory_rejected() {
+  local candidate=$1 status
+  set +e
+  (COURSE_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+    cleanup_validate_inventory "$candidate") >/dev/null 2>&1
+  status=$?
+  set -e
+  [[ "$status" -ne 0 ]] || {
+    echo "expected whitespace-only cleanup ownership rejection: $candidate" >&2
+    exit 1
+  }
+}
+
+for field in kind id classification owner reason followUpAction; do
+  candidate="$tmp_dir/whitespace-$field.json"
+  jq --arg field "$field" '
+    if $field == "reason" or $field == "followUpAction" then
+      .resources[0][$field] = " "
+    else
+      .resources[0][$field] = " " | .resources |= sort_by(.kind,.id)
+    end
+  ' "$tmp_dir/ap-northeast-2/inventory.json" >"$candidate"
+  assert_inventory_rejected "$candidate"
+done
+
 cluster_prefix='arn:aws:eks:ap-northeast-2:123456789012:cluster/'
 hundred_character_name=$(printf 'a%.0s' {1..100})
 jq --arg prefix "$cluster_prefix" --arg name "$hundred_character_name" '
@@ -90,5 +115,13 @@ jq --arg prefix "$cluster_prefix" --arg name "$hundred_one_character_name" --arg
   .clusters[0].clusterArn=($prefix+$name) | .clusters[1].clusterArn=($prefix+"prod")
 ' "$tmp_dir/ap-northeast-2/removal.json" >"$tmp_dir/long-cluster-removal.json"
 assert_cleanup_cluster_rejected "$tmp_dir/long-cluster-freeze.json" "$tmp_dir/long-cluster-removal.json"
+
+jq '.clusters[0].application.name=" "' \
+  "$tmp_dir/ap-northeast-2/freeze.json" >"$tmp_dir/whitespace-application-freeze.json"
+whitespace_application_freeze_sha=$(raw_sha256 "$tmp_dir/whitespace-application-freeze.json")
+jq --arg freeze "$whitespace_application_freeze_sha" '.freezeEvidenceSha256=$freeze' \
+  "$tmp_dir/ap-northeast-2/removal.json" >"$tmp_dir/whitespace-application-removal.json"
+assert_cleanup_cluster_rejected \
+  "$tmp_dir/whitespace-application-freeze.json" "$tmp_dir/whitespace-application-removal.json"
 
 echo 'PASS: canonical cleanup ownership and evidence schemas'

@@ -95,23 +95,25 @@ cleanup_validate_inventory() {
   course_require_file "$inventory"
   cleanup_grade_is_valid "$inventory" || course_fail 'invalid ownership evidence grade'
   course_assert_json "$inventory" '
+    def nonblank: type == "string" and test("\\S");
     keys == ["accountId","courseId","evidenceGrade","observedAt","region","resources","schemaVersion"] and
     .schemaVersion == "course.cleanup-ownership/v1" and
-    (.courseId | type == "string" and length > 0) and (.accountId | test("^[0-9]{12}$")) and
+    (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and
     (.region == "ap-northeast-2" or .region == "us-east-1") and
     (.resources | type == "array" and length > 0) and
     ([.resources[] | [.kind,.id]] == ([.resources[] | [.kind,.id]] | sort)) and
     ([.resources[] | [.kind,.id]] | unique | length) == (.resources | length) and
     all(.resources[];
       keys == ["billable","classification","decision","environment","followUpAction","id","kind","managedBy","owner","reason"] and
-      (.kind | type == "string" and length > 0) and (.id | type == "string" and length > 0) and
+      (.kind | nonblank) and (.id | nonblank) and
       (.environment == "dev" or .environment == "prod" or .environment == "shared") and
-      (.classification | type == "string" and length > 0) and
-      (.owner | type == "string" and length > 0) and .managedBy == "terraform" and
+      (.classification | nonblank) and
+      (.owner | nonblank) and .managedBy == "terraform" and
       (.billable | type == "boolean") and
+      (.reason | type == "string") and (.followUpAction | type == "string") and
       (.decision == "DELETE" or .decision == "RETAIN" or .decision == "EXTERNAL_SHARED") and
       (if .decision == "DELETE" then .owner == "course"
-       else (.reason | type == "string" and length > 0) and (.followUpAction | type == "string" and length > 0) end)) and
+       else (.reason | nonblank) and (.followUpAction | nonblank) end)) and
     (.observedAt | fromdateiso8601) <= now
   ' 'invalid course.cleanup-ownership/v1 evidence'
   [[ -z "${COURSE_ID:-}" || $(jq -r '.courseId' "$inventory") == "$COURSE_ID" ]] || course_fail 'inventory CourseId mismatch'
@@ -124,17 +126,19 @@ cleanup_validate_decisions() {
   cleanup_validate_inventory "$inventory"
   course_require_file "$decisions"
   course_assert_json "$decisions" '
+    def nonblank: type == "string" and test("\\S");
     keys == ["accountId","approvedAt","courseId","decisions","evidenceGrade","inventorySha256","region","schemaVersion","status"] and
     .schemaVersion == "course.cleanup-retain-decisions/v1" and .evidenceGrade == "LOCAL_RUNTIME" and .status == "APPROVED" and
-    (.courseId | type == "string" and length > 0) and (.accountId | test("^[0-9]{12}$")) and
+    (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and
     (.region == "ap-northeast-2" or .region == "us-east-1") and
     (.inventorySha256 | test("^[0-9a-f]{64}$")) and
     ([.decisions[] | [.kind,.id]] == ([.decisions[] | [.kind,.id]] | sort)) and
     ([.decisions[] | [.kind,.id]] | unique | length) == (.decisions | length) and
     all(.decisions[];
       keys == ["decision","followUpAction","id","kind","reason"] and
+      (.kind | nonblank) and (.id | nonblank) and
       (.decision == "RETAIN" or .decision == "EXTERNAL_SHARED") and
-      (.reason | type == "string" and length > 0) and (.followUpAction | type == "string" and length > 0)) and
+      (.reason | nonblank) and (.followUpAction | nonblank)) and
     (.approvedAt | fromdateiso8601) <= now
   ' 'invalid course.cleanup-retain-decisions/v1 evidence'
   [[ $(jq -r '.inventorySha256' "$decisions") == "$(course_raw_sha256_file "$inventory")" ]] || course_fail 'INVENTORY_DIGEST_MISMATCH'
@@ -152,6 +156,7 @@ cleanup_validate_removal() {
   cleanup_validate_inventory "$inventory"
   course_require_file "$removal"
   course_assert_json "$removal" '
+    def nonblank: type == "string" and test("\\S");
     keys == ["clusters","evidenceGrade","freezeEvidenceSha256","gitopsRevision","observedAt","providerSecrets","remaining","retained","schemaVersion","status"] and
     .schemaVersion == "course.gitops-removal/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "REMOVED" and
     (.gitopsRevision | test("^[0-9a-f]{40}$")) and (.freezeEvidenceSha256 | test("^[0-9a-f]{64}$")) and
@@ -163,13 +168,13 @@ cleanup_validate_removal() {
       .requiresExplicitDeletion == true and
       (.kind | IN("PersistentVolumeClaim","VolumeSnapshot","VolumeSnapshotContent","Namespace")) and
       (.environment | IN("dev","prod")) and
-      (.classification | type == "string" and length > 0) and
-      (.name | type == "string" and length > 0) and
+      (.classification | nonblank) and
+      (.name | nonblank) and
       (.namespace | type == "string") and
       (if .kind == "PersistentVolumeClaim" or .kind == "VolumeSnapshot" then
-        (.namespace | length > 0)
+        (.namespace | nonblank)
        else .namespace == "" end) and
-      (.uid | type == "string" and length > 0)) and
+      (.uid | nonblank)) and
     ([.retained[] | [.environment,.kind,.namespace,.name,.uid]] | unique | length) == (.retained | length) and
     (.providerSecrets | keys == ["inventorySha256","retained"]) and .providerSecrets.retained == true and
     (.providerSecrets.inventorySha256 | test("^[0-9a-f]{64}$")) and
@@ -211,6 +216,7 @@ cleanup_validate_freeze_removal() {
     all(.clusters[];
       keys == ["application","clusterArn","environment"] and
       (.application | keys == ["automated","health","name","sync"]) and
+      .application.name == ("sample-app-" + .environment) and
       .application.automated == false and .application.sync == "Synced" and .application.health == "Healthy") and
     (.writers | keys == ["chaosResources","loadGenerators","migrationJobs","recoveryJobs"]) and
     ([.writers[]] | all(type == "number" and floor == . and . == 0)) and
@@ -231,6 +237,7 @@ cleanup_validate_pre_destroy() {
   course_require_file "$pre"
   cleanup_grade_is_valid "$pre" || course_fail 'invalid pre-destroy evidence grade'
   course_assert_json "$pre" '
+    def nonblank: type == "string" and test("\\S");
     keys == ["accountId","clusters","courseId","evidenceGrade","gitopsRemovalSha256","observedAt","region","remainingWorkloads","remainingWriters","retainedStorage","schemaVersion","status"] and
     .schemaVersion == "course.kubernetes-pre-destroy/v1" and .status == "PASS" and
     (.gitopsRemovalSha256 | test("^[0-9a-f]{64}$")) and
@@ -239,7 +246,15 @@ cleanup_validate_pre_destroy() {
     ([.remainingWriters[]] | all(type == "number" and floor == . and . == 0)) and
     (.remainingWorkloads | keys == ["applications","chaosResources","deployments","externalSecrets","jobs","rollouts","statefulSets","volumeAttachments"]) and
     ([.remainingWorkloads[]] | all(type == "number" and floor == . and . == 0)) and
-    all(.retainedStorage[]; keys == ["classification","environment","kind","name","namespace","uid"]) and
+    all(.retainedStorage[];
+      keys == ["classification","environment","kind","name","namespace","uid"] and
+      (.environment | IN("dev","prod")) and
+      (.kind | IN("PersistentVolumeClaim","VolumeSnapshot","VolumeSnapshotContent","Namespace")) and
+      (.classification | nonblank) and (.name | nonblank) and (.uid | nonblank) and
+      (.namespace | type == "string") and
+      (if .kind == "PersistentVolumeClaim" or .kind == "VolumeSnapshot" then
+        (.namespace | nonblank)
+       else .namespace == "" end)) and
     (.observedAt | fromdateiso8601) <= now
   ' 'invalid course.kubernetes-pre-destroy/v1 evidence'
   [[ $(jq -r '.gitopsRemovalSha256' "$pre") == "$(course_raw_sha256_file "$removal")" ]] || course_fail 'GITOPS_REMOVAL_DIGEST_MISMATCH'
@@ -257,14 +272,24 @@ cleanup_validate_residual() {
   course_require_file "$residual"
   cleanup_grade_is_valid "$residual" || course_fail 'invalid residual evidence grade'
   course_assert_json "$residual" '
+    def nonblank: type == "string" and test("\\S");
     keys == ["accountId","courseId","evidenceGrade","externalShared","gitopsRemovalSha256","inventorySha256","kubernetesPreDestroySha256","observedAt","region","retainDecisionsSha256","retained","schemaVersion","status","unapprovedCourseOwned"] and
     .schemaVersion == "course.cleanup-residual/v1" and .status == "PASS" and
     (.unapprovedCourseOwned | keys == ["ampWorkspaces","ebsSnapshots","ebsVolumes","ecrRepositories","eksClusters","loadBalancers","natGateways","snsTopics","total"]) and
     ([.unapprovedCourseOwned[]] | all(type == "number" and floor == . and . == 0)) and
+    (.courseId | nonblank) and
+    (.externalShared | type == "array") and
     ([.externalShared[] | [.kind,.id]] == ([.externalShared[] | [.kind,.id]] | sort)) and
-    all(.externalShared[]; keys == ["deletePlanned","id","kind","owner","presentAfterCleanup"] and .deletePlanned == false and .presentAfterCleanup == true) and
+    all(.externalShared[];
+      keys == ["deletePlanned","id","kind","owner","presentAfterCleanup"] and
+      ([.kind,.id,.owner] | all(nonblank)) and
+      .deletePlanned == false and .presentAfterCleanup == true) and
+    (.retained | type == "array") and
     ([.retained[] | [.kind,.id]] == ([.retained[] | [.kind,.id]] | sort)) and
-    all(.retained[]; keys == ["followUpAction","id","kind","owner","presentAfterCleanup","reason"] and .presentAfterCleanup == true and (.reason | length > 0) and (.followUpAction | length > 0)) and
+    all(.retained[];
+      keys == ["followUpAction","id","kind","owner","presentAfterCleanup","reason"] and
+      ([.kind,.id,.owner,.reason,.followUpAction] | all(nonblank)) and
+      .presentAfterCleanup == true) and
     (.observedAt | fromdateiso8601) <= now
   ' 'invalid course.cleanup-residual/v1 evidence'
   [[ $(jq -r '.inventorySha256' "$residual") == "$(course_raw_sha256_file "$inventory")" ]] || course_fail 'RESIDUAL_INVENTORY_DIGEST_MISMATCH'

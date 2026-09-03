@@ -22,6 +22,54 @@ run_valid() {
 }
 run_valid
 
+whitespace_inventory="$tmp_dir/ownership-whitespace.json"
+jq '.resources[0].classification=" "' \
+  "$root/tests/fixtures/cleanup-ownership-valid.json" >"$whitespace_inventory"
+
+whitespace_rejected=true
+if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
+    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+      --plan "$root/tests/fixtures/cleanup-course-owned.json" \
+      --inventory-source "$whitespace_inventory" \
+      --inventory-output "$tmp_dir/whitespace-inventory.json" \
+      --retain-template "$tmp_dir/whitespace-retain.json" \
+      --preflight-output "$tmp_dir/whitespace-preflight.json" >/dev/null 2>&1; then
+  echo 'cleanup preflight accepted whitespace-only ownership classification' >&2
+  whitespace_rejected=false
+fi
+for output_path in "$tmp_dir/whitespace-inventory.json" "$tmp_dir/whitespace-retain.json" \
+  "$tmp_dir/whitespace-preflight.json"; do
+  if [[ -e "$output_path" ]]; then
+    echo 'invalid cleanup ownership created a published output' >&2
+    whitespace_rejected=false
+  fi
+done
+
+sentinel_inventory="$tmp_dir/sentinel-inventory.json"
+sentinel_retain="$tmp_dir/sentinel-retain.json"
+sentinel_preflight="$tmp_dir/sentinel-preflight.json"
+for output_path in "$sentinel_inventory" "$sentinel_retain" "$sentinel_preflight"; do
+  printf '%s\n' '{"sentinel":true}' >"$output_path"
+done
+sentinel_digest_before=$(shasum -a 256 "$sentinel_inventory" "$sentinel_retain" "$sentinel_preflight")
+if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
+    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+      --plan "$root/tests/fixtures/cleanup-course-owned.json" \
+      --inventory-source "$whitespace_inventory" \
+      --inventory-output "$sentinel_inventory" --retain-template "$sentinel_retain" \
+      --preflight-output "$sentinel_preflight" >/dev/null 2>&1; then
+  echo 'cleanup preflight accepted whitespace-only ownership over sentinel outputs' >&2
+  whitespace_rejected=false
+fi
+sentinel_digest_after=$(shasum -a 256 "$sentinel_inventory" "$sentinel_retain" "$sentinel_preflight")
+if [[ "$sentinel_digest_after" != "$sentinel_digest_before" ]]; then
+  echo 'invalid cleanup ownership replaced an existing output' >&2
+  whitespace_rejected=false
+fi
+[[ "$whitespace_rejected" == true ]] || exit 1
+
 for plan in cleanup-external-oidc-plan.json cleanup-external-shared.json cleanup-retained.json; do
   rm -f "$tmp_dir/rejected-inventory.json" "$tmp_dir/rejected-retain.json" "$tmp_dir/rejected-preflight.json"
   set +e
