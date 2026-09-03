@@ -10,6 +10,7 @@ locked_version=$(yq -r '.tooling.trivy' "$lock")
 action_ref=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform with Trivy") | .uses' "$workflow")
 scanner_version=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform with Trivy") | .with.version' "$workflow")
 legacy_input=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform with Trivy") | .with."trivy-version" // ""' "$workflow")
+skip_files=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform with Trivy") | .with."skip-files" // ""' "$workflow")
 
 [[ "$locked_version" == '0.74.0' ]] || {
   echo 'versions.lock.yaml must retain the approved Trivy scanner release' >&2
@@ -33,6 +34,10 @@ legacy_input=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform w
 }
 [[ -z "$legacy_input" ]] || {
   echo 'unsupported Trivy Action input trivy-version must not be used' >&2
+  exit 1
+}
+[[ "$skip_files" == 'tests/fixtures/terraform-plan-noop-malformed.json' ]] || {
+  echo 'Trivy config scan must exclude only the intentionally malformed negative fixture' >&2
   exit 1
 }
 

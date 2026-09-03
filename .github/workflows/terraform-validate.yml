@@ -82,6 +82,7 @@ jobs:
           scan-type: config
           scan-ref: .
           skip-dirs: vendor
+          skip-files: tests/fixtures/terraform-plan-noop-malformed.json
           trivyignores: .trivyignore.yaml
           severity: HIGH,CRITICAL
           exit-code: "1"
