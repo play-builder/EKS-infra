@@ -23,6 +23,9 @@ sample_app_oidc_subjects = [
   "repo:play-builder@42942042/cicd-course-sample-app@1352247019:ref:refs/heads/dev",
 ]
 
+# Attestation and verification trust is intentionally main-only and repository-ID pinned.
+sample_app_supply_chain_oidc_subject = "repo:play-builder@42942042/cicd-course-sample-app@1352247019:ref:refs/heads/main"
+
 tags = {
   Course = "cicd-gitops"
 }

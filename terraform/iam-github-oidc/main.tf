@@ -314,3 +314,62 @@ resource "aws_iam_role_policy_attachment" "sample_app_push" {
   role       = aws_iam_role.sample_app_push.name
   policy_arn = aws_iam_policy.sample_app_push.arn
 }
+
+resource "aws_iam_role" "sample_app_supply_chain" {
+  name        = var.sample_app_supply_chain_role_name
+  description = "Repository-scoped attestation and verification role for cicd-course-sample-app"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Principal = { Federated = local.oidc_provider_arn }
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = ["sts.amazonaws.com"]
+          "token.actions.githubusercontent.com:sub" = [var.sample_app_supply_chain_oidc_subject]
+        }
+      }
+    }]
+  })
+  tags = local.common_tags
+}
+
+resource "aws_iam_policy" "sample_app_supply_chain" {
+  name        = "${var.sample_app_supply_chain_role_name}-policy"
+  description = "Read and write OCI evidence only in the sample-app ECR repository"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "EcrLogin"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "ReadWriteSampleAppOci"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart",
+        ]
+        Resource = aws_ecr_repository.sample_app.arn
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "sample_app_supply_chain" {
+  role       = aws_iam_role.sample_app_supply_chain.name
+  policy_arn = aws_iam_policy.sample_app_supply_chain.arn
+}

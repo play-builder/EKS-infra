@@ -78,6 +78,7 @@ terraform output
 정상 결과에서 다음 값을 기록합니다.
 
 - `sample_app_push_role_arn` → sample-app의 `AWS_ROLE_ARN` variable
+- `sample_app_supply_chain_role_arn` → sample-app의 `AWS_ATTEST_VERIFY_ROLE_ARN` variable
 - `sample_app_ecr_repository_url` → GitOps values의 `image.repository`
 - `infra_role_arn` → EKS-infra workflow role
 

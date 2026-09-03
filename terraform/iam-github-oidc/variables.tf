@@ -90,6 +90,23 @@ variable "sample_app_push_role_name" {
   default     = "playdevops-github-sample-app-push"
 }
 
+variable "sample_app_supply_chain_role_name" {
+  description = "GitHub Actions role for sample-app attestation and verification"
+  type        = string
+  default     = "playdevops-github-sample-app-supply-chain"
+}
+
+variable "sample_app_supply_chain_oidc_subject" {
+  description = "Immutable GitHub OIDC subject for the sample-app main branch supply-chain workflow"
+  type        = string
+  default     = "repo:play-builder@42942042/cicd-course-sample-app@1352247019:ref:refs/heads/main"
+
+  validation {
+    condition     = can(regex("^repo:[^/@]+@[0-9]+/cicd-course-sample-app@[0-9]+:ref:refs/heads/main$", var.sample_app_supply_chain_oidc_subject))
+    error_message = "sample_app_supply_chain_oidc_subject must be an immutable numeric owner/repository subject for the sample-app main branch."
+  }
+}
+
 variable "sample_app_oidc_subjects" {
   description = "Exact GitHub OIDC subjects allowed to push sample-app images"
   type        = set(string)
