@@ -142,6 +142,42 @@ common=(
   --residual-output "$tmp_dir/evidence/generated-residual.json"
 )
 
+cp "$tmp_dir/evidence/preflight.json" "$tmp_dir/evidence/preflight-valid.json"
+assert_preflight_timestamp_rejected_before_cloud_calls() {
+  local label=$1 field=$2 value=$3 status
+  jq --arg field "$field" --arg value "$value" '.[$field]=$value' \
+    "$tmp_dir/evidence/preflight-valid.json" >"$tmp_dir/evidence/preflight.json"
+  : >"$tmp_dir/mutations.log"
+  : >"$tmp_dir/kubectl.log"
+  : >"$tmp_dir/aws.log"
+  rm -f "$tmp_dir/eks-deleted"
+  set +e
+  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
+    bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 \
+      >/dev/null 2>&1
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" || -s "$tmp_dir/kubectl.log" || -s "$tmp_dir/aws.log" ]]; then
+    echo "invalid cleanup preflight timestamp reached a cloud or mutation command: $label" >&2
+    exit 1
+  fi
+}
+
+for timestamp_case in \
+  'observed-calendar|observedAt|2020-02-30T00:00:00Z' \
+  'observed-fractional|observedAt|2020-03-01T00:00:00.123Z' \
+  'observed-offset|observedAt|2020-03-01T09:00:00+09:00' \
+  'expires-calendar|expiresAt|2099-02-31T00:00:00Z' \
+  'expires-fractional|expiresAt|2099-03-01T00:00:00.123Z' \
+  'expires-offset|expiresAt|2099-03-01T09:00:00+09:00'; do
+  IFS='|' read -r label field value <<<"$timestamp_case"
+  assert_preflight_timestamp_rejected_before_cloud_calls "$label" "$field" "$value"
+done
+cp "$tmp_dir/evidence/preflight-valid.json" "$tmp_dir/evidence/preflight.json"
+
 cp "$tmp_dir/evidence/in-flight.json" "$tmp_dir/evidence/in-flight-valid.json"
 assert_in_flight_rejected_before_cloud_calls() {
   local label=$1 filter=$2

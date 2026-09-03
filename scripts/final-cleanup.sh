@@ -54,6 +54,8 @@ course_require_file "$plan"
 cleanup_validate_decisions "$inventory" "$decisions"
 cleanup_validate_freeze_removal "$inventory" "$freeze" "$removal"
 course_require_file "$preflight"
+cleanup_assert_canonical_utc_seconds "$preflight" 'cleanup preflight timestamps' \
+  '["observedAt"]' '["expiresAt"]'
 course_require_file "$in_flight"
 
 course_assert_json "$preflight" '

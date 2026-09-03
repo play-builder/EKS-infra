@@ -6,6 +6,19 @@ cleanup_grade_is_valid() {
     "$file" >/dev/null
 }
 
+cleanup_assert_canonical_utc_seconds() {
+  local file=$1 label=$2 path
+  shift 2
+  for path in "$@"; do
+    jq -e --argjson path "$path" '
+      getpath($path) |
+      type == "string" and
+      test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
+      ((try (fromdateiso8601 | todateiso8601) catch "") == .)
+    ' "$file" >/dev/null || course_fail "invalid canonical UTC seconds timestamp: $label"
+  done
+}
+
 cleanup_normalize_absolute_path() {
   local input=$1 segment normalized='' depth=0 index
   local -a parts=() stack=()
@@ -93,6 +106,7 @@ cleanup_provider_secret_sha() {
 cleanup_validate_inventory() {
   local inventory=$1
   course_require_file "$inventory"
+  cleanup_assert_canonical_utc_seconds "$inventory" 'ownership observedAt' '["observedAt"]'
   cleanup_grade_is_valid "$inventory" || course_fail 'invalid ownership evidence grade'
   course_assert_json "$inventory" '
     def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
@@ -125,6 +139,7 @@ cleanup_validate_decisions() {
   local inventory=$1 decisions=$2
   cleanup_validate_inventory "$inventory"
   course_require_file "$decisions"
+  cleanup_assert_canonical_utc_seconds "$decisions" 'retain decisions approvedAt' '["approvedAt"]'
   course_assert_json "$decisions" '
     def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
     keys == ["accountId","approvedAt","courseId","decisions","evidenceGrade","inventorySha256","region","schemaVersion","status"] and
@@ -155,6 +170,7 @@ cleanup_validate_removal() {
   local inventory=$1 removal=$2
   cleanup_validate_inventory "$inventory"
   course_require_file "$removal"
+  cleanup_assert_canonical_utc_seconds "$removal" 'GitOps removal observedAt' '["observedAt"]'
   course_assert_json "$removal" '
     def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
     keys == ["clusters","evidenceGrade","freezeEvidenceSha256","gitopsRevision","observedAt","providerSecrets","remaining","retained","schemaVersion","status"] and
@@ -207,6 +223,7 @@ cleanup_validate_freeze_removal() {
   local inventory=$1 freeze=$2 removal=$3
   cleanup_validate_inventory "$inventory"
   course_require_file "$freeze"
+  cleanup_assert_canonical_utc_seconds "$freeze" 'GitOps freeze observedAt' '["observedAt"]'
   cleanup_validate_removal "$inventory" "$removal"
   course_assert_json "$freeze" '
     keys == ["clusters","evidenceGrade","gitopsRevision","observedAt","schemaVersion","status","writers"] and
@@ -235,6 +252,7 @@ cleanup_validate_freeze_removal() {
 cleanup_validate_pre_destroy() {
   local inventory=$1 removal=$2 pre=$3
   course_require_file "$pre"
+  cleanup_assert_canonical_utc_seconds "$pre" 'Kubernetes pre-destroy observedAt' '["observedAt"]'
   cleanup_grade_is_valid "$pre" || course_fail 'invalid pre-destroy evidence grade'
   course_assert_json "$pre" '
     def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
@@ -270,6 +288,7 @@ cleanup_validate_residual() {
   cleanup_validate_decisions "$inventory" "$decisions"
   cleanup_validate_pre_destroy "$inventory" "$removal" "$pre"
   course_require_file "$residual"
+  cleanup_assert_canonical_utc_seconds "$residual" 'cleanup residual observedAt' '["observedAt"]'
   cleanup_grade_is_valid "$residual" || course_fail 'invalid residual evidence grade'
   course_assert_json "$residual" '
     def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
