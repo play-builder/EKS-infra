@@ -179,14 +179,14 @@ variable "tags" {
   default     = {}
 }
 
-# ─── NEW: ADOT Collector ─────
+# ADOT Collector
 variable "enable_adot_collector" {
   description = "Enable ADOT Collector for metrics/logs collection (replaces Container Insights)"
   type        = bool
   default     = true
 }
 
-# ─── NEW: Amazon Managed Prometheus ─────
+# Amazon Managed Service for Prometheus
 variable "enable_amp" {
   description = "Enable Amazon Managed Service for Prometheus"
   type        = bool
@@ -199,7 +199,7 @@ variable "amp_retention_days" {
   default     = 90
 }
 
-# ─── NEW: Amazon Managed Grafana ────
+# Amazon Managed Grafana
 variable "enable_amg" {
   description = "Enable Amazon Managed Grafana"
   type        = bool
