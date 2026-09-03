@@ -4,6 +4,11 @@ project_name = "playdevops"
 environment  = "dev"
 cluster_name = "dev-playdevops-eks"
 
+# Resolve this value with aws eks describe-addon-versions for EKS 1.36 in the selected Region.
+vpc_cni_addon_version                  = "REPLACE_WITH_COMPATIBLE_EKS_ADDON_VERSION"
+vpc_cni_enable_network_policy          = false
+vpc_cni_network_policy_enforcing_mode  = "standard"
+
 cluster_version                            = "1.36"
 authentication_mode                        = "API"
 bootstrap_cluster_creator_admin_permissions = false

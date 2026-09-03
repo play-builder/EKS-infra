@@ -225,6 +225,35 @@ variable "cluster_log_retention_in_days" {
   default     = 7
 }
 
+variable "vpc_cni_addon_version" {
+  description = "VPC CNI add-on version resolved for EKS 1.36 in the selected Region"
+  type        = string
+}
+
+variable "vpc_cni_enable_network_policy" {
+  description = "False in Ch03; changed to true in Ch14"
+  type        = bool
+  default     = false
+}
+
+variable "vpc_cni_network_policy_enforcing_mode" {
+  description = "Start with standard; strict requires a separate approved gate"
+  type        = string
+  default     = "standard"
+
+  validation {
+    condition     = contains(["standard", "strict"], var.vpc_cni_network_policy_enforcing_mode)
+    error_message = "vpc_cni_network_policy_enforcing_mode must be standard or strict."
+  }
+}
+
+variable "vpc_cni_strict_gate_evidence_file" {
+  description = "Strict-mode approval evidence; null for standard mode"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "tags" {
   description = "Additional tags"
   type        = map(string)

@@ -9,6 +9,7 @@ tests=(
   oidc-external-provider-contract.sh
   oidc-ownership-handoff-contract.sh
   ecr-lifecycle-preview-contract.sh
+  network-policy-runtime-contract.sh
 )
 
 for test_file in "${tests[@]}"; do

@@ -133,6 +133,40 @@ variable "cluster_log_retention_in_days" {
   }
 }
 
+variable "vpc_cni_addon_version" {
+  description = "EKS-compatible VPC CNI add-on version verified in both course Regions"
+  type        = string
+
+  validation {
+    condition     = can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+-eksbuild\\.[0-9]+$", var.vpc_cni_addon_version))
+    error_message = "vpc_cni_addon_version must use the EKS add-on version form."
+  }
+}
+
+variable "vpc_cni_enable_network_policy" {
+  description = "Enable VPC CNI NetworkPolicy support"
+  type        = bool
+  default     = false
+}
+
+variable "vpc_cni_network_policy_enforcing_mode" {
+  description = "VPC CNI policy mode; strict requires current approval evidence"
+  type        = string
+  default     = "standard"
+
+  validation {
+    condition     = contains(["standard", "strict"], var.vpc_cni_network_policy_enforcing_mode)
+    error_message = "VPC CNI enforcing mode must be standard or strict."
+  }
+}
+
+variable "vpc_cni_strict_gate_evidence_file" {
+  description = "Current course.network-policy-strict-gate/v1 record required for strict mode"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "tags" {
   description = "Map of tags to apply to all resources"
   type        = map(string)

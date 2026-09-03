@@ -50,6 +50,11 @@ module "eks_cluster" {
   cluster_enabled_log_types     = var.cluster_enabled_log_types
   cluster_log_retention_in_days = var.cluster_log_retention_in_days
 
+  vpc_cni_addon_version                 = var.vpc_cni_addon_version
+  vpc_cni_enable_network_policy         = var.vpc_cni_enable_network_policy
+  vpc_cni_network_policy_enforcing_mode = var.vpc_cni_network_policy_enforcing_mode
+  vpc_cni_strict_gate_evidence_file     = var.vpc_cni_strict_gate_evidence_file
+
   tags = local.common_tags
 }
 

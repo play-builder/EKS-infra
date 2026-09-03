@@ -482,7 +482,15 @@ case "$chapter" in
   ch02) check_ch02 "$@"; emit_pass "$(runtime_grade)" "ch02 state, identity, governance 계약이 유효합니다." ;;
   ch05) check_workflow_run ch05 "$@"; emit_pass "$(runtime_grade)" "ch05 exact workflow 실행이 유효합니다." ;;
   ch06) check_ch06 "$@"; emit_pass "$(runtime_grade)" "ch06 image index와 rollback retention이 유효합니다." ;;
-  ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch12|ch13|ch14|ch15|ch16|ch17|ch18|ch19|ch20|ch21|ch22|ch23|ch24|ch25|ch26)
+  ch14)
+    if [[ "${1:-}" == "--contract-only" ]]; then
+      check_contract_only "$chapter" "$@"
+    else
+      COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/network-policy-runtime.sh" "$@"
+    fi
+    emit_pass "$(runtime_grade)" "ch14 VPC CNI NetworkPolicy runtime 계약이 유효합니다."
+    ;;
+  ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch12|ch13|ch15|ch16|ch17|ch18|ch19|ch20|ch21|ch22|ch23|ch24|ch25|ch26)
     check_contract_only "$chapter" "$@"
     emit_pass STATIC "SIMULATED_CLOUD_CONTRACT $chapter dispatcher가 등록됐습니다."
     ;;

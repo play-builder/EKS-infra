@@ -32,6 +32,13 @@ delivery:
   externalSecretsChart: "2.10.0"
 
 platform:
+  vpcCni:
+    verificationStatus: "NOT_RUN_NO_AWS_CREDENTIALS"
+    eksVersion: "1.36"
+    lookupRequiredForRegions:
+      - "ap-northeast-2"
+      - "us-east-1"
+    lookupCommand: "aws eks describe-addon-versions --addon-name vpc-cni --kubernetes-version 1.36 --region <region>"
   ebsCsiIamPolicy: "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
   courseStorageClass: "course-gp3"
   courseStorageType: "gp3"

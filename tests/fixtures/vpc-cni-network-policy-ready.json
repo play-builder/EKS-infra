@@ -1,0 +1,1 @@
+{"addon":{"addonName":"vpc-cni","addonVersion":"v1.20.4-eksbuild.1","status":"ACTIVE","configurationValues":"{\"enableNetworkPolicy\":\"true\",\"env\":{\"NETWORK_POLICY_ENFORCING_MODE\":\"standard\"}}"}}
