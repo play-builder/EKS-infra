@@ -1,7 +1,15 @@
 # Supported course Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
+course_id    = "replace-with-unique-course-id"
 github_org   = "play-builder"
+
+# Use create only in a dedicated account without the GitHub issuer.
+# Use external for an existing account-wide provider and set its exact ARN.
+oidc_provider_mode         = "create"
+external_oidc_provider_arn = null
+
+retained_rollback_index_digests = []
 
 infra_oidc_subjects = [
   "repo:play-builder@42942042/EKS-infra@405337777:ref:refs/heads/main",

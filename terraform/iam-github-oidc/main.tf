@@ -1,18 +1,64 @@
 locals {
   common_tags = merge(var.tags, {
-    Course    = "cicd-gitops"
-    ManagedBy = "Terraform"
-    Layer     = "shared"
+    CourseId    = var.course_id
+    Project     = var.project_name
+    AccountId   = data.aws_caller_identity.current.account_id
+    Region      = var.aws_region
+    Environment = "shared"
+    ManagedBy   = "Terraform"
+    Layer       = "shared"
   })
+
+  external_oidc_account_id = var.oidc_provider_mode == "external" ? split(":", var.external_oidc_provider_arn)[4] : null
+  oidc_provider_arn = var.oidc_provider_mode == "create" ? (
+    aws_iam_openid_connect_provider.github[0].arn
+  ) : data.aws_iam_openid_connect_provider.external[0].arn
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_iam_openid_connect_provider" "github" {
+  count          = var.oidc_provider_mode == "create" ? 1 : 0
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
 
   tags = merge(local.common_tags, {
     Name = "GitHub-Actions-OIDC-Provider"
   })
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+data "aws_iam_openid_connect_provider" "external" {
+  count = var.oidc_provider_mode == "external" ? 1 : 0
+  arn   = var.external_oidc_provider_arn
+}
+
+resource "terraform_data" "oidc_ownership_marker" {
+  input = {
+    mode       = var.oidc_provider_mode
+    provider   = local.oidc_provider_arn
+    account_id = data.aws_caller_identity.current.account_id
+    issuer     = "https://token.actions.githubusercontent.com"
+    audience   = "sts.amazonaws.com"
+  }
+
+  triggers_replace = [var.oidc_provider_mode, local.oidc_provider_arn]
+
+  lifecycle {
+    prevent_destroy = true
+
+    precondition {
+      condition = var.oidc_provider_mode != "external" || (
+        local.external_oidc_account_id == data.aws_caller_identity.current.account_id &&
+        trimprefix(data.aws_iam_openid_connect_provider.external[0].url, "https://") == "token.actions.githubusercontent.com" &&
+        contains(data.aws_iam_openid_connect_provider.external[0].client_id_list, "sts.amazonaws.com")
+      )
+      error_message = "External OIDC provider must belong to the current account and use the exact GitHub issuer and STS audience."
+    }
+  }
 }
 
 resource "aws_ecr_repository" "sample_app" {
@@ -88,7 +134,7 @@ data "aws_iam_policy_document" "infra_assume_role" {
 
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [local.oidc_provider_arn]
     }
 
     condition {
@@ -130,10 +176,8 @@ resource "aws_iam_policy" "infra" {
         Effect = "Allow"
         Action = [
           "iam:AttachRolePolicy",
-          "iam:CreateOpenIDConnectProvider",
           "iam:CreatePolicy",
           "iam:CreateRole",
-          "iam:DeleteOpenIDConnectProvider",
           "iam:DeletePolicy",
           "iam:DeleteRole",
           "iam:DetachRolePolicy",
@@ -176,7 +220,7 @@ data "aws_iam_policy_document" "sample_app_assume_role" {
 
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [local.oidc_provider_arn]
     }
 
     condition {

@@ -4,6 +4,10 @@
 먼저 dev의 네 계층을 완성하고 `DEV_READY`를 확인한 뒤에만 prod를 만듭니다. 두 환경의
 Terraform state, VPC CIDR, Argo CD instance, AMP workspace가 분리됩니다.
 
+Shared identity는 전용 계정의 Terraform-owned GitHub OIDC provider와 기존 account-wide provider를
+구분합니다. 기존 provider는 삭제하지 않고 external mode로 참조하며, ECR lifecycle 변경 전에는
+모든 rollback image-index digest가 보존되는지 preview gate로 확인합니다.
+
 ## 배포 순서
 
 ```text

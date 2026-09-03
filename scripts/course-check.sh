@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 API_VERSION="2026-03-10"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
   [[ -d "$COURSE_CHECK_BIN_DIR" ]] || {
@@ -316,6 +317,15 @@ check_ch05() {
   pass "ch05 ECR multi-architecture image index가 유효합니다."
 }
 
+check_ch06() {
+  if [[ "${1:-}" == "--lifecycle-preview" ]]; then
+    shift
+    COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/ecr-lifecycle-preview.sh" "$@"
+  else
+    check_ch05 "$@"
+  fi
+}
+
 check_contract_only() {
   local chapter=$1 mode=${2:-}
   [[ "$mode" == "--contract-only" ]] || \
@@ -471,7 +481,7 @@ case "$chapter" in
   ch01) check_ch01 "$@"; emit_pass STATIC "ch01 repository baseline이 유효합니다." ;;
   ch02) check_ch02 "$@"; emit_pass "$(runtime_grade)" "ch02 state, identity, governance 계약이 유효합니다." ;;
   ch05) check_workflow_run ch05 "$@"; emit_pass "$(runtime_grade)" "ch05 exact workflow 실행이 유효합니다." ;;
-  ch06) check_ch05 "$@"; emit_pass "$(runtime_grade)" "ch06 multi-architecture image index가 유효합니다." ;;
+  ch06) check_ch06 "$@"; emit_pass "$(runtime_grade)" "ch06 image index와 rollback retention이 유효합니다." ;;
   ch03|ch04|ch07|ch08|ch09|ch10|ch11|ch12|ch13|ch14|ch15|ch16|ch17|ch18|ch19|ch20|ch21|ch22|ch23|ch24|ch25|ch26)
     check_contract_only "$chapter" "$@"
     emit_pass STATIC "SIMULATED_CLOUD_CONTRACT $chapter dispatcher가 등록됐습니다."

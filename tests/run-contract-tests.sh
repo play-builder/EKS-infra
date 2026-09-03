@@ -6,6 +6,9 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tests=(
   course-check-contract.sh
   stateful-contract.sh
+  oidc-external-provider-contract.sh
+  oidc-ownership-handoff-contract.sh
+  ecr-lifecycle-preview-contract.sh
 )
 
 for test_file in "${tests[@]}"; do

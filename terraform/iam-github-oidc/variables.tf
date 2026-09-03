@@ -14,6 +14,43 @@ variable "project_name" {
   default     = "playdevops"
 }
 
+variable "course_id" {
+  description = "Unique ownership boundary for this course run"
+  type        = string
+  default     = "replace-with-unique-course-id"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be a unique 8-63 character lowercase identifier."
+  }
+}
+
+variable "oidc_provider_mode" {
+  description = "Create a course-owned GitHub OIDC provider or reference an existing account-wide provider"
+  type        = string
+  default     = "create"
+
+  validation {
+    condition     = contains(["create", "external"], var.oidc_provider_mode)
+    error_message = "oidc_provider_mode must be create or external."
+  }
+}
+
+variable "external_oidc_provider_arn" {
+  description = "Existing GitHub Actions OIDC provider ARN when oidc_provider_mode is external"
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = var.oidc_provider_mode != "external" || (
+      var.external_oidc_provider_arn != null &&
+      can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:oidc-provider/token\\.actions\\.githubusercontent\\.com$", var.external_oidc_provider_arn))
+    )
+    error_message = "external mode requires the exact token.actions.githubusercontent.com provider ARN."
+  }
+}
+
 variable "github_org" {
   description = "GitHub organization"
   type        = string
@@ -69,6 +106,17 @@ variable "ecr_keep_last_images" {
   validation {
     condition     = var.ecr_keep_last_images >= 10
     error_message = "ecr_keep_last_images must be at least 10."
+  }
+}
+
+variable "retained_rollback_index_digests" {
+  description = "Image-index digests that a lifecycle preview must prove will survive"
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for digest in var.retained_rollback_index_digests : can(regex("^sha256:[0-9a-f]{64}$", digest))])
+    error_message = "Every retained rollback digest must be a lowercase sha256 digest."
   }
 }
 
