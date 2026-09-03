@@ -1,0 +1,23 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.15.9",
+  "planned_values": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "terraform_data.remaining",
+          "mode": "managed",
+          "type": "terraform_data",
+          "name": "remaining",
+          "values": {
+            "id": "still-managed"
+          }
+        }
+      ]
+    }
+  },
+  "configuration": {
+    "root_module": {}
+  },
+  "resource_changes": []
+}

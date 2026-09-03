@@ -28,7 +28,7 @@ if [[ " $* " == *" show -json "* ]]; then
     exit 0
   fi
   if [[ -n "${COURSE_FAKE_NOOP_PLAN_PATH:-}" && "$plan_path" == "$COURSE_FAKE_NOOP_PLAN_PATH" ]]; then
-    printf '%s\n' '{"format_version":"1.2","resource_changes":[]}'
+    cat "$COURSE_FAKE_GENUINE_NOOP_JSON"
     exit 0
   fi
   cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
@@ -46,6 +46,7 @@ chmod +x "$tmp_dir/bin/terraform"
 export PATH="$tmp_dir/bin:$PATH"
 export COURSE_FAKE_REPO_ROOT="$root"
 export COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json"
+export COURSE_FAKE_GENUINE_NOOP_JSON="$root/tests/fixtures/terraform-plan-noop-valid.json"
 export COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log"
 export COURSE_ID=course-2026
 export AWS_ACCOUNT_ID=123456789012
@@ -89,10 +90,10 @@ set -e
 }
 
 original_failed_plan=$failed_plan
-replacement_plan="$tmp_dir/plans/reviewed-noop-replacement.tfplan"
-printf 'reviewed no-op replacement plan\n' >"$replacement_plan"
-replacement_sha=$(raw_sha256 "$replacement_plan")
-jq --arg path "$replacement_plan" --arg sha "$replacement_sha" \
+replacement_a="$tmp_dir/plans/reviewed-replacement-a.tfplan"
+printf 'reviewed replacement plan A\n' >"$replacement_a"
+replacement_a_sha=$(raw_sha256 "$replacement_a")
+jq --arg path "$replacement_a" --arg sha "$replacement_a_sha" \
   '.reviewedAt="2026-09-03T00:11:00Z" | .plans[1].path=$path | .plans[1].sha256=$sha' \
   "$manifest" >"$manifest.tmp"
 mv "$manifest.tmp" "$manifest"
@@ -101,27 +102,39 @@ later_plan_json="$tmp_dir/plan-json/environments__prod__03-platform.json"
 cp "$later_plan_json" "$tmp_dir/valid-later-plan.json"
 jq '.resource_changes[0].change.actions=["create"]' "$later_plan_json" >"$later_plan_json.tmp"
 mv "$later_plan_json.tmp" "$later_plan_json"
-progress_before_failed_recovery=$(raw_sha256 "$progress")
+authorization_before_failed_recovery=$(jq -c '{manifestSha256,status,completed,inFlight}' "$progress")
 mutations_before=$(wc -l <"$tmp_dir/mutations.log" | tr -d ' ')
 set +e
-output=$(COURSE_FAKE_NOOP_PLAN_PATH="$replacement_plan" \
+output=$(COURSE_FAKE_NOOP_PLAN_PATH="$replacement_a" \
   cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevops 2>&1)
 status=$?
 set -e
 [[ "$status" -ne 0 ]] || { echo 'replacement recovery accepted a later create action' >&2; exit 1; }
 grep -Fq 'SAVED_DESTROY_PLAN_NOT_DELETE_ONLY' <<<"$output"
-[[ $(raw_sha256 "$progress") == "$progress_before_failed_recovery" ]] || {
-  echo 'failed replacement semantic preflight rebound progress' >&2
+[[ $(jq -c '{manifestSha256,status,completed,inFlight}' "$progress") == "$authorization_before_failed_recovery" ]] || {
+  echo 'failed replacement semantic preflight changed apply authorization state' >&2
   exit 1
 }
 [[ $(wc -l <"$tmp_dir/mutations.log" | tr -d ' ') -eq "$mutations_before" ]]
-[[ -f "$original_failed_plan" && -f "$replacement_plan" ]]
+[[ -f "$original_failed_plan" && -f "$replacement_a" ]]
+jq -e --arg candidate "$replacement_a" 'any(.registeredPlans[]; .path == $candidate)' "$progress" >/dev/null || {
+  echo 'failed later-layer preflight did not register replacement candidate A' >&2
+  exit 1
+}
 mv "$tmp_dir/valid-later-plan.json" "$later_plan_json"
+
+replacement_b="$tmp_dir/plans/reviewed-replacement-b.tfplan"
+printf 'reviewed replacement plan B\n' >"$replacement_b"
+replacement_b_sha=$(raw_sha256 "$replacement_b")
+jq --arg path "$replacement_b" --arg sha "$replacement_b_sha" \
+  '.reviewedAt="2026-09-03T00:12:00Z" | .plans[1].path=$path | .plans[1].sha256=$sha' \
+  "$manifest" >"$manifest.tmp"
+mv "$manifest.tmp" "$manifest"
 
 progress_before_invalid_noop=$(raw_sha256 "$progress")
 mutations_before=$(wc -l <"$tmp_dir/mutations.log" | tr -d ' ')
 set +e
-(COURSE_FAKE_INVALID_NOOP_PLAN_PATH="$replacement_plan" \
+(COURSE_FAKE_INVALID_NOOP_PLAN_PATH="$replacement_b" \
   cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevops) >/dev/null 2>&1
 status=$?
 set -e
@@ -129,7 +142,7 @@ set -e
 [[ $(raw_sha256 "$progress") == "$progress_before_invalid_noop" ]]
 [[ $(wc -l <"$tmp_dir/mutations.log" | tr -d ' ') -eq "$mutations_before" ]]
 
-COURSE_FAKE_NOOP_PLAN_PATH="$replacement_plan" \
+COURSE_FAKE_NOOP_PLAN_PATH="$replacement_b" \
   cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevops
 
 jq -e '
@@ -139,8 +152,10 @@ jq -e '
 [[ $(wc -l <"$tmp_dir/mutations.log" | tr -d ' ') -eq 8 ]]
 [[ $(sed -n '1p' "$tmp_dir/mutations.log") == "environments/prod/04-workloads/argocd" ]]
 [[ $(sed -n '3p' "$tmp_dir/mutations.log") == "environments/prod/03-platform" ]]
-jq -e --arg original "$original_failed_plan" --arg replacement "$replacement_plan" '
-  any(.registeredPlans[]; .path == $original) and any(.registeredPlans[]; .path == $replacement)
+jq -e --arg original "$original_failed_plan" --arg candidateA "$replacement_a" --arg candidateB "$replacement_b" '
+  any(.registeredPlans[]; .path == $original) and
+  any(.registeredPlans[]; .path == $candidateA) and
+  any(.registeredPlans[]; .path == $candidateB)
 ' "$progress" >/dev/null
 while IFS= read -r saved_plan; do
   [[ ! -e "$saved_plan" ]] || { echo "terminal cleanup retained binary plan: $saved_plan" >&2; exit 1; }
@@ -158,7 +173,7 @@ cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevop
 jq -e '.status == "COMPLETE" and (.completed | length) == 8' "$progress" >/dev/null
 
 cp "$manifest" "$tmp_dir/manifest-before-unbound-change.json"
-jq '.reviewedAt="2026-09-03T00:12:00Z"' "$manifest" >"$manifest.tmp"
+jq '.reviewedAt="2026-09-03T00:13:00Z"' "$manifest" >"$manifest.tmp"
 mv "$manifest.tmp" "$manifest"
 set +e
 (cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevops) >/dev/null 2>&1

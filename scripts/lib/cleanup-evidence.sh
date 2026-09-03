@@ -80,7 +80,22 @@ cleanup_inspect_saved_destroy_plan() {
     course_fail "SAVED_DESTROY_PLAN_SHOW_FAILED: $layer"
   jq -e '.format_version | type == "string"' <<<"$plan_json" >/dev/null || \
     course_fail "SAVED_DESTROY_PLAN_FORMAT_INVALID: $layer"
-  if jq -e '((.resource_changes // []) | type == "array" and length == 0)' <<<"$plan_json" >/dev/null; then
+  if jq -e '
+    (.resource_changes // []) as $changes |
+    ($changes | type == "array") and
+    all($changes[]; .mode == "data" and
+      (.change.actions == ["read"] or .change.actions == ["no-op"]))
+  ' <<<"$plan_json" >/dev/null; then
+    jq -e '
+      def modules:
+        . as $module | $module, (($module.child_modules // [])[] | modules);
+      (.terraform_version | type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+")) and
+      (.planned_values | type == "object") and
+      (.configuration | type == "object") and
+      (has("values") | not) and
+      ([.planned_values.root_module // {} | modules |
+        (.resources // [])[] | select(.mode == "managed")] | length == 0)
+    ' <<<"$plan_json" >/dev/null || course_fail "SAVED_DESTROY_PLAN_ARTIFACT_INVALID: $layer"
     printf '%s\n' NO_CHANGES
     return 0
   fi
@@ -231,6 +246,28 @@ cleanup_validate_plan_registry_extension() {
   ' >/dev/null || course_fail 'SAVED_DESTROY_PLAN_REGISTRY_LIMIT_OR_PATH_CONFLICT'
 }
 
+cleanup_register_replacement_candidate() {
+  local progress=$1 manifest=$2 manifest_sha=$3 layer=$4 saved_plan=$5 expected_sha=$6
+  local now payload
+  [[ $(course_raw_sha256_file "$manifest") == "$manifest_sha" ]] || \
+    course_fail 'SAVED_DESTROY_PLAN_MANIFEST_CHANGED'
+  jq -en --argjson existing "$(jq -c '.registeredPlans' "$progress")" \
+    --arg layer "$layer" --arg path "$saved_plan" --arg sha "$expected_sha" '
+    ($existing + [{layer:$layer,path:$path,sha256:$sha}] | unique_by([.path,.sha256])) as $all |
+    ($all | length) <= 32 and
+    all(($all | group_by(.layer)[]); length <= 4) and
+    all($all[]; . as $registered |
+      all($all[]; .path != $registered.path or .layer == $registered.layer))
+  ' >/dev/null || course_fail 'SAVED_DESTROY_PLAN_REGISTRY_LIMIT_OR_PATH_CONFLICT'
+  now=$(course_now)
+  payload=$(jq --arg layer "$layer" --arg path "$saved_plan" --arg sha "$expected_sha" --arg now "$now" '
+    .registeredPlans=([.registeredPlans[], {layer:$layer,path:$path,sha256:$sha}] |
+      unique_by([.path,.sha256]) | sort_by(.layer,.path,.sha256)) |
+    .updatedAt=$now
+  ' "$progress")
+  course_write_json "$progress" "$payload"
+}
+
 cleanup_apply_saved_plans() {
   local manifest=$1 repo_root=$2 inventory=$3 progress=$4 project=$5
   local manifest_sha progress_manifest_sha completed_count layer saved_plan expected_sha actual_manifest_sha now payload
@@ -279,20 +316,30 @@ cleanup_apply_saved_plans() {
   fi
 
   index=$completed_count
+  if [[ "$recovery" == true ]]; then
+    IFS=$'\t' read -r layer saved_plan expected_sha < <(
+      jq -r --argjson index "$completed_count" '.plans[$index] | [.layer,.path,.sha256] | @tsv' "$manifest"
+    )
+    cleanup_validate_saved_plan_file "$saved_plan" "$expected_sha" "$layer"
+    plan_kind=$(cleanup_inspect_saved_destroy_plan "$layer" "$saved_plan" "$inventory" "$repo_root" \
+      "$course" "$account" "$region" "$project")
+    case "$plan_kind" in
+      NO_CHANGES) recovery_kind=NO_CHANGES ;;
+      DELETE) recovery_kind=DELETE ;;
+      *) course_fail "SAVED_DESTROY_PLAN_NOT_DELETE_ONLY: $layer" ;;
+    esac
+    cleanup_register_replacement_candidate "$progress" "$manifest" "$manifest_sha" \
+      "$layer" "$saved_plan" "$expected_sha"
+    index=$((index + 1))
+  fi
+
   while IFS=$'\t' read -r layer saved_plan expected_sha; do
     cleanup_validate_saved_plan_file "$saved_plan" "$expected_sha" "$layer"
     plan_kind=$(cleanup_inspect_saved_destroy_plan "$layer" "$saved_plan" "$inventory" "$repo_root" \
       "$course" "$account" "$region" "$project")
-    if [[ "$plan_kind" == NO_CHANGES ]]; then
-      [[ "$recovery" == true && "$index" -eq "$completed_count" ]] || \
-        course_fail "SAVED_DESTROY_PLAN_NOT_DELETE_ONLY: $layer"
-      recovery_kind=NO_CHANGES
-    else
-      [[ "$plan_kind" == DELETE ]] || course_fail "SAVED_DESTROY_PLAN_NOT_DELETE_ONLY: $layer"
-      if [[ "$recovery" == true && "$index" -eq "$completed_count" ]]; then recovery_kind=DELETE; fi
-    fi
+    [[ "$plan_kind" == DELETE ]] || course_fail "SAVED_DESTROY_PLAN_NOT_DELETE_ONLY: $layer"
     index=$((index + 1))
-  done < <(jq -r --argjson start "$completed_count" '.plans[$start:][] | [.layer,.path,.sha256] | @tsv' "$manifest")
+  done < <(jq -r --argjson start "$index" '.plans[$start:][] | [.layer,.path,.sha256] | @tsv' "$manifest")
   actual_manifest_sha=$(course_raw_sha256_file "$manifest")
   [[ "$actual_manifest_sha" == "$manifest_sha" ]] || course_fail 'SAVED_DESTROY_PLAN_MANIFEST_CHANGED'
 
