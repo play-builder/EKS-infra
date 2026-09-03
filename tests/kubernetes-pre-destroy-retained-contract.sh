@@ -55,6 +55,37 @@ fi
 EOF
 chmod +x "$tmp_dir/bin/kubectl"
 
+: >"$tmp_dir/kubectl.log"
+set +e
+output=$(PATH="$tmp_dir/bin:$PATH" FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_ID=course-2026 \
+  AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
+    bash "$root/scripts/kubernetes-pre-destroy-scan.sh" \
+      --inventory "$tmp_dir/inventory.json" --gitops-removal "$tmp_dir/removal.json" \
+      --dev-context course-dev --prod-context course-prod --output "$tmp_dir/runtime-pre-destroy.json" 2>&1)
+status=$?
+set -e
+if [[ "$status" -eq 0 ]] || ! grep -Fq 'NONCANONICAL_RUNTIME_OUTPUT' <<<"$output"; then
+  echo 'real Kubernetes pre-destroy scan accepted a noncanonical output' >&2
+  exit 1
+fi
+[[ ! -s "$tmp_dir/kubectl.log" && ! -e "$tmp_dir/runtime-pre-destroy.json" ]]
+
+: >"$tmp_dir/kubectl.log"
+set +e
+output=$(FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_ID=course-2026 \
+  AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
+    bash "$root/scripts/kubernetes-pre-destroy-scan.sh" \
+      --inventory "$tmp_dir/inventory.json" --gitops-removal "$tmp_dir/removal.json" \
+      --dev-context course-dev --prod-context course-prod \
+      --output "$root/evidence/cleanup/../cleanup/kubernetes-pre-destroy.json" 2>&1)
+status=$?
+set -e
+if [[ "$status" -eq 0 ]] || ! grep -Fq 'FIXTURE_RUNTIME_OUTPUT_BLOCKED' <<<"$output"; then
+  echo 'fixture Kubernetes pre-destroy scan did not block a canonical output alias' >&2
+  exit 1
+fi
+[[ ! -s "$tmp_dir/kubectl.log" ]]
+
 FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
   bash "$root/scripts/kubernetes-pre-destroy-scan.sh" \
     --inventory "$tmp_dir/inventory.json" --gitops-removal "$tmp_dir/removal.json" \

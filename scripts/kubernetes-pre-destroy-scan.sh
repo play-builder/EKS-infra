@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
 
@@ -28,6 +29,7 @@ done
 for name in inventory removal dev_context prod_context output; do
   [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64
 done
+cleanup_require_canonical_runtime_output "$output" "$REPO_ROOT" kubernetes-pre-destroy.json
 
 cleanup_validate_removal "$inventory" "$removal"
 course_id=$(jq -r '.courseId' "$inventory")
@@ -36,7 +38,6 @@ region=$(jq -r '.region' "$inventory")
 [[ -z "${COURSE_ID:-}" || "$COURSE_ID" == "$course_id" ]] || course_fail 'pre-destroy CourseId mismatch'
 [[ -z "${AWS_ACCOUNT_ID:-}" || "$AWS_ACCOUNT_ID" == "$account_id" ]] || course_fail 'pre-destroy account mismatch'
 [[ -z "${AWS_REGION:-}" || "$AWS_REGION" == "$region" ]] || course_fail 'pre-destroy Region mismatch'
-cleanup_reject_runtime_output_from_fixture "$output" kubernetes-pre-destroy.json
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT

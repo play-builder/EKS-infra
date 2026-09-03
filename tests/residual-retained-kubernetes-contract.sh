@@ -64,6 +64,35 @@ run_scan() {
     bash "$root/scripts/residual-scan.sh" "${common[@]}" --output "$output"
 }
 
+: >"$work/aws.log"
+set +e
+output=$(PATH="$root/tests/helpers/residual-retained-bin:$PATH" COURSE_FAKE_AWS_LOG="$work/aws.log" \
+  AWS_PROFILE=course AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+  RESIDUAL_SCAN_ATTEMPTS=1 RESIDUAL_SCAN_DELAY_SECONDS=0 \
+    bash "$root/scripts/residual-scan.sh" "${common[@]}" --output "$work/evidence/runtime-residual.json" 2>&1)
+status=$?
+set -e
+if [[ "$status" -eq 0 ]] || ! grep -Fq 'NONCANONICAL_RUNTIME_OUTPUT' <<<"$output"; then
+  echo 'real residual scan accepted a noncanonical output' >&2
+  exit 1
+fi
+[[ ! -s "$work/aws.log" && ! -e "$work/evidence/runtime-residual.json" ]]
+
+: >"$work/aws.log"
+set +e
+output=$(COURSE_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" COURSE_FAKE_AWS_LOG="$work/aws.log" \
+  AWS_PROFILE=course AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+  RESIDUAL_SCAN_ATTEMPTS=1 RESIDUAL_SCAN_DELAY_SECONDS=0 \
+    bash "$root/scripts/residual-scan.sh" "${common[@]}" \
+      --output "$root/evidence/cleanup/../cleanup/residual.json" 2>&1)
+status=$?
+set -e
+if [[ "$status" -eq 0 ]] || ! grep -Fq 'FIXTURE_RUNTIME_OUTPUT_BLOCKED' <<<"$output"; then
+  echo 'fixture residual scan did not block a canonical output alias' >&2
+  exit 1
+fi
+[[ ! -s "$work/aws.log" ]]
+
 run_scan "$work/evidence/generated-residual.json"
 jq -e '
   .evidenceGrade == "STATIC" and .status == "PASS" and

@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
 
@@ -54,7 +55,7 @@ course_validate_account "$AWS_ACCOUNT_ID"
 [[ "$COURSE_ID" == "$(jq -r '.courseId' "$inventory")" ]] || course_fail 'residual CourseId mismatch'
 [[ "$AWS_ACCOUNT_ID" == "$(jq -r '.accountId' "$inventory")" ]] || course_fail 'residual account mismatch'
 [[ "$AWS_REGION" == "$(jq -r '.region' "$inventory")" ]] || course_fail 'residual Region mismatch'
-cleanup_reject_runtime_output_from_fixture "$output" residual.json
+cleanup_require_canonical_runtime_output "$output" "$REPO_ROOT" residual.json
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT

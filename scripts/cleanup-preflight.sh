@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
 
@@ -26,6 +27,9 @@ done
 for name in COURSE_ID AWS_ACCOUNT_ID AWS_REGION COURSE_PROJECT; do [[ -n "${!name:-}" ]] || course_fail "$name is required" 64; done
 course_validate_region "$AWS_REGION"
 course_validate_account "$AWS_ACCOUNT_ID"
+cleanup_require_canonical_runtime_output "$inventory_output" "$REPO_ROOT" ownership-inventory.json
+cleanup_require_canonical_runtime_output "$retain_template" "$REPO_ROOT" retain-decisions.json
+cleanup_reject_runtime_output_from_fixture "$preflight_output" "$REPO_ROOT" preflight.json
 course_require_file "$plan"
 cleanup_validate_inventory "$inventory_source"
 
@@ -57,8 +61,6 @@ done < <(jq -c '.resource_changes[] | select(.change.actions | index("delete"))'
 
 grade=CLOUD_RUNTIME
 [[ -z "${COURSE_CHECK_BIN_DIR:-}" ]] || grade=STATIC
-cleanup_reject_runtime_output_from_fixture "$inventory_output" ownership-inventory.json
-cleanup_reject_runtime_output_from_fixture "$preflight_output" preflight.json
 observed=$(course_now)
 expires=$(course_expires_after "${CLEANUP_PREFLIGHT_TTL_SECONDS:-3600}")
 inventory_payload=$(jq --arg grade "$grade" --arg observed "$observed" '

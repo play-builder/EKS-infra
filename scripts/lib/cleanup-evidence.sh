@@ -6,11 +6,82 @@ cleanup_grade_is_valid() {
     "$file" >/dev/null
 }
 
+cleanup_normalize_absolute_path() {
+  local input=$1 segment normalized='' depth=0 index
+  local -a parts=() stack=()
+  [[ "$input" == /* ]] || input="$PWD/$input"
+  IFS='/' read -r -a parts <<<"$input"
+  for segment in "${parts[@]}"; do
+    case "$segment" in
+      ''|.) ;;
+      ..)
+        if ((depth > 0)); then
+          depth=$((depth - 1))
+          unset "stack[$depth]"
+        fi
+        ;;
+      *)
+        stack[$depth]=$segment
+        depth=$((depth + 1))
+        ;;
+    esac
+  done
+  for ((index=0; index<depth; index++)); do normalized+="/${stack[$index]}"; done
+  printf '%s\n' "${normalized:-/}"
+}
+
+cleanup_resolve_parent_identity() {
+  local directory=$1 probe suffix='' component physical
+  directory=$(cleanup_normalize_absolute_path "$directory")
+  probe=$directory
+  while [[ ! -d "$probe" ]]; do
+    [[ "$probe" != / ]] || break
+    component=${probe##*/}
+    suffix="/$component$suffix"
+    probe=${probe%/*}
+    [[ -n "$probe" ]] || probe=/
+  done
+  physical=$(cd -- "$probe" && pwd -P)
+  printf '%s%s\n' "${physical%/}" "$suffix"
+}
+
+cleanup_output_identity() {
+  local output=$1 normalized parent name parent_identity
+  normalized=$(cleanup_normalize_absolute_path "$output")
+  parent=${normalized%/*}
+  [[ -n "$parent" ]] || parent=/
+  name=${normalized##*/}
+  parent_identity=$(cleanup_resolve_parent_identity "$parent")
+  printf '%s/%s\n' "${parent_identity%/}" "$name"
+}
+
 cleanup_reject_runtime_output_from_fixture() {
-  local output=$1 canonical_name=$2
-  if [[ -n "${COURSE_CHECK_BIN_DIR:-}" && "$output" == */evidence/cleanup/"$canonical_name" ]]; then
+  local output=$1 repo_root=$2 canonical_name=$3
+  local output_path canonical_path output_identity canonical_identity
+  [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]] || return 0
+  output_path=$(cleanup_normalize_absolute_path "$output")
+  canonical_path=$(cleanup_normalize_absolute_path "$repo_root/evidence/cleanup/$canonical_name")
+  output_identity=$(cleanup_output_identity "$output_path")
+  canonical_identity=$(cleanup_output_identity "$canonical_path")
+  if [[ -L "$output_path" || "$output_path" == "$canonical_path" || "$output_identity" == "$canonical_identity" ]]; then
     course_fail "FIXTURE_RUNTIME_OUTPUT_BLOCKED: $output"
   fi
+}
+
+cleanup_require_canonical_runtime_output() {
+  local output=$1 repo_root=$2 canonical_name=$3
+  local output_path canonical_path output_identity
+  if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+    cleanup_reject_runtime_output_from_fixture "$output" "$repo_root" "$canonical_name"
+    return 0
+  fi
+  output_path=$(cleanup_normalize_absolute_path "$output")
+  canonical_path=$(cleanup_normalize_absolute_path "$repo_root/evidence/cleanup/$canonical_name")
+  [[ "$output_path" == "$canonical_path" ]] || \
+    course_fail "NONCANONICAL_RUNTIME_OUTPUT: expected $canonical_path"
+  output_identity=$(cleanup_output_identity "$output_path")
+  [[ ! -L "$output_path" && "$output_identity" == "$canonical_path" ]] || \
+    course_fail "RUNTIME_OUTPUT_SYMLINK_ESCAPE_BLOCKED: $output"
 }
 
 cleanup_provider_secret_sha() {

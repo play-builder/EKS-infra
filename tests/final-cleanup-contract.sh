@@ -73,6 +73,46 @@ common=(
   --residual-output "$tmp_dir/evidence/generated-residual.json"
 )
 
+: >"$tmp_dir/mutations.log"
+: >"$tmp_dir/kubectl.log"
+: >"$tmp_dir/aws.log"
+rm -f "$tmp_dir/eks-deleted" "$tmp_dir/evidence/runtime-pre-destroy.json" "$tmp_dir/evidence/runtime-residual.json"
+set +e
+output=$(PATH="$tmp_dir/bin:$PATH" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
+    bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
+      --kubernetes-pre-destroy-output "$tmp_dir/evidence/runtime-pre-destroy.json" \
+      --residual-output "$tmp_dir/evidence/runtime-residual.json" \
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 2>&1)
+status=$?
+set -e
+if [[ "$status" -eq 0 ]] || ! grep -Fq 'NONCANONICAL_RUNTIME_OUTPUT' <<<"$output"; then
+  echo 'real final cleanup accepted noncanonical evidence outputs' >&2
+  exit 1
+fi
+[[ ! -s "$tmp_dir/mutations.log" && ! -s "$tmp_dir/kubectl.log" && ! -s "$tmp_dir/aws.log" ]]
+[[ ! -e "$tmp_dir/evidence/runtime-pre-destroy.json" && ! -e "$tmp_dir/evidence/runtime-residual.json" ]]
+
+: >"$tmp_dir/mutations.log"
+: >"$tmp_dir/kubectl.log"
+: >"$tmp_dir/aws.log"
+rm -f "$tmp_dir/eks-deleted"
+set +e
+output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
+    bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
+      --kubernetes-pre-destroy-output "$root/evidence/cleanup/../cleanup/kubernetes-pre-destroy.json" \
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 2>&1)
+status=$?
+set -e
+if [[ "$status" -eq 0 ]] || ! grep -Fq 'FIXTURE_RUNTIME_OUTPUT_BLOCKED' <<<"$output"; then
+  echo 'fixture final cleanup did not block a canonical output alias' >&2
+  exit 1
+fi
+[[ ! -s "$tmp_dir/mutations.log" && ! -s "$tmp_dir/kubectl.log" && ! -s "$tmp_dir/aws.log" ]]
+
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
   bash "$root/scripts/course-check.sh" ch26 --final-cleanup "${common[@]}"
 [[ ! -s "$tmp_dir/mutations.log" && ! -e "$tmp_dir/evidence/generated-residual.json" ]]

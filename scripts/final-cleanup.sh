@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd)
+REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
 
@@ -119,8 +119,8 @@ fi
 course_validate_region "$confirm_region"
 course_validate_account "$confirm_account"
 [[ $(jq -r '.evidenceGrade' "$inventory") == CLOUD_RUNTIME ]] || course_fail 'STATIC_INVENTORY_EXECUTION_BLOCKED'
-cleanup_reject_runtime_output_from_fixture "$pre_destroy_output" kubernetes-pre-destroy.json
-cleanup_reject_runtime_output_from_fixture "$residual_output" residual.json
+cleanup_require_canonical_runtime_output "$pre_destroy_output" "$REPO_ROOT" kubernetes-pre-destroy.json
+cleanup_require_canonical_runtime_output "$residual_output" "$REPO_ROOT" residual.json
 for command_name in aws kubectl terraform jq; do command -v "$command_name" >/dev/null || course_fail "required command not found: $command_name" 69; done
 
 layers=(
