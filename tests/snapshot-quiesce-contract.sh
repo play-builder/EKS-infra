@@ -36,6 +36,34 @@ reject snapshot-quiesce-checksum-after-stop.json
 jq '.database.shutdownSignal="SIGTERM"' "$fixtures/snapshot-quiesce-valid.json" >"$tmp_dir/legacy-sigterm.json"
 reject_file "$tmp_dir/legacy-sigterm.json" legacy-sigterm
 
+reject_timestamp() {
+  local label=$1 path=$2 value=$3 candidate
+  candidate="$tmp_dir/timestamp-$label.json"
+  jq --argjson path "$path" --arg value "$value" '
+    .checksum.capturedAt = "2020-02-01T00:00:00Z" |
+    .database.stoppedAt = "2020-05-01T00:00:00Z" |
+    .observedAt = "2020-08-01T00:00:00Z" |
+    .expiresAt = "2099-12-01T00:00:00Z" |
+    setpath($path; $value)
+  ' "$fixtures/snapshot-quiesce-valid.json" >"$candidate"
+  reject_file "$candidate" "$label"
+}
+
+reject_timestamp captured-invalid-calendar '["checksum","capturedAt"]' '2020-02-30T00:00:00Z'
+reject_timestamp stopped-invalid-calendar '["database","stoppedAt"]' '2020-04-31T00:00:00Z'
+reject_timestamp observed-invalid-calendar '["observedAt"]' '2020-06-31T00:00:00Z'
+reject_timestamp expires-invalid-calendar '["expiresAt"]' '2099-02-31T00:00:00Z'
+
+reject_timestamp captured-fractional '["checksum","capturedAt"]' '2020-02-01T00:00:00.123Z'
+reject_timestamp stopped-fractional '["database","stoppedAt"]' '2020-05-01T00:00:00.123Z'
+reject_timestamp observed-fractional '["observedAt"]' '2020-08-01T00:00:00.123Z'
+reject_timestamp expires-fractional '["expiresAt"]' '2099-12-01T00:00:00.123Z'
+
+reject_timestamp captured-offset '["checksum","capturedAt"]' '2020-02-01T09:00:00+09:00'
+reject_timestamp stopped-offset '["database","stoppedAt"]' '2020-05-01T09:00:00+09:00'
+reject_timestamp observed-offset '["observedAt"]' '2020-08-01T09:00:00+09:00'
+reject_timestamp expires-offset '["expiresAt"]' '2099-12-01T09:00:00+09:00'
+
 jq '.unexpected=true' "$fixtures/snapshot-quiesce-valid.json" >"$tmp_dir/extra.json"
 set +e
 COURSE_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-quiesce-check.sh" "$tmp_dir/extra.json" >/dev/null 2>&1

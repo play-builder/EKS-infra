@@ -26,6 +26,28 @@ reject_mutation '.snapshot.readyToUse=false' "$tmp_dir/not-ready.json"
 reject_mutation '.snapshot.driver="other.csi.example"' "$tmp_dir/wrong-driver.json"
 reject_mutation '.unexpected=true' "$tmp_dir/extra.json"
 
+reject_timestamp() {
+  local label=$1 path=$2 value=$3 candidate status
+  candidate="$tmp_dir/timestamp-$label.json"
+  jq --argjson path "$path" --arg value "$value" '
+    .observedAt = "2020-08-01T00:00:00Z" |
+    .expiresAt = "2099-12-01T00:00:00Z" |
+    setpath($path; $value)
+  ' "$fixtures/snapshot-recovery-valid.json" >"$candidate"
+  set +e
+  COURSE_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$candidate" >/dev/null 2>&1
+  status=$?
+  set -e
+  [[ "$status" -ne 0 ]] || { echo "expected recovery timestamp rejection: $label" >&2; exit 1; }
+}
+
+reject_timestamp observed-invalid-calendar '["observedAt"]' '2020-06-31T00:00:00Z'
+reject_timestamp expires-invalid-calendar '["expiresAt"]' '2099-02-31T00:00:00Z'
+reject_timestamp observed-fractional '["observedAt"]' '2020-08-01T00:00:00.123Z'
+reject_timestamp expires-fractional '["expiresAt"]' '2099-12-01T00:00:00.123Z'
+reject_timestamp observed-offset '["observedAt"]' '2020-08-01T09:00:00+09:00'
+reject_timestamp expires-offset '["expiresAt"]' '2099-12-01T09:00:00+09:00'
+
 for cluster_length in 1 100; do
   cluster_name=$(printf '%*s' "$cluster_length" '' | tr ' ' a)
   candidate="$tmp_dir/cluster-$cluster_length.json"

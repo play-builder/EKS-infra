@@ -12,6 +12,10 @@ course_assert_eks_cluster_arn \
   "$(jq -r '.region // empty' "$recovery")"
 
 course_assert_json "$recovery" '
+  def canonical_utc_seconds:
+    type == "string" and
+    test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
+    ((try (fromdateiso8601 | todateiso8601) catch "") == .);
   (keys | sort) == ["clusterArn","environment","evidenceGrade","expiresAt","gitopsRevision","integrity","observedAt","recovery","region","schemaVersion","snapshot","source"] and
   .schemaVersion == "course.snapshot-recovery/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .environment == "dev" and
   (.region == "ap-northeast-2" or .region == "us-east-1") and (.gitopsRevision | test("^[0-9a-f]{40}$")) and
@@ -23,6 +27,7 @@ course_assert_json "$recovery" '
   (.recovery.roleArn | test("^arn:aws:iam::[0-9]{12}:role/")) and
   (.snapshot | (keys | sort) == ["driver","name","readyToUse","uid","volumeSnapshotClassName"] and .readyToUse == true and .driver == "ebs.csi.aws.com") and
   (.integrity | (keys | sort) == ["algorithm","value"] and .algorithm == "sha256" and (.value | test("^sha256:[0-9a-f]{64}$"))) and
+  (.observedAt | canonical_utc_seconds) and (.expiresAt | canonical_utc_seconds) and
   (.observedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
 ' 'invalid snapshot recovery evidence or source/recovery collision'
 
