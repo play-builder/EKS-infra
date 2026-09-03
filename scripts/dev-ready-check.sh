@@ -67,7 +67,10 @@ course_assert_json "$ready" '
 
 jq -en --slurpfile deployment "$deployment" --slurpfile slo "$slo" --slurpfile ready "$ready" '
   ($deployment[0]) as $d | ($slo[0]) as $s | ($ready[0]) as $r |
+  ($r.workflow.runUrl |
+    capture("^https://github\\.com/(?<repository>[^/]+/cicd-course-sample-app)/actions/runs/[0-9]+$").repository) as $workflow_repository |
   $d.source == $s.source and $d.image == $s.image and
+  $d.source.repository == $workflow_repository and $s.source.repository == $workflow_repository and
   $d.gitopsRevision == $s.gitopsRevision and $d.clusterArn == $s.clusterArn and $d.region == $s.region and
   $r.sourceSha == $d.source.sha and $r.image.repository == $d.image.repository and
   $r.image.indexDigest == $d.image.indexDigest and $r.gitops.devRevision == $d.gitopsRevision and

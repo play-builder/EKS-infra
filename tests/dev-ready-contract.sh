@@ -46,12 +46,29 @@ jq '.attestation.githubUrl="https://github.com/other-owner/cicd-course-sample-ap
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-attestation-repository.json"
 jq '.attestation.githubId=""' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-empty-attestation-id.json"
+jq '.source.repository="attacker/cicd-course-sample-app"' \
+  "$deployment" >"$tmp_dir/deployment-wrong-source-repository.json"
+jq '.source.repository="attacker/cicd-course-sample-app"' \
+  "$slo" >"$tmp_dir/slo-wrong-source-repository.json"
 
 run_rejected() {
   local deployment_file=$1 ready_file=$2 status
   set +e
   AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 bash "$root/scripts/dev-ready-check.sh" \
     "$deployment_file" "$slo" "$ready_file" >/dev/null 2>&1
+  status=$?
+  set -e
+  if [[ "$status" -eq 0 ]]; then
+    echo "expected DEV_READY rejection: $ready_file" >&2
+    exit 1
+  fi
+}
+
+run_rejected_with_slo() {
+  local deployment_file=$1 slo_file=$2 ready_file=$3 status
+  set +e
+  AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 bash "$root/scripts/dev-ready-check.sh" \
+    "$deployment_file" "$slo_file" "$ready_file" >/dev/null 2>&1
   status=$?
   set -e
   if [[ "$status" -eq 0 ]]; then
@@ -75,6 +92,8 @@ run_rejected "$deployment" "$tmp_dir/dev-ready-missing-arm64.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-attestation-id.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-attestation-repository.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-empty-attestation-id.json"
+run_rejected_with_slo "$tmp_dir/deployment-wrong-source-repository.json" \
+  "$tmp_dir/slo-wrong-source-repository.json" "$root/tests/fixtures/dev-ready-ap-northeast-2.json"
 
 grep -Fq '"name": "ci"' "$root/README.md"
 grep -Fq '"event": "push"' "$root/README.md"
