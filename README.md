@@ -132,7 +132,7 @@ Platform controller는 Chapter가 처음 필요로 할 때만 활성화합니다
 | Ch23 | `enable_snapshot_controller=true` | EKS managed `snapshot-controller`와 Retain `VolumeSnapshotClass` 설치 |
 
 ADOT X-Ray trace 입력은 애플리케이션과 OTLP/HTTP protobuf 계약을 사용합니다. `enable_adot_xray=true`일
-때 platform output의 `otlp_http_traces_endpoint`를 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`에 그대로
+때 platform output의 `otlp_http_traces_endpoint`를 `OTEL_EXPORTER_OTLP_ENDPOINT`에 그대로
 설정하며, endpoint는 `:4318/v1/traces`, protocol은 `http/protobuf`입니다. gRPC `4317` 입력은
 이 과정의 애플리케이션 계약에 포함하지 않습니다.
 

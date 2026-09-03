@@ -1,0 +1,11 @@
+[
+  {
+    "databaseId": 101,
+    "headSha": "0123456789abcdef0123456789abcdef01234567",
+    "workflowName": "ci",
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "url": "https://example.invalid/run/101"
+  }
+]

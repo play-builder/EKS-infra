@@ -246,7 +246,7 @@ check_ch02() {
 }
 
 check_workflow_run() {
-  local chapter=$1 repository=${2:-} head_sha=${3:-} workflow_name=${4:-CI} event=${5:-push}
+  local chapter=$1 repository=${2:-} head_sha=${3:-} workflow_name=${4:-ci} event=${5:-push}
   [[ -n "$repository" && -n "$head_sha" ]] || \
     fail "사용법: bash scripts/course-check.sh $chapter <owner/repository> <commit-sha> [workflow] [event]" 64
   require_command gh

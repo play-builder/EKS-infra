@@ -16,8 +16,8 @@ elif [[ "$1 $2" == "run watch" ]]; then
   exit 0
 elif [[ "$1 $2" == "run view" ]]; then
   run_id=$3
-  jq --argjson id "$run_id" --arg sha "$COURSE_CHECK_HEAD_SHA" '
-    {databaseId:$id,headSha:$sha,workflowName:"CI",event:"push",status:"completed",conclusion:"success",url:"https://example.invalid/run/\($id)"}
+  jq --argjson id "$run_id" --arg sha "$COURSE_CHECK_HEAD_SHA" --arg workflow "${COURSE_CHECK_WORKFLOW_NAME:-CI}" '
+    {databaseId:$id,headSha:$sha,workflowName:$workflow,event:"push",status:"completed",conclusion:"success",url:"https://example.invalid/run/\($id)"}
   ' <<<'{}'
 else
   printf 'unexpected gh invocation: %q ' "$@" >&2
@@ -50,6 +50,17 @@ run_case() {
 run_case workflow-runs-one-exact.json 0 'databaseId'
 run_case workflow-runs-none.json 1 'EXACT_RUN_NOT_FOUND'
 run_case workflow-runs-ambiguous.json 1 'AMBIGUOUS_RUN'
+
+default_workflow_output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
+  COURSE_CHECK_RUNS_FIXTURE="$fixtures/workflow-runs-one-exact-lowercase.json" \
+  COURSE_CHECK_HEAD_SHA="$sha" COURSE_CHECK_WORKFLOW_NAME=ci \
+  COURSE_CHECK_WAIT_ATTEMPTS=1 \
+  bash "$root/scripts/course-check.sh" ch05 owner/repo "$sha")
+grep -Fq 'databaseId' <<<"$default_workflow_output"
+grep -Fq '[STATIC] SIMULATED_CLOUD_CONTRACT' <<<"$default_workflow_output"
+
+grep -Fq 'OTEL_EXPORTER_OTLP_ENDPOINT' "$root/README.md"
+! grep -Fq 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT' "$root/README.md"
 
 for region in ap-northeast-2 us-east-1; do
   AWS_REGION=$region COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
