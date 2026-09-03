@@ -30,6 +30,7 @@ tests=(
   ownership-inventory-contract.sh
   retained-identity-contract.sh
   kubernetes-pre-destroy-retained-contract.sh
+  residual-retained-kubernetes-contract.sh
   cleanup-preflight-contract.sh
   checkpoint-teardown-contract.sh
   final-cleanup-contract.sh

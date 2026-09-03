@@ -94,7 +94,11 @@ cleanup_validate_removal() {
       (.environment | IN("dev","prod")) and
       (.classification | type == "string" and length > 0) and
       (.name | type == "string" and length > 0) and
-      (.namespace | type == "string") and (.uid | type == "string" and length > 0)) and
+      (.namespace | type == "string") and
+      (if .kind == "PersistentVolumeClaim" or .kind == "VolumeSnapshot" then
+        (.namespace | length > 0)
+       else .namespace == "" end) and
+      (.uid | type == "string" and length > 0)) and
     ([.retained[] | [.environment,.kind,.namespace,.name,.uid]] | unique | length) == (.retained | length) and
     (.providerSecrets | keys == ["inventorySha256","retained"]) and .providerSecrets.retained == true and
     (.providerSecrets.inventorySha256 | test("^[0-9a-f]{64}$")) and

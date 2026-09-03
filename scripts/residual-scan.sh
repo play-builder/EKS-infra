@@ -115,12 +115,21 @@ scan_once() {
     decision=$(jq -r '.decision' <<<"$resource")
     present=false
     status=0
-    if resource_present "$kind" "$id"; then
-      present=true
-    else
-      status=$?
-      [[ "$status" -ne 2 ]] || course_fail "UNSUPPORTED_CLEANUP_RESOURCE_KIND: $kind"
-    fi
+    case "$kind:$decision" in
+      PersistentVolumeClaim:RETAIN|VolumeSnapshot:RETAIN|VolumeSnapshotContent:RETAIN|Namespace:RETAIN)
+        # These identities were observed before cluster deletion and are bound to
+        # the accepted removal record by cleanup_validate_pre_destroy above.
+        present=true
+        ;;
+      *)
+        if resource_present "$kind" "$id"; then
+          present=true
+        else
+          status=$?
+          [[ "$status" -ne 2 ]] || course_fail "UNSUPPORTED_CLEANUP_RESOURCE_KIND: $kind"
+        fi
+        ;;
+    esac
     if [[ "$decision" == DELETE && "$present" == true ]]; then
       case "$kind" in
         LoadBalancer) ((load_balancers+=1)) ;;
