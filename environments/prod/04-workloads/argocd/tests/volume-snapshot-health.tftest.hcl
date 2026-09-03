@@ -22,9 +22,10 @@ run "volume_snapshot_health_and_manual_bootstrap" {
   command = plan
 
   variables {
-    aws_region       = "us-east-1"
-    gitops_repo_url  = "https://github.com/play-builder/argocd-gitops.git"
-    enable_bootstrap = true
+    aws_region        = "us-east-1"
+    state_bucket_name = "course-prod-state"
+    gitops_repo_url   = "https://github.com/play-builder/argocd-gitops.git"
+    enable_bootstrap  = true
   }
 
   assert {

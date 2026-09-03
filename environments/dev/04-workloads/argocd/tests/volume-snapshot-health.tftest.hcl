@@ -22,8 +22,9 @@ run "volume_snapshot_health_is_terraform_owned" {
   command = plan
 
   variables {
-    aws_region      = "ap-northeast-2"
-    gitops_repo_url = "https://github.com/play-builder/argocd-gitops.git"
+    aws_region       = "ap-northeast-2"
+    state_bucket_name = "course-dev-state"
+    gitops_repo_url  = "https://github.com/play-builder/argocd-gitops.git"
   }
 
   assert {

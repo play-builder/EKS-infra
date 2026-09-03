@@ -47,6 +47,7 @@ override_data {
 
 variables {
   aws_region                      = "us-east-1"
+  state_bucket_name               = "course-prod-state"
   acm_domain_name                 = "example.com"
   hosted_zone_id                  = "Z0123456789"
   enable_course_resources         = false

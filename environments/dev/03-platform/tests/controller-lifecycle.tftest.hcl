@@ -59,6 +59,7 @@ override_data {
 
 variables {
   aws_region                      = "ap-northeast-2"
+  state_bucket_name               = "course-dev-state"
   acm_domain_name                 = "dev.example.com"
   hosted_zone_id                  = "Z0123456789"
   enable_ebs_csi_driver           = false
