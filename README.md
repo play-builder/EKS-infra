@@ -266,26 +266,84 @@ repository import와 위 설정 외의 예상하지 않은 변경이 없는지 �
 
 ## 제거 순서와 비용
 
-Stateful 실습을 했다면 먼저 GitOps switch를 `false`로 되돌리고 동기화해 PostgreSQL StatefulSet을
-제거합니다. 그다음 PVC를 명시적으로 삭제하고 PV가 사라질 때까지 확인합니다.
+Ch26 제거는 개별 Kubernetes 리소스를 직접 삭제하지 않고, digest로 결속된 ownership·GitOps
+증거를 `final-cleanup.sh`가 검증한 뒤에만 수행합니다. 먼저 검토한 Terraform destroy plan과 현재
+cloud inventory를 입력으로 preflight를 실행합니다. 이 명령에는 `COURSE_ID`, `AWS_ACCOUNT_ID`,
+`AWS_REGION`, `COURSE_PROJECT`가 설정되어 있어야 합니다.
 
 ```bash
-kubectl --context course-dev -n app-dev get pvc -l app.kubernetes.io/component=database
-kubectl --context course-dev -n app-dev delete pvc -l app.kubernetes.io/component=database
-kubectl --context course-dev get pv
+bash scripts/cleanup-preflight.sh \
+  --plan "$REVIEWED_DESTROY_PLAN_JSON" \
+  --inventory-source "$LIVE_OWNERSHIP_INPUT" \
+  --inventory-output evidence/cleanup/ownership-inventory.json \
+  --retain-template evidence/cleanup/retain-decisions.json \
+  --preflight-output "$CLEANUP_PREFLIGHT_EVIDENCE"
 ```
 
-PVC 삭제는 EBS data를 되돌릴 수 없게 삭제하는 작업입니다. namespace와 label을 먼저 조회하고,
-필요한 data가 없음을 확인한 후 실행합니다.
+`evidence/cleanup/ownership-inventory.json`의 모든 `DELETE`, `RETAIN`, `EXTERNAL_SHARED` 결정을
+검토합니다. `evidence/cleanup/retain-decisions.json`은 retained/shared 항목만 승인할 수 있으며
+delete 권한을 추가할 수 없습니다. 결정이 틀리면 source inventory와 destroy plan을 고친 뒤
+preflight를 다시 실행합니다. 일치하는 경우에만 `status`를 `APPROVED`로, `approvedAt`을 현재
+canonical UTC seconds 값으로 바꾸고 파일 권한 `0600`을 유지합니다.
 
-이후 클러스터는 반드시 `04 → 03 → 02 → 01` 역순으로 제거합니다. Gateway가 만든 ALB와
-target group이 삭제된 것을 먼저 확인해야 VPC 삭제가 막히지 않습니다. ECR의
-`force_delete=false`와 Secrets Manager의 7일 recovery window는 실수 삭제를 막기 위한
-의도된 보호 장치입니다.
+다음으로 `argocd-gitops` 저장소에서 optional writer를 중지하고 Auto-Sync를 끈 뒤, 검토된
+cleanup commit을 manual full Sync/prune합니다. 두 cluster API가 모두 접근 가능한 동안 순서대로
+`evidence/cleanup/freeze.json`과 `evidence/cleanup/removal.json`을 수집합니다.
+
+```bash
+AWS_REGION="$AWS_REGION" DEV_CLUSTER_NAME="$DEV_CLUSTER_NAME" PROD_CLUSTER_NAME="$PROD_CLUSTER_NAME" \
+  bash scripts/capture-cleanup-evidence.sh freeze \
+    --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
+bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$LAB_EKS_REPO" \
+  --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
+```
+
+EKS 저장소로 돌아와 동일한 파일 집합으로 먼저 dry-run을 실행합니다. `--execute`와 세 confirmation을
+추가한 두 번째 호출만 실제 제거를 허용합니다.
+
+```bash
+cleanup_args=(
+  --plan "$REVIEWED_DESTROY_PLAN_JSON"
+  --inventory evidence/cleanup/ownership-inventory.json
+  --retain-decisions evidence/cleanup/retain-decisions.json
+  --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
+  --in-flight-evidence "$IN_FLIGHT_ZERO_EVIDENCE"
+  --gitops-freeze-evidence "$ARGO_REPO/evidence/cleanup/freeze.json"
+  --gitops-removal-evidence "$ARGO_REPO/evidence/cleanup/removal.json"
+  --dev-context "$DEV_KUBE_CONTEXT"
+  --prod-context "$PROD_KUBE_CONTEXT"
+  --kubernetes-pre-destroy-output evidence/cleanup/kubernetes-pre-destroy.json
+  --residual-output evidence/cleanup/residual.json
+)
+
+bash scripts/final-cleanup.sh "${cleanup_args[@]}"
+bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
+  --confirm-account-id "$AWS_ACCOUNT_ID" \
+  --confirm-region "$AWS_REGION" \
+  --confirm-course-id "$COURSE_ID"
+```
+
+실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist를 내부에서만 역순으로 제거합니다.
+
+- `environments/prod/04-workloads/argocd`
+- `environments/dev/04-workloads/argocd`
+- `environments/prod/03-platform`
+- `environments/dev/03-platform`
+- `environments/prod/02-eks`
+- `environments/dev/02-eks`
+- `environments/prod/01-network`
+- `environments/dev/01-network`
+
+EKS 삭제 전에는 canonical `kubernetes-pre-destroy.json`, 삭제 후에는 AWS/Terraform API만 사용한
+`residual.json`을 원자적으로 기록합니다. PVC, VolumeSnapshot, VolumeSnapshotContent, Namespace와
+provider-side handle은 승인된 retain 결정에 따라 검증되므로 PVC 직접 삭제 명령을 실행하지
+않습니다. Gateway가 만든 ALB와 target group이 남거나 미승인 billable residual이 있으면 완료
+증거가 생성되지 않습니다. ECR의 `force_delete=false`와 Secrets Manager의 7일 recovery window는
+보호 경계로 유지됩니다.
 
 운영 비용이 발생하는 핵심 항목은 NAT Gateway, EKS control plane, EC2 node, ALB, AMP입니다.
-교육 종료 후 `terraform plan -destroy`로 대상 범위를 검토하고, GitOps Application을 먼저
-삭제한 다음 역순으로 destroy합니다.
+최종 PASS는 `evidence/cleanup/residual.json`의 미승인 course-owned billable residual이 0이고
+승인된 retained/external handle이 inventory와 일치할 때만 성립합니다.
 
 ## 검증 범위
 

@@ -3,6 +3,32 @@ set -Eeuo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$root/tests/cleanup-fixture-helpers.sh"
+
+if grep -Eq 'kubectl .*delete[[:space:]]+pvc' "$root/README.md"; then
+  echo 'README bypasses guarded cleanup with direct PVC deletion' >&2
+  exit 1
+fi
+
+readme_line() {
+  local marker=$1
+  local line
+  line=$(grep -nF -- "$marker" "$root/README.md" | head -n 1 | cut -d: -f1)
+  [[ -n "$line" ]] || { echo "README cleanup marker missing: $marker" >&2; exit 1; }
+  printf '%s\n' "$line"
+}
+
+preflight_line=$(readme_line 'bash scripts/cleanup-preflight.sh')
+decision_line=$(readme_line 'evidence/cleanup/retain-decisions.json')
+freeze_line=$(readme_line 'evidence/cleanup/freeze.json')
+removal_line=$(readme_line 'evidence/cleanup/removal.json')
+final_line=$(readme_line 'bash scripts/final-cleanup.sh')
+reverse_line=$(readme_line 'environments/prod/04-workloads/argocd')
+if ! (( preflight_line < decision_line && decision_line < freeze_line && freeze_line <= removal_line \
+  && removal_line < final_line && final_line < reverse_line )); then
+  echo 'README cleanup flow is not in guarded dependency order' >&2
+  exit 1
+fi
+
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence"
