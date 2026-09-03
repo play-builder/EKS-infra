@@ -627,7 +627,8 @@ check_ch15() {
   ' <<<"$app" >/dev/null || fail "Dev Argo Application이 요청 GitOps revision에서 Synced/Healthy가 아닙니다."
   cluster_name=${cluster_arn##*/}
   cluster=$(aws eks describe-cluster --name "$cluster_name" --region "$region" --profile "$AWS_PROFILE" --output json)
-  jq -e --arg arn "$cluster_arn" --arg region "$region" '.cluster.arn == $arn and .cluster.status == "ACTIVE" and .cluster.arn | contains(":"+$region+":")' \
+  jq -e --arg arn "$cluster_arn" --arg region "$region" \
+    '.cluster.arn == $arn and .cluster.status == "ACTIVE" and (.cluster.arn | contains(":"+$region+":"))' \
     <<<"$cluster" >/dev/null || fail "Dev EKS cluster ARN/Region/ACTIVE 상태가 일치하지 않습니다."
   now=${COURSE_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
   grade=$(runtime_grade)
@@ -637,8 +638,13 @@ check_ch15() {
       {schemaVersion:"course.dev-deployment/v1",evidenceGrade:$grade,status:{sync:"Synced",health:"Healthy"},
        source:{repository:$source_repository,sha:$source_sha},image:{repository:$image_repository,indexDigest:$image_digest},
        gitopsRevision:$gitops_revision,clusterArn:$cluster_arn,region:$region,observedAt:$now}')
+  (
+    candidate=$(mktemp "${output}.candidate.XXXXXX")
+    trap 'rm -f -- "$candidate"' EXIT
+    printf '%s\n' "$payload" >"$candidate"
+    validate_dev_deployment_evidence "$candidate" "$now" "$grade"
+  )
   write_json_atomic "$output" "$payload"
-  validate_dev_deployment_evidence "$output" "$now" "$grade"
   printf 'DEV_DEPLOYMENT_EVIDENCE: %s\n' "$output"
 }
 
