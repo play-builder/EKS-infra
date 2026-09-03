@@ -30,6 +30,8 @@ jq '.workflow.event="workflow_dispatch"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-event.json"
 jq '.workflow.runUrl="https://github.com/play-builder/cicd-course-sample-app/actions/runs/999"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-run-url.json"
+jq '.workflow.runUrl="https://github.com/other-owner/cicd-course-sample-app/actions/runs/101"' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-workflow-repository.json"
 jq '.workflow.runId=101' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-numeric-run-id.json"
 jq '.workflow.runId="not-digits"' \
@@ -38,6 +40,12 @@ jq '.workflow.runAttempt=0' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-zero-run-attempt.json"
 jq '.image.platforms=["linux/amd64"]' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-missing-arm64.json"
+jq '.attestation.githubUrl="https://github.com/play-builder/cicd-course-sample-app/attestations/other-id"' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-attestation-id.json"
+jq '.attestation.githubUrl="https://github.com/other-owner/cicd-course-sample-app/attestations/attestation-101"' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-attestation-repository.json"
+jq '.attestation.githubId=""' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-empty-attestation-id.json"
 
 run_rejected() {
   local deployment_file=$1 ready_file=$2 status
@@ -59,18 +67,24 @@ run_rejected "$deployment" "$tmp_dir/dev-ready-mismatch.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-workflow.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-event.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-run-url.json"
+run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-workflow-repository.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-numeric-run-id.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-nondigit-run-id.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-zero-run-attempt.json"
 run_rejected "$deployment" "$tmp_dir/dev-ready-missing-arm64.json"
+run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-attestation-id.json"
+run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-attestation-repository.json"
+run_rejected "$deployment" "$tmp_dir/dev-ready-empty-attestation-id.json"
 
 grep -Fq '"name": "ci"' "$root/README.md"
 grep -Fq '"event": "push"' "$root/README.md"
 grep -Fq '"runId": "<digits>"' "$root/README.md"
 grep -Fq 'linux/amd64' "$root/README.md"
 grep -Fq 'linux/arm64' "$root/README.md"
+grep -Fq 'attestations/<githubId>' "$root/README.md"
 ! grep -Fq 'Build and publish' "$root/README.md"
 grep -Fq '"name": "ci"' "$root/docs/architecture.md"
+grep -Fq 'attestations/<githubId>' "$root/docs/architecture.md"
 ! grep -Fq 'Build and publish' "$root/docs/architecture.md"
 
 echo 'PASS: canonical DEV_READY and intermediate evidence contract'

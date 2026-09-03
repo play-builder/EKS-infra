@@ -44,16 +44,20 @@ course_assert_json "$ready" '
   .workflow.name == "ci" and .workflow.event == "push" and
   (.workflow.runId | type == "string" and test("^[0-9]+$")) and
   (.workflow.runAttempt | type == "number" and floor == . and . > 0) and
-  ((.workflow.runId) as $run_id |
-    .workflow.runUrl | test("^https://[^/]+/.+/actions/runs/" + $run_id + "$")) and
-  (.image | keys == ["indexDigest","platforms","repository"]) and
-  (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/")) and
-  (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
-  .image.platforms == ["linux/amd64","linux/arm64"] and
-  (.attestation | keys == ["githubId","githubUrl","ociProvenanceDigest","ociSbomDigest"]) and
-  (.attestation.githubId | type == "string" and length > 0) and (.attestation.githubUrl | test("^https://")) and
-  (.attestation.ociSbomDigest | test("^sha256:[0-9a-f]{64}$")) and
-  (.attestation.ociProvenanceDigest | test("^sha256:[0-9a-f]{64}$")) and
+  (
+    (.workflow.runUrl |
+      capture("^https://github\\.com/(?<repository>[^/]+/cicd-course-sample-app)/actions/runs/(?<url_run_id>[0-9]+)$")) as $run_url |
+    ($run_url.url_run_id == .workflow.runId) and
+    (.image | keys == ["indexDigest","platforms","repository"]) and
+    (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/")) and
+    (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
+    .image.platforms == ["linux/amd64","linux/arm64"] and
+    (.attestation | keys == ["githubId","githubUrl","ociProvenanceDigest","ociSbomDigest"]) and
+    (.attestation.githubId | type == "string" and length > 0) and
+    .attestation.githubUrl == ("https://github.com/" + $run_url.repository + "/attestations/" + .attestation.githubId) and
+    (.attestation.ociSbomDigest | test("^sha256:[0-9a-f]{64}$")) and
+    (.attestation.ociProvenanceDigest | test("^sha256:[0-9a-f]{64}$"))
+  ) and
   (.gitops | keys == ["devRevision"]) and (.gitops.devRevision | test("^[0-9a-f]{40}$")) and
   (.cluster | keys == ["arn"]) and
   (.cluster.arn | test("^arn:aws:eks:" + $ENV.AWS_REGION + ":" + $ENV.AWS_ACCOUNT_ID + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]+$")) and

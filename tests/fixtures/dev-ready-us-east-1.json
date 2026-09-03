@@ -17,7 +17,7 @@
   },
   "attestation": {
     "githubId": "attestation-202",
-    "githubUrl": "https://github.com/play-builder/cicd-course-sample-app/attestations/202",
+    "githubUrl": "https://github.com/play-builder/cicd-course-sample-app/attestations/attestation-202",
     "ociSbomDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "ociProvenanceDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
   },
