@@ -14,8 +14,7 @@ infra_oidc_subjects = [
 ]
 
 state_bucket_arns = [
-  "arn:aws:s3:::replace-with-your-dev-state-bucket",
-  "arn:aws:s3:::replace-with-your-prod-state-bucket",
+  "arn:aws:s3:::replace-with-your-state-bucket",
 ]
 
 sample_app_oidc_subjects = [

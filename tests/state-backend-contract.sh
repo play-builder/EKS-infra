@@ -56,4 +56,16 @@ done
   exit 1
 }
 
+shared_identity_example="$root/terraform/iam-github-oidc/terraform.tfvars.example"
+shared_state_bucket_count=$(awk '
+  /^state_bucket_arns[[:space:]]*=/ { in_list = 1; next }
+  in_list && /arn:aws:s3:::/ { count++ }
+  in_list && /^]/ { print count + 0; exit }
+' "$shared_identity_example")
+
+[[ "$shared_state_bucket_count" -eq 1 ]] || {
+  echo "shared identity example must bind the infrastructure role to exactly one backend bucket; found $shared_state_bucket_count" >&2
+  exit 1
+}
+
 echo 'PASS: all downstream remote states require the explicit state bucket input'
