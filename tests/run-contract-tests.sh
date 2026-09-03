@@ -7,6 +7,7 @@ tests=(
   state-backend-contract.sh
   cluster-identity-contract.sh
   saved-plan-cleanup-contract.sh
+  saved-plan-preflight-recovery-contract.sh
   saved-plan-execution-contract.sh
   platform-telemetry-output-contract.sh
   course-check-contract.sh

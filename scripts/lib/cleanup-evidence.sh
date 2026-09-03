@@ -43,6 +43,7 @@ cleanup_validate_saved_plan_manifest() {
       "environments/prod/01-network",
       "environments/dev/01-network"
     ]) and
+    ([.plans[].path] | unique | length) == 8 and
     all(.plans[];
       keys == ["layer","path","sha256"] and
       (.layer | nonblank) and (.path | startswith("/")) and
@@ -62,7 +63,7 @@ cleanup_validate_saved_plan_file() {
     course_fail "SAVED_DESTROY_PLAN_DIGEST_MISMATCH: $layer"
 }
 
-cleanup_validate_saved_destroy_plan() {
+cleanup_inspect_saved_destroy_plan() {
   local layer=$1 saved_plan=$2 inventory=$3 repo_root=$4
   local course=$5 account=$6 region=$7 project=$8 plan_json environment semantic_layer
   environment=${layer#environments/}
@@ -77,6 +78,12 @@ cleanup_validate_saved_destroy_plan() {
 
   plan_json=$(terraform -chdir="$repo_root/$layer" show -json "$saved_plan") || \
     course_fail "SAVED_DESTROY_PLAN_SHOW_FAILED: $layer"
+  jq -e '.format_version | type == "string"' <<<"$plan_json" >/dev/null || \
+    course_fail "SAVED_DESTROY_PLAN_FORMAT_INVALID: $layer"
+  if jq -e '((.resource_changes // []) | type == "array" and length == 0)' <<<"$plan_json" >/dev/null; then
+    printf '%s\n' NO_CHANGES
+    return 0
+  fi
   jq -e '
     (.format_version | type == "string") and
     (.resource_changes | type == "array" and length > 0) and
@@ -129,6 +136,13 @@ cleanup_validate_saved_destroy_plan() {
       else untaggable end;
     all(.resource_changes[]; address_allowed and inventory_allows_delete and tags_allow_delete)
   ' <<<"$plan_json" >/dev/null || course_fail "SAVED_DESTROY_PLAN_OWNERSHIP_MISMATCH: $layer"
+  printf '%s\n' DELETE
+}
+
+cleanup_validate_saved_destroy_plan() {
+  local kind
+  kind=$(cleanup_inspect_saved_destroy_plan "$@")
+  [[ "$kind" == DELETE ]] || course_fail "SAVED_DESTROY_PLAN_NOT_DELETE_ONLY: $1"
 }
 
 cleanup_validate_apply_progress() {
@@ -136,45 +150,91 @@ cleanup_validate_apply_progress() {
   course_require_file "$progress"
   cleanup_assert_canonical_utc_seconds "$progress" 'saved plan progress updatedAt' '["updatedAt"]'
   course_assert_json "$progress" '
-    keys == ["completed","inFlight","manifestSha256","schemaVersion","status","updatedAt"] and
-    .schemaVersion == "course.saved-destroy-progress/v1" and
+    . as $progress |
+    keys == ["completed","inFlight","manifestSha256","registeredPlans","schemaVersion","status","updatedAt"] and
+    .schemaVersion == "course.saved-destroy-progress/v2" and
     (.manifestSha256 | test("^[0-9a-f]{64}$")) and
     (.status == "IN_PROGRESS" or .status == "COMPLETE") and
     (.completed | type == "array" and length <= 8) and
-    all(.completed[]; keys == ["appliedAt","layer","sha256"] and
+    all(.completed[]; keys == ["appliedAt","layer","outcome","path","sha256"] and
+      (.layer | type == "string" and test("[^[:space:]\uFEFF]")) and
+      (.path | type == "string" and startswith("/")) and
       (.sha256 | test("^[0-9a-f]{64}$")) and
+      (.outcome == "APPLIED" or .outcome == "RECOVERED_NO_CHANGES") and
       (.appliedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
         ((try (fromdateiso8601 | todateiso8601) catch "") == .))) and
-    (.inFlight == null or (.inFlight | keys == ["layer","sha256","startedAt"] and
+    (.inFlight == null or (.inFlight | keys == ["layer","path","sha256","startedAt"] and
+      (.layer | type == "string" and test("[^[:space:]\uFEFF]")) and
+      (.path | type == "string" and startswith("/")) and
       (.sha256 | test("^[0-9a-f]{64}$")) and
       (.startedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
         ((try (fromdateiso8601 | todateiso8601) catch "") == .)))) and
+    (.registeredPlans | type == "array" and length >= 8 and length <= 32) and
+    all(.registeredPlans[];
+      keys == ["layer","path","sha256"] and
+      (.layer | type == "string" and test("[^[:space:]\uFEFF]")) and
+      (.path | type == "string" and startswith("/")) and
+      (.sha256 | test("^[0-9a-f]{64}$"))) and
+    ([.registeredPlans[] | [.path,.sha256]] | unique | length) == (.registeredPlans | length) and
+    all((.registeredPlans | group_by(.layer)[]); length <= 4) and
+    all(.registeredPlans[]; . as $registered |
+      all($progress.registeredPlans[]; .path != $registered.path or .layer == $registered.layer)) and
+    all(.completed[]; . as $done | any($progress.registeredPlans[];
+      .layer == $done.layer and .path == $done.path and .sha256 == $done.sha256)) and
+    (.inFlight == null or (.inFlight as $active | any(.registeredPlans[];
+      .layer == $active.layer and .path == $active.path and .sha256 == $active.sha256))) and
     (if .status == "COMPLETE" then (.completed | length) == 8 and .inFlight == null
-     else (.completed | length) < 8 end)
+     else (.completed | length) <= 8 and
+       (if (.completed | length) == 8 then .inFlight == null else true end) end)
   ' 'invalid saved destroy plan progress'
-  while IFS=$'\t' read -r index layer sha; do
+  while IFS=$'\t' read -r index layer path sha; do
     [[ $(jq -r --argjson index "$index" '.plans[$index].layer' "$manifest") == "$layer" ]] || \
       course_fail 'SAVED_DESTROY_PROGRESS_LAYER_MISMATCH'
+    [[ $(jq -r --argjson index "$index" '.plans[$index].path' "$manifest") == "$path" ]] || \
+      course_fail 'SAVED_DESTROY_PROGRESS_PATH_MISMATCH'
     [[ $(jq -r --argjson index "$index" '.plans[$index].sha256' "$manifest") == "$sha" ]] || \
       course_fail 'SAVED_DESTROY_PROGRESS_DIGEST_MISMATCH'
-  done < <(jq -r '.completed | to_entries[] | [.key,.value.layer,.value.sha256] | @tsv' "$progress")
+  done < <(jq -r '.completed | to_entries[] | [.key,.value.layer,.value.path,.value.sha256] | @tsv' "$progress")
 }
 
-cleanup_remove_completed_plan_files() {
-  local manifest=$1 progress=$2 completed_count saved_plan expected_sha layer
-  completed_count=$(jq -r '.completed | length' "$progress")
-  while IFS=$'\t' read -r layer saved_plan expected_sha; do
+cleanup_remove_registered_plan_files() {
+  local progress=$1 scope=${2:-ALL} saved_plan actual_sha
+  while IFS= read -r saved_plan; do
     if [[ -e "$saved_plan" ]]; then
-      cleanup_validate_saved_plan_file "$saved_plan" "$expected_sha" "$layer"
+      [[ -f "$saved_plan" && ! -L "$saved_plan" ]] || course_fail "SAVED_DESTROY_PLAN_INVALID: $saved_plan"
+      chmod 600 "$saved_plan"
+      actual_sha=$(course_raw_sha256_file "$saved_plan")
+      jq -e --arg path "$saved_plan" --arg sha "$actual_sha" '
+        any(.registeredPlans[]; .path == $path and .sha256 == $sha)
+      ' "$progress" >/dev/null || course_fail "SAVED_DESTROY_REGISTERED_PLAN_DIGEST_MISMATCH: $saved_plan"
       rm -f -- "$saved_plan"
     fi
-  done < <(jq -r --argjson count "$completed_count" '.plans[:$count][] | [.layer,.path,.sha256] | @tsv' "$manifest")
+  done < <(jq -r --arg scope "$scope" '
+    if $scope == "ALL" then
+      [.registeredPlans[].path] | unique[]
+    else
+      [.completed[].layer] as $completedLayers |
+      [.registeredPlans[] | select(.layer as $layer | $completedLayers | index($layer)) | .path] | unique[]
+    end
+  ' "$progress")
+}
+
+cleanup_validate_plan_registry_extension() {
+  local progress=$1 manifest=$2
+  jq -en --argjson existing "$(jq -c '.registeredPlans' "$progress")" \
+    --argjson plans "$(jq -c '[.plans[] | {layer,path,sha256}]' "$manifest")" '
+    ($existing + $plans | unique_by([.path,.sha256])) as $all |
+    ($all | length) <= 32 and
+    all(($all | group_by(.layer)[]); length <= 4) and
+    all($all[]; . as $registered |
+      all($all[]; .path != $registered.path or .layer == $registered.layer))
+  ' >/dev/null || course_fail 'SAVED_DESTROY_PLAN_REGISTRY_LIMIT_OR_PATH_CONFLICT'
 }
 
 cleanup_apply_saved_plans() {
   local manifest=$1 repo_root=$2 inventory=$3 progress=$4 project=$5
   local manifest_sha progress_manifest_sha completed_count layer saved_plan expected_sha actual_manifest_sha now payload
-  local course account region
+  local course account region recovery=false recovery_kind='' index plan_kind
   cleanup_validate_saved_plan_manifest "$manifest" "$repo_root"
   cleanup_validate_inventory "$inventory"
   course=$(jq -r '.courseId' "$inventory")
@@ -187,66 +247,117 @@ cleanup_apply_saved_plans() {
     cleanup_validate_apply_progress "$progress" "$manifest"
     course_assert_file_mode "$progress" 600
     progress_manifest_sha=$(jq -r '.manifestSha256' "$progress")
-    if [[ "$progress_manifest_sha" != "$manifest_sha" && $(jq -r '.inFlight == null' "$progress") == true ]]; then
-      course_fail 'SAVED_DESTROY_PROGRESS_MANIFEST_MISMATCH'
-    fi
-    cleanup_remove_completed_plan_files "$manifest" "$progress"
-    if [[ $(jq -r '.status' "$progress") == COMPLETE ]]; then
+    completed_count=$(jq -r '.completed | length' "$progress")
+    if [[ "$completed_count" -eq 8 ]]; then
+      [[ "$progress_manifest_sha" == "$manifest_sha" ]] || course_fail 'SAVED_DESTROY_PROGRESS_MANIFEST_MISMATCH'
+      if [[ $(jq -r '.status' "$progress") != COMPLETE ]]; then
+        now=$(course_now)
+        payload=$(jq --arg now "$now" '.status="COMPLETE" | .updatedAt=$now' "$progress")
+        course_write_json "$progress" "$payload"
+      fi
+      cleanup_remove_registered_plan_files "$progress" ALL
       return 0
     fi
-    if [[ $(jq -r '.inFlight != null' "$progress") == true ]]; then
-      completed_count=$(jq -r '.completed | length' "$progress")
+    if [[ "$progress_manifest_sha" == "$manifest_sha" ]]; then
+      [[ $(jq -r '.inFlight == null' "$progress") == true ]] || {
+        layer=$(jq -r '.inFlight.layer' "$progress")
+        course_fail "SAVED_DESTROY_PLAN_REVIEW_REQUIRED_AFTER_FAILURE: $layer"
+      }
+    else
+      [[ $(jq -r '.inFlight != null' "$progress") == true ]] || \
+        course_fail 'SAVED_DESTROY_PROGRESS_MANIFEST_MISMATCH'
       layer=$(jq -r '.inFlight.layer' "$progress")
       expected_sha=$(jq -r --argjson index "$completed_count" '.plans[$index].sha256' "$manifest")
       [[ "$layer" == "$(jq -r --argjson index "$completed_count" '.plans[$index].layer' "$manifest")" ]] || \
         course_fail 'SAVED_DESTROY_PROGRESS_LAYER_MISMATCH'
       [[ "$expected_sha" != "$(jq -r '.inFlight.sha256' "$progress")" ]] || \
         course_fail "SAVED_DESTROY_PLAN_REVIEW_REQUIRED_AFTER_FAILURE: $layer"
+      recovery=true
     fi
-    payload=$(jq --arg manifest "$manifest_sha" '
-      .manifestSha256=$manifest | .inFlight=null | .status="IN_PROGRESS"
-    ' "$progress")
-    course_write_json "$progress" "$payload"
   else
+    completed_count=0
+  fi
+
+  index=$completed_count
+  while IFS=$'\t' read -r layer saved_plan expected_sha; do
+    cleanup_validate_saved_plan_file "$saved_plan" "$expected_sha" "$layer"
+    plan_kind=$(cleanup_inspect_saved_destroy_plan "$layer" "$saved_plan" "$inventory" "$repo_root" \
+      "$course" "$account" "$region" "$project")
+    if [[ "$plan_kind" == NO_CHANGES ]]; then
+      [[ "$recovery" == true && "$index" -eq "$completed_count" ]] || \
+        course_fail "SAVED_DESTROY_PLAN_NOT_DELETE_ONLY: $layer"
+      recovery_kind=NO_CHANGES
+    else
+      [[ "$plan_kind" == DELETE ]] || course_fail "SAVED_DESTROY_PLAN_NOT_DELETE_ONLY: $layer"
+      if [[ "$recovery" == true && "$index" -eq "$completed_count" ]]; then recovery_kind=DELETE; fi
+    fi
+    index=$((index + 1))
+  done < <(jq -r --argjson start "$completed_count" '.plans[$start:][] | [.layer,.path,.sha256] | @tsv' "$manifest")
+  actual_manifest_sha=$(course_raw_sha256_file "$manifest")
+  [[ "$actual_manifest_sha" == "$manifest_sha" ]] || course_fail 'SAVED_DESTROY_PLAN_MANIFEST_CHANGED'
+
+  if [[ ! -e "$progress" ]]; then
     now=$(course_now)
-    payload=$(jq -n --arg manifest "$manifest_sha" --arg now "$now" '{
-      schemaVersion:"course.saved-destroy-progress/v1",status:"IN_PROGRESS",
-      manifestSha256:$manifest,completed:[],inFlight:null,updatedAt:$now
+    payload=$(jq -n --arg manifest "$manifest_sha" --arg now "$now" \
+      --argjson plans "$(jq -c '[.plans[] | {layer,path,sha256}]' "$manifest")" '{
+      schemaVersion:"course.saved-destroy-progress/v2",status:"IN_PROGRESS",
+      manifestSha256:$manifest,completed:[],inFlight:null,registeredPlans:$plans,updatedAt:$now
     }')
+    course_write_json "$progress" "$payload"
+  elif [[ "$recovery" == true ]]; then
+    cleanup_validate_plan_registry_extension "$progress" "$manifest"
+    now=$(course_now)
+    payload=$(jq --arg manifest "$manifest_sha" --arg now "$now" \
+      --argjson plans "$(jq -c '[.plans[] | {layer,path,sha256}]' "$manifest")" '
+      .manifestSha256=$manifest | .inFlight=null | .status="IN_PROGRESS" | .updatedAt=$now |
+      .registeredPlans=([.registeredPlans[], $plans[]] | unique_by([.path,.sha256]) | sort_by(.layer,.path,.sha256))
+    ' "$progress")
+    if [[ "$recovery_kind" == NO_CHANGES ]]; then
+      layer=$(jq -r --argjson index "$completed_count" '.plans[$index].layer' "$manifest")
+      saved_plan=$(jq -r --argjson index "$completed_count" '.plans[$index].path' "$manifest")
+      expected_sha=$(jq -r --argjson index "$completed_count" '.plans[$index].sha256' "$manifest")
+      payload=$(jq --arg layer "$layer" --arg path "$saved_plan" --arg sha "$expected_sha" --arg now "$now" '
+        .completed += [{layer:$layer,path:$path,sha256:$sha,outcome:"RECOVERED_NO_CHANGES",appliedAt:$now}]
+      ' <<<"$payload")
+      completed_count=$((completed_count + 1))
+    fi
     course_write_json "$progress" "$payload"
   fi
 
-  completed_count=$(jq -r '.completed | length' "$progress")
-  while IFS=$'\t' read -r layer saved_plan expected_sha; do
-    cleanup_validate_saved_plan_file "$saved_plan" "$expected_sha" "$layer"
-    cleanup_validate_saved_destroy_plan "$layer" "$saved_plan" "$inventory" "$repo_root" \
-      "$course" "$account" "$region" "$project"
-  done < <(jq -r --argjson start "$completed_count" '.plans[$start:][] | [.layer,.path,.sha256] | @tsv' "$manifest")
+  cleanup_remove_registered_plan_files "$progress" COMPLETED
+  if [[ "$completed_count" -eq 8 ]]; then
+    now=$(course_now)
+    payload=$(jq --arg now "$now" '.status="COMPLETE" | .updatedAt=$now' "$progress")
+    course_write_json "$progress" "$payload"
+    cleanup_remove_registered_plan_files "$progress" ALL
+    return 0
+  fi
 
   while IFS=$'\t' read -r layer saved_plan expected_sha; do
     actual_manifest_sha=$(course_raw_sha256_file "$manifest")
     [[ "$actual_manifest_sha" == "$manifest_sha" ]] || course_fail 'SAVED_DESTROY_PLAN_MANIFEST_CHANGED'
     cleanup_validate_saved_plan_file "$saved_plan" "$expected_sha" "$layer"
     now=$(course_now)
-    payload=$(jq --arg layer "$layer" --arg sha "$expected_sha" --arg now "$now" '
-      .inFlight={layer:$layer,sha256:$sha,startedAt:$now} | .updatedAt=$now
+    payload=$(jq --arg layer "$layer" --arg path "$saved_plan" --arg sha "$expected_sha" --arg now "$now" '
+      .inFlight={layer:$layer,path:$path,sha256:$sha,startedAt:$now} | .updatedAt=$now
     ' "$progress")
     course_write_json "$progress" "$payload"
     if ! terraform -chdir="$repo_root/$layer" apply "$saved_plan"; then
       course_fail "TERRAFORM_SAVED_PLAN_APPLY_FAILED: $layer"
     fi
     now=$(course_now)
-    payload=$(jq --arg layer "$layer" --arg sha "$expected_sha" --arg now "$now" '
-      .completed += [{layer:$layer,sha256:$sha,appliedAt:$now}] |
+    payload=$(jq --arg layer "$layer" --arg path "$saved_plan" --arg sha "$expected_sha" --arg now "$now" '
+      .completed += [{layer:$layer,path:$path,sha256:$sha,outcome:"APPLIED",appliedAt:$now}] |
       .inFlight=null | .updatedAt=$now
     ' "$progress")
     course_write_json "$progress" "$payload"
-    rm -f -- "$saved_plan"
+    cleanup_remove_registered_plan_files "$progress" COMPLETED
   done < <(jq -r --argjson start "$completed_count" '.plans[$start:][] | [.layer,.path,.sha256] | @tsv' "$manifest")
 
   now=$(course_now)
   payload=$(jq --arg now "$now" '.status="COMPLETE" | .inFlight=null | .updatedAt=$now' "$progress")
   course_write_json "$progress" "$payload"
+  cleanup_remove_registered_plan_files "$progress" ALL
 }
 
 cleanup_normalize_absolute_path() {

@@ -381,10 +381,12 @@ bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
 
 실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist의 digest-bound saved plan을
 `terraform apply <saved-plan>`으로 적용합니다. 성공한 layer/digest는 권한 `0600`인
-`saved-plan-progress.json`에 원자적으로 기록한 뒤 해당 binary plan을 즉시 삭제합니다. 중간 실패 시
-성공 prefix만 건너뛰며, 결과가 불확실한 in-flight layer는 현재 state로 새 destroy plan을 만들고
-다시 review하여 manifest digest를 갱신하기 전에는 재실행하지 않습니다. 모든 layer가 완료되면 남은
-binary plan도 제거합니다.
+`course.saved-destroy-progress/v2` progress에 원자적으로 기록한 뒤 해당 binary plan을 즉시 삭제합니다.
+progress는 원본과 교체 plan의 path/digest를 모두 등록합니다. 중간 실패 시 성공 prefix만 건너뛰며,
+결과가 불확실한 in-flight layer는 현재 state로 새 plan을 만들고 다시 review해야 합니다. 새 plan이
+delete-only이면 그 plan을 적용하고, no-change이면 `RECOVERED_NO_CHANGES`로 완료 처리합니다. 전체
+remaining plan의 semantic preflight가 끝나기 전에는 manifest binding을 변경하지 않습니다. 모든
+layer가 완료되면 등록된 원본/교체 binary plan을 모두 제거합니다.
 
 - `environments/prod/04-workloads/argocd`
 - `environments/dev/04-workloads/argocd`
