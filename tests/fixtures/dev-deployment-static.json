@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "course.dev-deployment/v1",
+  "evidenceGrade": "STATIC",
+  "status": {"sync": "Synced", "health": "Healthy"},
+  "source": {"repository": "play-builder/cicd-course-sample-app", "sha": "0123456789abcdef0123456789abcdef01234567"},
+  "image": {"repository": "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/course/sample-app", "indexDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+  "gitopsRevision": "89abcdef0123456789abcdef0123456789abcdef",
+  "clusterArn": "arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-course",
+  "region": "ap-northeast-2",
+  "observedAt": "2026-09-03T10:00:00Z"
+}

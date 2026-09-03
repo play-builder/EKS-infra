@@ -33,7 +33,7 @@ GitHub OIDC + ECR
 | shared | GitHub OIDC, ECR, GitHub Actions IAM role | EKS cluster |
 | 01-network | VPC, subnet, NAT, route | EKS |
 | 02-eks | EKS 1.36, node group, Access Entry, OIDC provider | platform chart |
-| 03-platform | Gateway CRD, AWS LBC, ExternalDNS, AMP, ADOT, IRSA, `course-gp3` | sample-app/PVC |
+| 03-platform | Gateway CRD, AWS LBC, ExternalDNS, External Secrets, AMP, ADOT, IRSA, `course-gp3` | sample-app/PVC |
 | 04-workloads | Argo CD, Argo Rollouts, Gateway plugin, bootstrap Application | app manifest 원본 |
 
 ## 전제 도구
@@ -121,6 +121,34 @@ placeholder, secret value, repository 접근을 준비한 뒤 `true`로 바꾸�
 encrypted gp3, volume expansion, `WaitForFirstConsumer`를 사용합니다. Ch01~Ch14에서는 PVC가
 없으므로 EBS volume 비용이 추가되지 않고, Ch14 이후 Stateful 실습에서 처음 provisioning됩니다.
 
+Platform controller는 Chapter가 처음 필요로 할 때만 활성화합니다.
+
+| 시점 | `03-platform` flag | 결과 |
+| --- | --- | --- |
+| Ch03 baseline | `enable_external_secrets=true` | Terraform이 External Secrets의 유일한 writer |
+| Ch12 | `enable_reloader=true` | runtime secret rotation이 Rollout의 새 Pod를 생성 |
+| Ch16 Dev | `enable_k6_operator=true`, `enable_amp_alerting=true` | 제한된 부하와 SLO/alert 검증 |
+| Prod | `enable_k6_operator=false` | 강의 load controller 설치 차단 |
+
+Secrets Manager에는 `sample-app-runtime`과 `sample-app-db` 두 shell만 만들며 값은 Terraform으로
+전달하지 않습니다. application reader IRSA는 두 exact ARN의 `DescribeSecret`/`GetSecretValue`만
+허용합니다. Reloader 대상은 runtime secret뿐이며 DB secret rotation은 application Pod reload
+증거로 인정하지 않습니다.
+
+기존 Argo CD Application이 External Secrets를 관리 중이라면 두 writer를 동시에 켜지 않습니다.
+Phase A에서 automated sync와 resources finalizer를 제거한 runtime handoff evidence를 받은 뒤 다음
+검증/가져오기 절차를 실행합니다. 이 스크립트는 `terraform apply`를 실행하지 않습니다.
+
+```bash
+bash scripts/external-secrets-owner-handoff.sh validate-handoff handoff.json
+bash scripts/external-secrets-owner-handoff.sh adopt \
+  environments/dev/03-platform handoff.json adoption.json course-dev
+```
+
+저장된 plan이 no-op이고 UID가 유지된 adoption evidence가 승인된 뒤에만 GitOps Phase B에서 비활성
+Application을 삭제합니다. 마지막으로 `verify-phase-b`가 Application 부재와 controller/CRD UID
+불변을 확인합니다.
+
 ## 2. DEV_READY 게이트
 
 다음 명령이 모두 정상이어야 prod를 시작합니다.
@@ -144,6 +172,25 @@ kubectl -n app-dev get deploy,pod,hpa,externalsecret,gateway,httproute
 - Argo CD Application `Synced/Healthy`
 - sample-app `/version`의 digest 앞 12자리가 GitOps values와 일치
 - AMP에서 `http_requests_total{namespace="app-dev"}` 조회 가능
+
+Ch15와 Ch16 runtime evidence는 EKS-infra가 호출자가 지정한 임시 경로에만 원자적으로 씁니다.
+`argocd-gitops/evidence/dev` 경로에는 직접 쓰지 않으며, 사람이 검토한 뒤 GitOps 변경으로 반영합니다.
+fixture/fake CLI가 활성화된 실행은 항상 `STATIC`이고 promotion input으로 사용할 수 없습니다.
+
+```bash
+bash scripts/course-check.sh ch15 <context> <namespace> <application> \
+  <source-repository> <source-sha> <image-repository> <image-digest> \
+  <gitops-revision> <cluster-arn> <region> --output <temporary-path>
+
+ALERT_DELIVERY_EVIDENCE=<firing-and-resolved.json> \
+bash scripts/course-check.sh ch16 <ch15-evidence> <context> <k6-namespace> \
+  <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <temporary-path>
+```
+
+Ch15는 Stateless deployment 상태만 증명합니다. DB endpoint, DB query span, PostgreSQL PVC는 Ch20
+이후 evidence에서만 다룹니다. Ch16은 현재 Ch15 identity와 동일한 source/image/GitOps/cluster/Region,
+k6 controller와 bounded TestRun, AMP query, confirmed SNS subscription, Firing/Resolved 전달을 모두
+확인해야 `course.dev-slo/v1`을 생성합니다.
 
 ## 3. prod 클러스터
 

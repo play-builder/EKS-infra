@@ -10,6 +10,11 @@ tests=(
   oidc-ownership-handoff-contract.sh
   ecr-lifecycle-preview-contract.sh
   network-policy-runtime-contract.sh
+  external-secrets-owner-handoff-contract.sh
+  secret-freshness-contract.sh
+  alerting-contract.sh
+  k6-operator-contract.sh
+  dev-evidence-handoff-contract.sh
 )
 
 for test_file in "${tests[@]}"; do

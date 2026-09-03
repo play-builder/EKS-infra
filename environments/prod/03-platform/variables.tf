@@ -200,3 +200,98 @@ variable "amg_authentication_providers" {
   type        = list(string)
   default     = ["AWS_SSO"]
 }
+
+variable "enable_external_secrets" {
+  description = "Install the Terraform-owned External Secrets controller from the Ch03 baseline"
+  type        = bool
+  default     = true
+}
+
+variable "external_secrets_chart_version" {
+  description = "Pinned External Secrets chart version"
+  type        = string
+  default     = "2.10.0"
+}
+
+variable "external_secrets_ownership_mode" {
+  description = "fresh creates a new release; adopted requires reviewed runtime adoption evidence"
+  type        = string
+  default     = "fresh"
+
+  validation {
+    condition     = contains(["fresh", "adopted"], var.external_secrets_ownership_mode)
+    error_message = "external_secrets_ownership_mode must be fresh or adopted."
+  }
+}
+
+variable "external_secrets_adoption_evidence_path" {
+  description = "Path to course.platform-release-adoption/v1 evidence for an existing release"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "enable_reloader" {
+  description = "Enable Reloader at the first Ch12 platform apply"
+  type        = bool
+  default     = false
+}
+
+variable "reloader_chart_version" {
+  description = "Pinned Stakater Reloader chart version"
+  type        = string
+  default     = "2.2.16"
+}
+
+variable "enable_adot_xray" {
+  description = "Enable OTLP trace ingestion and the AWS X-Ray exporter"
+  type        = bool
+  default     = false
+}
+
+variable "enable_amp_alerting" {
+  description = "Enable AMP recording rules and Alertmanager only when explicitly approved"
+  type        = bool
+  default     = false
+}
+
+variable "enable_sns_alert_delivery" {
+  description = "Enable SNS alert delivery after an endpoint is supplied"
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.enable_sns_alert_delivery || var.enable_amp_alerting
+    error_message = "enable_sns_alert_delivery requires enable_amp_alerting=true."
+  }
+}
+
+variable "sns_alert_email_endpoint" {
+  description = "Optional email endpoint; confirmation is verified at runtime"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "enable_k6_operator" {
+  description = "Course load generation is Dev-only and must stay disabled in Prod"
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.enable_k6_operator
+    error_message = "K6_OPERATOR_DEV_ONLY: Prod must not install the course load controller."
+  }
+}
+
+variable "k6_operator_chart_version" {
+  description = "Pinned Grafana k6 operator chart version"
+  type        = string
+  default     = "4.6.0"
+}
+
+variable "k6_operator_namespace" {
+  description = "Dedicated controller namespace for k6"
+  type        = string
+  default     = "k6-operator-system"
+}

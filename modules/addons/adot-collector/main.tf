@@ -30,16 +30,24 @@ resource "aws_iam_role_policy" "adot" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AMPRemoteWrite"
-        Effect = "Allow"
-        Action = [
-          "aps:RemoteWrite"
-        ]
-        Resource = var.amp_workspace_arn
-      }
-    ]
+    Statement = concat(
+      [
+        {
+          Sid      = "AMPRemoteWrite"
+          Effect   = "Allow"
+          Action   = ["aps:RemoteWrite"]
+          Resource = var.amp_workspace_arn
+        }
+      ],
+      var.enable_xray ? [
+        {
+          Sid      = "XRayWrite"
+          Effect   = "Allow"
+          Action   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
+          Resource = "*"
+        }
+      ] : []
+    )
   })
 }
 
@@ -147,90 +155,100 @@ resource "kubernetes_manifest" "otel_collector" {
       serviceAccount = kubernetes_service_account_v1.adot_collector[0].metadata[0].name
       image          = var.collector_image
       config = {
-        receivers = {
-          prometheus = {
-            config = {
-              global = {
-                scrape_interval = "15s"
-                scrape_timeout  = "10s"
-              }
-              scrape_configs = [
-                {
-                  job_name              = "kubernetes-pods"
-                  sample_limit          = 10000
-                  kubernetes_sd_configs = [{ role = "pod" }]
-                  relabel_configs = [
-                    {
-                      source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
-                      action        = "keep"
-                      regex         = "true"
-                    },
-                    {
-                      source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
-                      action        = "replace"
-                      target_label  = "__metrics_path__"
-                      regex         = "(.+)"
-                    },
-                    {
-                      source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
-                      action        = "replace"
-                      regex         = "([^:]+)(?::\\d+)?;(\\d+)"
-                      replacement   = "$1:$2"
-                      target_label  = "__address__"
-                    },
-                    {
-                      action = "labelmap"
-                      regex  = "__meta_kubernetes_pod_label_(.+)"
-                    },
-                    {
-                      source_labels = ["__meta_kubernetes_namespace"]
-                      action        = "replace"
-                      target_label  = "namespace"
-                    },
-                    {
-                      source_labels = ["__meta_kubernetes_pod_name"]
-                      action        = "replace"
-                      target_label  = "pod"
-                    }
-                  ]
-                },
-                {
-                  job_name = "kubernetes-nodes-cadvisor"
-                  scheme   = "https"
-                  tls_config = {
-                    ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-                    insecure_skip_verify = true
-                  }
-                  bearer_token_file     = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-                  kubernetes_sd_configs = [{ role = "node" }]
-                  relabel_configs = [
-                    {
-                      action = "labelmap"
-                      regex  = "__meta_kubernetes_node_label_(.+)"
-                    },
-                    {
-                      target_label = "__address__"
-                      replacement  = "kubernetes.default.svc:443"
-                    },
-                    {
-                      source_labels = ["__meta_kubernetes_node_name"]
-                      regex         = "(.+)"
-                      target_label  = "__metrics_path__"
-                      replacement   = "/api/v1/nodes/$1/proxy/metrics/cadvisor"
-                    }
-                  ]
-                  metric_relabel_configs = [
-                    {
-                      source_labels = ["__name__"]
-                      regex         = "container_cpu_usage_seconds_total|container_memory_working_set_bytes|container_network_receive_bytes_total|container_network_transmit_bytes_total|container_fs_reads_bytes_total|container_fs_writes_bytes_total"
-                      action        = "keep"
-                    }
-                  ]
+        receivers = merge(
+          {
+            prometheus = {
+              config = {
+                global = {
+                  scrape_interval = "15s"
+                  scrape_timeout  = "10s"
                 }
-              ]
+                scrape_configs = [
+                  {
+                    job_name              = "kubernetes-pods"
+                    sample_limit          = 10000
+                    kubernetes_sd_configs = [{ role = "pod" }]
+                    relabel_configs = [
+                      {
+                        source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
+                        action        = "keep"
+                        regex         = "true"
+                      },
+                      {
+                        source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
+                        action        = "replace"
+                        target_label  = "__metrics_path__"
+                        regex         = "(.+)"
+                      },
+                      {
+                        source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+                        action        = "replace"
+                        regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+                        replacement   = "$1:$2"
+                        target_label  = "__address__"
+                      },
+                      {
+                        action = "labelmap"
+                        regex  = "__meta_kubernetes_pod_label_(.+)"
+                      },
+                      {
+                        source_labels = ["__meta_kubernetes_namespace"]
+                        action        = "replace"
+                        target_label  = "namespace"
+                      },
+                      {
+                        source_labels = ["__meta_kubernetes_pod_name"]
+                        action        = "replace"
+                        target_label  = "pod"
+                      }
+                    ]
+                  },
+                  {
+                    job_name = "kubernetes-nodes-cadvisor"
+                    scheme   = "https"
+                    tls_config = {
+                      ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+                      insecure_skip_verify = true
+                    }
+                    bearer_token_file     = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+                    kubernetes_sd_configs = [{ role = "node" }]
+                    relabel_configs = [
+                      {
+                        action = "labelmap"
+                        regex  = "__meta_kubernetes_node_label_(.+)"
+                      },
+                      {
+                        target_label = "__address__"
+                        replacement  = "kubernetes.default.svc:443"
+                      },
+                      {
+                        source_labels = ["__meta_kubernetes_node_name"]
+                        regex         = "(.+)"
+                        target_label  = "__metrics_path__"
+                        replacement   = "/api/v1/nodes/$1/proxy/metrics/cadvisor"
+                      }
+                    ]
+                    metric_relabel_configs = [
+                      {
+                        source_labels = ["__name__"]
+                        regex         = "container_cpu_usage_seconds_total|container_memory_working_set_bytes|container_network_receive_bytes_total|container_network_transmit_bytes_total|container_fs_reads_bytes_total|container_fs_writes_bytes_total"
+                        action        = "keep"
+                      }
+                    ]
+                  }
+                ]
+              }
             }
-          }
-        }
+          },
+          var.enable_xray ? {
+            otlp = {
+              protocols = {
+                grpc = { endpoint = "0.0.0.0:4317" }
+                http = { endpoint = "0.0.0.0:4318" }
+              }
+            }
+          } : {}
+        )
 
         processors = {
           batch = {
@@ -239,14 +257,21 @@ resource "kubernetes_manifest" "otel_collector" {
           }
         }
 
-        exporters = {
-          prometheusremotewrite = {
-            endpoint = "${var.amp_workspace_endpoint}api/v1/remote_write"
-            auth = {
-              authenticator = "sigv4auth"
+        exporters = merge(
+          {
+            prometheusremotewrite = {
+              endpoint = "${var.amp_workspace_endpoint}api/v1/remote_write"
+              auth = {
+                authenticator = "sigv4auth"
+              }
             }
-          }
-        }
+          },
+          var.enable_xray ? {
+            awsxray = {
+              region = var.aws_region
+            }
+          } : {}
+        )
 
         extensions = {
           sigv4auth = {
@@ -257,13 +282,22 @@ resource "kubernetes_manifest" "otel_collector" {
 
         service = {
           extensions = ["sigv4auth"]
-          pipelines = {
-            metrics = {
-              receivers  = ["prometheus"]
-              processors = ["batch"]
-              exporters  = ["prometheusremotewrite"]
-            }
-          }
+          pipelines = merge(
+            {
+              metrics = {
+                receivers  = ["prometheus"]
+                processors = ["batch"]
+                exporters  = ["prometheusremotewrite"]
+              }
+            },
+            var.enable_xray ? {
+              traces = {
+                receivers  = ["otlp"]
+                processors = ["batch"]
+                exporters  = ["awsxray"]
+              }
+            } : {}
+          )
         }
       }
     }

@@ -30,6 +30,12 @@ variable "amp_workspace_arn" {
   default     = "*"
 }
 
+variable "enable_xray" {
+  description = "Enable OTLP trace ingestion and the AWS X-Ray exporter"
+  type        = bool
+  default     = false
+}
+
 variable "cert_manager_chart_version" {
   description = "cert-manager chart required by the ADOT EKS add-on"
   type        = string

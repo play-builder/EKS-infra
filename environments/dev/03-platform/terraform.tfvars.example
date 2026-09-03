@@ -12,6 +12,16 @@ enable_external_dns   = true
 enable_metrics_server = true
 enable_amp            = true
 enable_adot_collector = true
+enable_adot_xray      = false
+
+# Controller lifecycle: Ch03 baseline -> Ch12 Reloader -> Ch16 k6/alerting.
+enable_external_secrets         = true
+external_secrets_ownership_mode = "fresh"
+enable_reloader                 = false
+enable_k6_operator              = false
+enable_amp_alerting             = false
+enable_sns_alert_delivery       = false
+# sns_alert_email_endpoint      = "oncall@example.com"
 
 # The available chart release targets Kubernetes 1.35; keep it off for EKS 1.36.
 enable_cluster_autoscaler = false

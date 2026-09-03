@@ -23,6 +23,22 @@ locals {
   eks_cluster_name = data.terraform_remote_state.eks.outputs.cluster_name
   vpc_id           = data.terraform_remote_state.network.outputs.vpc_id
 
+  external_secrets_adoption = try(
+    var.external_secrets_adoption_evidence_path != null ?
+    jsondecode(file(var.external_secrets_adoption_evidence_path)) : {},
+    {}
+  )
+  external_secrets_adoption_valid = var.external_secrets_ownership_mode == "fresh" || (
+    toset(keys(local.external_secrets_adoption)) == toset(["schemaVersion", "evidenceGrade", "environment", "region", "clusterArn", "handoffSha256", "release", "terraform", "observedAt", "expiresAt"]) &&
+    try(local.external_secrets_adoption.schemaVersion, "") == "course.platform-release-adoption/v1" &&
+    try(local.external_secrets_adoption.evidenceGrade, "") == "CLOUD_RUNTIME" &&
+    try(local.external_secrets_adoption.environment, "") == var.environment &&
+    try(local.external_secrets_adoption.region, "") == var.aws_region &&
+    try(local.external_secrets_adoption.terraform.address, "") == "module.external_secrets[0].helm_release.this" &&
+    try(local.external_secrets_adoption.terraform.imported, false) == true &&
+    try(length(local.external_secrets_adoption.terraform.planActions), -1) == 0
+  )
+
   common_tags = merge(
     var.tags,
     {
@@ -33,6 +49,45 @@ locals {
       Layer       = "platform"
     }
   )
+}
+
+resource "terraform_data" "external_secrets_ownership_gate" {
+  input = {
+    mode         = var.external_secrets_ownership_mode
+    evidencePath = var.external_secrets_adoption_evidence_path
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.external_secrets_adoption_valid
+      error_message = "PLATFORM_OWNER_HANDOFF_BLOCKED: adopted mode requires exact CLOUD_RUNTIME no-op adoption evidence."
+    }
+  }
+}
+
+module "external_secrets" {
+  source = "../../../modules/addons/external-secrets"
+  count  = var.enable_external_secrets ? 1 : 0
+
+  chart_version = var.external_secrets_chart_version
+
+  depends_on = [terraform_data.external_secrets_ownership_gate]
+}
+
+module "reloader" {
+  source = "../../../modules/addons/reloader"
+  count  = var.enable_reloader ? 1 : 0
+
+  chart_version = var.reloader_chart_version
+}
+
+module "k6_operator" {
+  source = "../../../modules/addons/k6-operator"
+
+  enable_k6_operator = var.enable_k6_operator
+  environment        = var.environment
+  namespace          = var.k6_operator_namespace
+  chart_version      = var.k6_operator_chart_version
 }
 
 module "ebs_csi_driver" {
@@ -179,8 +234,24 @@ module "adot_collector" {
 
   amp_workspace_endpoint = var.enable_amp ? module.amp[0].workspace_prometheus_endpoint : ""
   amp_workspace_arn      = var.enable_amp ? module.amp[0].workspace_arn : "*"
+  enable_xray            = var.enable_adot_xray
 
   tags = local.common_tags
+
+  depends_on = [module.amp]
+}
+
+module "amp_alerting" {
+  source = "../../../modules/addons/amp-alerting"
+
+  enabled             = var.enable_amp && var.enable_amp_alerting
+  workspace_id        = var.enable_amp ? module.amp[0].workspace_id : "disabled"
+  workspace_arn       = var.enable_amp ? module.amp[0].workspace_arn : "arn:aws:aps:${var.aws_region}:000000000000:workspace/disabled"
+  aws_region          = var.aws_region
+  enable_sns_delivery = var.enable_amp && var.enable_amp_alerting && var.enable_sns_alert_delivery
+  sns_email_endpoint  = var.sns_alert_email_endpoint
+  name                = local.name
+  tags                = local.common_tags
 
   depends_on = [module.amp]
 }

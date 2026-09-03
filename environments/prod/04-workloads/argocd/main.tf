@@ -23,6 +23,34 @@ locals {
   rollouts_annotations = try(data.terraform_remote_state.platform.outputs.rollouts_amp_role_arn, null) != null ? {
     "eks.amazonaws.com/role-arn" = data.terraform_remote_state.platform.outputs.rollouts_amp_role_arn
   } : {}
+  external_secret_health_lua = <<-LUA
+    hs = {}
+    hs.status = "Progressing"
+    hs.message = "waiting for ExternalSecret Ready condition"
+    if obj.status ~= nil and obj.status.conditions ~= nil then
+      for _, condition in ipairs(obj.status.conditions) do
+        if condition.type == "Ready" then
+          local observed = condition.observedGeneration
+          if observed == nil then observed = obj.status.observedGeneration end
+          if observed == nil or obj.metadata == nil then
+            hs.status = "Progressing"
+            hs.message = "Ready condition has no observed generation"
+          elseif observed ~= obj.metadata.generation then
+            hs.status = "Progressing"
+            hs.message = "Ready condition is stale"
+          elseif condition.status == "True" then
+            hs.status = "Healthy"
+            hs.message = condition.message or "ExternalSecret is Ready"
+          elseif condition.status == "False" then
+            hs.status = "Degraded"
+            hs.message = condition.message or "ExternalSecret is not Ready"
+          end
+          return hs
+        end
+      end
+    end
+    return hs
+  LUA
 }
 
 resource "helm_release" "argocd" {
@@ -42,6 +70,8 @@ resource "helm_release" "argocd" {
           "server.insecure" = true
         }
         cm = {
+          "course.health.external-secret.contract"                                        = "external-secret-ready-health/v1"
+          "resource.customizations.health.external-secrets.io_ExternalSecret"             = local.external_secret_health_lua
           "resource.customizations.ignoreDifferences.gateway.networking.k8s.io_HTTPRoute" = <<-YAML
             jqPathExpressions:
               - 'select(.metadata.labels["rollouts.argoproj.io/gatewayapi-canary"] == "in-progress") | .spec.rules'

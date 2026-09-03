@@ -95,15 +95,34 @@ resource "kubectl_manifest" "aws_lbc_gateway" {
   depends_on = [kubectl_manifest.gateway_api]
 }
 
-resource "aws_secretsmanager_secret" "sample_app" {
+moved {
+  from = aws_secretsmanager_secret.sample_app
+  to   = aws_secretsmanager_secret.sample_app_runtime
+}
+
+resource "aws_secretsmanager_secret" "sample_app_runtime" {
   count = var.enable_course_resources ? 1 : 0
 
-  name                    = "sample-app/${var.environment}/app-secrets"
-  description             = "Secret shell for sample-app ${var.environment}; values are added outside Terraform"
+  name                    = "sample-app/${var.environment}/sample-app-runtime"
+  description             = "Runtime secret shell for sample-app ${var.environment}; values are added outside Terraform"
   recovery_window_in_days = var.secret_recovery_window_in_days
 
   tags = merge(local.common_tags, {
     Application = "sample-app"
+    SecretClass = "runtime"
+  })
+}
+
+resource "aws_secretsmanager_secret" "sample_app_db" {
+  count = var.enable_course_resources ? 1 : 0
+
+  name                    = "sample-app/${var.environment}/sample-app-db"
+  description             = "Database secret shell for sample-app ${var.environment}; values are added outside Terraform"
+  recovery_window_in_days = var.secret_recovery_window_in_days
+
+  tags = merge(local.common_tags, {
+    Application = "sample-app"
+    SecretClass = "database"
   })
 }
 
@@ -123,10 +142,13 @@ module "external_secrets_reader_irsa" {
 
   iam_policy_statements = [
     {
-      sid       = "ReadEnvironmentSecret"
-      effect    = "Allow"
-      actions   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
-      resources = [aws_secretsmanager_secret.sample_app[0].arn]
+      sid     = "ReadExactEnvironmentSecrets"
+      effect  = "Allow"
+      actions = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue"]
+      resources = [
+        aws_secretsmanager_secret.sample_app_runtime[0].arn,
+        aws_secretsmanager_secret.sample_app_db[0].arn,
+      ]
     }
   ]
 
@@ -165,8 +187,28 @@ module "rollouts_amp_irsa" {
 }
 
 output "course_secret_name" {
-  description = "Secrets Manager shell populated after apply"
-  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app[0].name : null
+  description = "Backward-compatible runtime secret name; no secret value enters Terraform state"
+  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_runtime[0].name : null
+}
+
+output "sample_app_runtime_secret_name" {
+  description = "Runtime secret name consumed by the Reloader target"
+  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_runtime[0].name : null
+}
+
+output "sample_app_runtime_secret_arn" {
+  description = "Runtime secret ARN; secret values are populated outside Terraform"
+  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_runtime[0].arn : null
+}
+
+output "sample_app_db_secret_name" {
+  description = "Database secret name that must never trigger the runtime reload path"
+  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_db[0].name : null
+}
+
+output "sample_app_db_secret_arn" {
+  description = "Database secret ARN; secret values are populated outside Terraform"
+  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_db[0].arn : null
 }
 
 output "external_secrets_reader_role_arn" {
