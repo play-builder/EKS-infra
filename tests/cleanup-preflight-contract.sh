@@ -18,7 +18,7 @@ run_valid() {
   jq -e '.evidenceGrade == "STATIC" and (.resources | length == 7)' "$tmp_dir/inventory.json" >/dev/null
   jq -e '.evidenceGrade == "LOCAL_RUNTIME" and .status == "PENDING"' "$tmp_dir/retain-template.json" >/dev/null
   jq -e '.evidenceGrade == "STATIC" and .status == "PASS"' "$tmp_dir/preflight.json" >/dev/null
-  [[ $(stat -f '%Lp' "$tmp_dir/inventory.json") == 600 ]]
+  course_assert_file_mode "$tmp_dir/inventory.json" 600
 }
 run_valid
 

@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$root/scripts/lib/evidence-common.sh"
 fixtures="$root/tests/fixtures"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
@@ -244,7 +245,7 @@ jq -e --arg handoffSha "$runtime_handoff_sha" --slurpfile handoff "$runtime_hand
   .terraform == {address:"module.external_secrets[0].helm_release.this",imported:true,
     planActions:[],stateLineage:"22222222-2222-4222-8222-222222222222",stateSerial:5}
 ' "$runtime_adoption" >/dev/null
-[[ $(stat -f '%Lp' "$runtime_adoption") == 600 ]]
+course_assert_file_mode "$runtime_adoption" 600
 [[ $(grep -Fc -- '--kube-context course-dev -n external-secrets status external-secrets -o json' \
   "$tmp_dir/commands.log") -eq 2 ]]
 grep -Fq -- '-chdir=' "$tmp_dir/commands.log"

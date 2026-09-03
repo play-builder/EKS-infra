@@ -74,6 +74,26 @@ course_runtime_grade() {
   fi
 }
 
+course_file_mode() {
+  local file=$1 mode
+  if mode=$(stat -c '%a' -- "$file" 2>/dev/null); then
+    printf '%s\n' "$mode"
+    return 0
+  fi
+  if mode=$(stat -f '%Lp' -- "$file" 2>/dev/null); then
+    printf '%s\n' "$mode"
+    return 0
+  fi
+  course_fail "unable to read file mode: $file"
+}
+
+course_assert_file_mode() {
+  local file=$1 expected=$2 actual
+  actual=$(course_file_mode "$file")
+  [[ "$actual" == "$expected" ]] || \
+    course_fail "unexpected file mode for $file: expected $expected, got $actual"
+}
+
 course_write_json() {
   local output=$1 payload=$2 output_dir tmp_file
   output_dir=$(dirname -- "$output")
