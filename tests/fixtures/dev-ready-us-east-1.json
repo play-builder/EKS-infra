@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "course.dev-ready/v1",
+  "environment": "dev",
+  "region": "us-east-1",
+  "sourceSha": "3333333333333333333333333333333333333333",
+  "workflow": {
+    "name": "Build and publish",
+    "event": "push",
+    "runId": 202,
+    "runAttempt": 1,
+    "runUrl": "https://github.com/play-builder/cicd-course-sample-app/actions/runs/202"
+  },
+  "image": {
+    "repository": "123456789012.dkr.ecr.us-east-1.amazonaws.com/course/sample-app",
+    "indexDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "platforms": ["linux/amd64", "linux/arm64"]
+  },
+  "attestation": {
+    "githubId": "attestation-202",
+    "githubUrl": "https://github.com/play-builder/cicd-course-sample-app/attestations/202",
+    "ociSbomDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "ociProvenanceDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "gitops": {"devRevision": "4444444444444444444444444444444444444444"},
+  "cluster": {"arn": "arn:aws:eks:us-east-1:123456789012:cluster/dev-playdevops-eks"},
+  "slo": {"evidenceId": "dev-slo-us-202"},
+  "issuedAt": "2026-09-03T00:00:00Z",
+  "expiresAt": "2099-09-03T01:00:00Z"
+}

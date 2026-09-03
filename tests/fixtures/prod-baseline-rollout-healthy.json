@@ -1,0 +1,32 @@
+{
+  "rollout": {
+    "apiVersion": "argoproj.io/v1alpha1",
+    "kind": "Rollout",
+    "metadata": {"name": "sample-app", "namespace": "prod", "uid": "rollout-uid-1"},
+    "spec": {"replicas": 3},
+    "status": {
+      "phase": "Healthy",
+      "stableRS": "stable-hash-v1",
+      "currentPodHash": "stable-hash-v1",
+      "replicas": 3,
+      "readyReplicas": 3,
+      "availableReplicas": 3
+    }
+  },
+  "replicaSets": {
+    "apiVersion": "apps/v1",
+    "items": [
+      {
+        "metadata": {
+          "name": "sample-app-stable-hash-v1",
+          "annotations": {"rollout.argoproj.io/revision": "1"},
+          "labels": {"rollouts-pod-template-hash": "stable-hash-v1"},
+          "ownerReferences": [{"apiVersion": "argoproj.io/v1alpha1", "kind": "Rollout", "name": "sample-app", "uid": "rollout-uid-1", "controller": true}]
+        },
+        "spec": {"replicas": 3},
+        "status": {"replicas": 3, "readyReplicas": 3, "availableReplicas": 3}
+      }
+    ]
+  },
+  "analysisRuns": {"apiVersion": "argoproj.io/v1alpha1", "items": []}
+}

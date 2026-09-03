@@ -1,0 +1,45 @@
+{
+  "profile": {
+    "schemaVersion": "course.prod-live-capacity-profile/v1",
+    "courseId": "course-2026",
+    "accountId": "123456789012",
+    "region": "ap-northeast-2",
+    "clusterArn": "arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks",
+    "subnetIds": ["subnet-001", "subnet-002", "subnet-003"],
+    "reserve": {"cpuMilli": 750, "memoryMiB": 1536, "pods": 3},
+    "workload": {"replicas": 3, "cpuMilliPerPod": 500, "memoryMiBPerPod": 512, "podsPerReplica": 1},
+    "rollout": {"maxSurgePods": 1},
+    "billable": {"estimatedMonthlyUsd": 420, "limitMonthlyUsd": 500},
+    "expiresAt": "2099-09-03T01:00:00Z"
+  },
+  "nodes": {
+    "apiVersion": "v1",
+    "items": [
+      {"metadata": {"name": "node-a"}, "status": {"allocatable": {"cpu": "1930m", "memory": "7500Mi", "pods": "29"}}},
+      {"metadata": {"name": "node-b"}, "status": {"allocatable": {"cpu": "1930m", "memory": "7500Mi", "pods": "29"}}},
+      {"metadata": {"name": "node-c"}, "status": {"allocatable": {"cpu": "1930m", "memory": "7500Mi", "pods": "29"}}}
+    ]
+  },
+  "daemonSets": {
+    "apiVersion": "apps/v1",
+    "items": [
+      {
+        "metadata": {"name": "aws-node"},
+        "status": {"desiredNumberScheduled": 3},
+        "spec": {"template": {"spec": {"containers": [{"resources": {"requests": {"cpu": "100m", "memory": "128Mi"}}}]}}}
+      },
+      {
+        "metadata": {"name": "kube-proxy"},
+        "status": {"desiredNumberScheduled": 3},
+        "spec": {"template": {"spec": {"containers": [{"resources": {"requests": {"cpu": "50m", "memory": "64Mi"}}}]}}}
+      }
+    ]
+  },
+  "subnets": {
+    "Subnets": [
+      {"SubnetId": "subnet-001", "AvailableIpAddressCount": 100},
+      {"SubnetId": "subnet-002", "AvailableIpAddressCount": 100},
+      {"SubnetId": "subnet-003", "AvailableIpAddressCount": 100}
+    ]
+  }
+}

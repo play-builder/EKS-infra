@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "course.capacity-input/v1",
+  "evidenceGrade": "STATIC",
+  "mode": "design",
+  "courseId": "course-2026",
+  "accountId": "123456789012",
+  "region": "ap-northeast-2",
+  "nodes": {
+    "count": 3,
+    "totalCpuMilli": 6000,
+    "totalMemoryMiB": 24576,
+    "totalPodSlots": 87,
+    "minMaxPodsPerNode": 29
+  },
+  "reserve": {"cpuMilli": 750, "memoryMiB": 1536, "pods": 3},
+  "daemonSets": {"cpuMilli": 600, "memoryMiB": 768, "pods": 9},
+  "workload": {"replicas": 3, "cpuMilliPerPod": 500, "memoryMiBPerPod": 512, "podsPerReplica": 1},
+  "rollout": {"maxSurgePods": 1},
+  "network": {"subnetAvailableIps": 300},
+  "billable": {"estimatedMonthlyUsd": 420, "limitMonthlyUsd": 500},
+  "observedAt": "2026-09-03T00:00:00Z",
+  "expiresAt": "2099-09-03T01:00:00Z"
+}
