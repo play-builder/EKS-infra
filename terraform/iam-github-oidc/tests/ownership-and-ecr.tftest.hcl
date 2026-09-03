@@ -12,6 +12,7 @@ run "create_mode_owns_provider" {
   variables {
     aws_region         = "ap-northeast-2"
     oidc_provider_mode = "create"
+    state_bucket_arns  = ["arn:aws:s3:::course-state"]
   }
 
   assert {
@@ -27,6 +28,7 @@ run "external_mode_does_not_own_provider" {
     aws_region                 = "us-east-1"
     oidc_provider_mode         = "external"
     external_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+    state_bucket_arns          = ["arn:aws:s3:::course-state"]
   }
 
   override_data {

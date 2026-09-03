@@ -83,7 +83,9 @@ terraform output
 
 ## 1. dev 클러스터
 
-각 계층에서 example을 복사하고 placeholder를 교체합니다. 실제 `.tfvars`는 gitignore 대상입니다.
+각 계층에서 example을 복사하고 placeholder를 교체합니다. 모든 downstream root의
+`state_bucket_name`은 backend에 전달한 `STATE_BUCKET_NAME`과 동일해야 합니다. 실제 `.tfvars`는
+gitignore 대상이며 아래 `-var`도 같은 값을 명시해 backend와 remote-state 조회가 갈라지지 않게 합니다.
 
 ```bash
 cp environments/dev/01-network/terraform.tfvars.example environments/dev/01-network/terraform.tfvars
@@ -101,7 +103,9 @@ terraform -chdir=environments/dev/<layer> init \
   -backend-config="region=$AWS_REGION" \
   -reconfigure
 
-terraform -chdir=environments/dev/<layer> plan -out=tfplan
+terraform -chdir=environments/dev/<layer> plan \
+  -var="state_bucket_name=$STATE_BUCKET_NAME" \
+  -out=tfplan
 terraform -chdir=environments/dev/<layer> apply tfplan
 ```
 

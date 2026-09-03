@@ -71,6 +71,19 @@ variable "infra_oidc_subjects" {
   ]
 }
 
+variable "state_bucket_arns" {
+  description = "Exact S3 bucket ARNs that store Terraform state and native lock files"
+  type        = set(string)
+
+  validation {
+    condition = length(var.state_bucket_arns) > 0 && alltrue([
+      for arn in var.state_bucket_arns :
+      can(regex("^arn:aws[a-z-]*:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", arn))
+    ])
+    error_message = "state_bucket_arns must contain only exact S3 bucket ARNs without object wildcards."
+  }
+}
+
 variable "sample_app_push_role_name" {
   description = "GitHub Actions role that can push only the sample-app image"
   type        = string
