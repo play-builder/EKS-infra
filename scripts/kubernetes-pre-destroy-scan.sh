@@ -44,19 +44,20 @@ trap 'rm -rf -- "$tmp_dir"' EXIT
 scan_context() {
   local environment=$1 context=$2 prefix
   prefix="$tmp_dir/$environment"
-  kubectl --context "$context" get applications.argoproj.io,rollouts.argoproj.io,deployments.apps,statefulsets.apps,jobs.batch,externalsecrets.external-secrets.io,chaosengines.chaos-mesh.org \
+  kubectl --context "$context" get applications.argoproj.io,rollouts.argoproj.io,deployments.apps,statefulsets.apps,jobs.batch,externalsecrets.external-secrets.io,podchaos.chaos-mesh.org,networkchaos.chaos-mesh.org \
     -A -l "course.id=$course_id" -o json >"$prefix-workloads.json"
   kubectl --context "$context" get jobs.batch -A -l "course.id=$course_id,course.writer=load-generator" -o json >"$prefix-load.json"
   kubectl --context "$context" get jobs.batch -A -l "course.id=$course_id,course.writer=recovery" -o json >"$prefix-recovery.json"
   kubectl --context "$context" get jobs.batch -A -l "course.id=$course_id,course.writer=migration" -o json >"$prefix-migration.json"
-  kubectl --context "$context" get chaosengines.chaos-mesh.org -A -l "course.id=$course_id" -o json >"$prefix-chaos.json"
+  kubectl --context "$context" get podchaos.chaos-mesh.org,networkchaos.chaos-mesh.org -A -l "course.id=$course_id" -o json >"$prefix-chaos.json"
   kubectl --context "$context" get persistentvolumeclaims -A -l "course.id=$course_id" -o json >"$prefix-pvcs.json"
   kubectl --context "$context" get volumesnapshots.snapshot.storage.k8s.io -A -o json >"$prefix-snapshots.json"
+  kubectl --context "$context" get volumesnapshotcontents.snapshot.storage.k8s.io -o json >"$prefix-snapshot-contents.json"
   kubectl --context "$context" get namespaces -o json >"$prefix-namespaces.json"
   kubectl --context "$context" get persistentvolumes -o json >"$prefix-pvs.json"
   kubectl --context "$context" get volumeattachments.storage.k8s.io -o json >"$prefix-attachments.json"
   for file in "$prefix-workloads.json" "$prefix-load.json" "$prefix-recovery.json" "$prefix-migration.json" \
-    "$prefix-chaos.json" "$prefix-pvcs.json" "$prefix-snapshots.json" "$prefix-namespaces.json" \
+    "$prefix-chaos.json" "$prefix-pvcs.json" "$prefix-snapshots.json" "$prefix-snapshot-contents.json" "$prefix-namespaces.json" \
     "$prefix-pvs.json" "$prefix-attachments.json"; do
     jq -e '.items | type == "array"' "$file" >/dev/null || course_fail "invalid kubectl response: $file"
   done
@@ -88,7 +89,7 @@ summary=$(jq -n \
       statefulSets:([$workloads[] | select(.kind == "StatefulSet")] | length),
       jobs:([$workloads[] | select(.kind == "Job")] | length),
       externalSecrets:([$workloads[] | select(.kind == "ExternalSecret")] | length),
-      chaosResources:([$workloads[] | select(.kind | startswith("Chaos") or . == "ChaosEngine")] | length),
+      chaosResources:([$workloads[] | select(.kind | endswith("Chaos"))] | length),
       volumeAttachments:(allitems($devAttachments;$prodAttachments) | length)
     }
   }
@@ -103,13 +104,16 @@ for environment in dev prod; do
     --argjson expected "$retained_storage" \
     --argjson pvcs "$(jq -c . "$tmp_dir/$environment-pvcs.json")" \
     --argjson snapshots "$(jq -c . "$tmp_dir/$environment-snapshots.json")" \
+    --argjson snapshotContents "$(jq -c . "$tmp_dir/$environment-snapshot-contents.json")" \
     --argjson namespaces "$(jq -c . "$tmp_dir/$environment-namespaces.json")" '
     def kube_identity($kind;$item):
       {kind:$kind,namespace:($item.metadata.namespace // ""),name:$item.metadata.name,uid:$item.metadata.uid};
     [$expected[] | select(.environment == $environment and
-      (.kind == "PersistentVolumeClaim" or .kind == "VolumeSnapshot" or .kind == "Namespace"))] as $wanted |
+      (.kind == "PersistentVolumeClaim" or .kind == "VolumeSnapshot" or
+       .kind == "VolumeSnapshotContent" or .kind == "Namespace"))] as $wanted |
     ([ $pvcs.items[] | select(.kind == "PersistentVolumeClaim") | kube_identity("PersistentVolumeClaim"; .) ] +
      [ $snapshots.items[] | select(.kind == "VolumeSnapshot") | kube_identity("VolumeSnapshot"; .) ] +
+     [ $snapshotContents.items[] | select(.kind == "VolumeSnapshotContent") | kube_identity("VolumeSnapshotContent"; .) ] +
      [ $namespaces.items[] | select(
          ($environment == "dev" and (.metadata.name == "app-dev" or .metadata.name == "app-recovery")) or
          ($environment == "prod" and .metadata.name == "app-prod")

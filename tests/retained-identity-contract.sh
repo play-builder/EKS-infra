@@ -10,21 +10,20 @@ jq '
   .resources += [
     {kind:"PersistentVolumeClaim",id:"app-dev/data",environment:"dev",classification:"source-pvc",owner:"course",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
     {kind:"VolumeSnapshot",id:"app-dev/data-snapshot",environment:"dev",classification:"source-snapshot",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
+    {kind:"VolumeSnapshotContent",id:"data-content",environment:"dev",classification:"source-snapshot-content",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
     {kind:"Namespace",id:"app-dev",environment:"dev",classification:"application-namespace",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"namespace cleanup review",followUpAction:"delete after approval"}
   ] |
   .resources |= sort_by(.kind,.id)
 ' "$root/tests/fixtures/cleanup-ownership-valid.json" >"$tmp_dir/inventory.json"
 
-provider_id=$(jq -r '.resources[] | select(.kind == "SecretsManagerSecret") | .id' "$tmp_dir/inventory.json")
-provider_classification=$(jq -r '.resources[] | select(.kind == "SecretsManagerSecret") | .classification' "$tmp_dir/inventory.json")
 provider_sha=$(jq -cS '[.resources[] | select(.kind == "SecretsManagerSecret")] | sort_by(.environment,.id)' \
   "$tmp_dir/inventory.json" | shasum -a 256 | awk '{print $1}')
-jq --arg provider_id "$provider_id" --arg provider_classification "$provider_classification" --arg provider_sha "$provider_sha" '
+jq --arg provider_sha "$provider_sha" '
   .retained = [
     {environment:"dev",namespace:"app-dev",kind:"PersistentVolumeClaim",name:"data",uid:"pvc-uid",classification:"source-pvc",requiresExplicitDeletion:true},
     {environment:"dev",namespace:"app-dev",kind:"VolumeSnapshot",name:"data-snapshot",uid:"snapshot-uid",classification:"source-snapshot",requiresExplicitDeletion:true},
-    {environment:"dev",namespace:"",kind:"Namespace",name:"app-dev",uid:"namespace-uid",classification:"application-namespace",requiresExplicitDeletion:true},
-    {environment:"shared",namespace:"",kind:"SecretsManagerSecret",name:$provider_id,uid:"provider-uid",classification:$provider_classification,requiresExplicitDeletion:true}
+    {environment:"dev",namespace:"",kind:"VolumeSnapshotContent",name:"data-content",uid:"content-uid",classification:"source-snapshot-content",requiresExplicitDeletion:true},
+    {environment:"dev",namespace:"",kind:"Namespace",name:"app-dev",uid:"namespace-uid",classification:"application-namespace",requiresExplicitDeletion:true}
   ] | .providerSecrets.inventorySha256 = $provider_sha
 ' "$root/tests/fixtures/cleanup-gitops-removal-valid.json" >"$tmp_dir/removal.json"
 
@@ -55,5 +54,9 @@ assert_rejected "$tmp_dir/suffix-collision-inventory.json" "$tmp_dir/removal.jso
 
 jq 'del(.retained[2])' "$tmp_dir/removal.json" >"$tmp_dir/omitted-retained.json"
 assert_rejected "$tmp_dir/inventory.json" "$tmp_dir/omitted-retained.json"
+
+jq '.retained += [{environment:"shared",namespace:"",kind:"SecretsManagerSecret",name:"provider",uid:"provider-uid",classification:"provider-secret",requiresExplicitDeletion:true}]' \
+  "$tmp_dir/removal.json" >"$tmp_dir/provider-in-retained.json"
+assert_rejected "$tmp_dir/inventory.json" "$tmp_dir/provider-in-retained.json"
 
 echo 'PASS: retained cleanup identities are complete, typed, and exact'

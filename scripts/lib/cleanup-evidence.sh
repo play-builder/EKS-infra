@@ -90,8 +90,8 @@ cleanup_validate_removal() {
     (.retained | type == "array") and all(.retained[];
       keys == ["classification","environment","kind","name","namespace","requiresExplicitDeletion","uid"] and
       .requiresExplicitDeletion == true and
-      (.kind | IN("PersistentVolumeClaim","VolumeSnapshot","Namespace","SecretsManagerSecret","ProviderSecretReference")) and
-      (.environment | IN("dev","prod","shared")) and
+      (.kind | IN("PersistentVolumeClaim","VolumeSnapshot","VolumeSnapshotContent","Namespace")) and
+      (.environment | IN("dev","prod")) and
       (.classification | type == "string" and length > 0) and
       (.name | type == "string" and length > 0) and
       (.namespace | type == "string") and (.uid | type == "string" and length > 0)) and
@@ -110,9 +110,11 @@ cleanup_validate_removal() {
       end;
     def supported_kind($kind):
       $kind == "PersistentVolumeClaim" or $kind == "VolumeSnapshot" or
-      $kind == "Namespace" or $kind == "SecretsManagerSecret" or $kind == "ProviderSecretReference";
+      $kind == "VolumeSnapshotContent" or $kind == "Namespace";
     all($removal.clusters[];
       .clusterArn | test("^arn:aws:eks:" + $inventory.region + ":" + $inventory.accountId + ":cluster/")) and
+    all($inventory.resources[] | select(.kind == "SecretsManagerSecret");
+      .decision == "RETAIN" or .decision == "EXTERNAL_SHARED") and
     ([ $removal.retained[] | select(supported_kind(.kind)) |
       {environment,kind,classification,id:retained_inventory_id(.)} ] | sort_by(.environment,.kind,.id,.classification)) ==
     ([ $inventory.resources[] | select(.decision == "RETAIN" and supported_kind(.kind)) |
