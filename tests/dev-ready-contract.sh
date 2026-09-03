@@ -50,6 +50,14 @@ jq '.source.repository="attacker/cicd-course-sample-app"' \
   "$deployment" >"$tmp_dir/deployment-wrong-source-repository.json"
 jq '.source.repository="attacker/cicd-course-sample-app"' \
   "$slo" >"$tmp_dir/slo-wrong-source-repository.json"
+jq '.image.repository="123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/"' \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-registry-root-only.json"
+make_dev_handoff "$tmp_dir/dev-ready-registry-root-only.json" \
+  "$tmp_dir/deployment-registry-root-only.json" "$tmp_dir/slo-registry-root-only.json"
+jq '.image.repository="not-an-ecr-repository"' \
+  "$deployment" >"$tmp_dir/deployment-invalid-image-repository.json"
+jq '.image.repository="not-an-ecr-repository"' \
+  "$slo" >"$tmp_dir/slo-invalid-image-repository.json"
 
 run_rejected() {
   local deployment_file=$1 ready_file=$2 status
@@ -94,6 +102,12 @@ run_rejected "$deployment" "$tmp_dir/dev-ready-wrong-attestation-repository.json
 run_rejected "$deployment" "$tmp_dir/dev-ready-empty-attestation-id.json"
 run_rejected_with_slo "$tmp_dir/deployment-wrong-source-repository.json" \
   "$tmp_dir/slo-wrong-source-repository.json" "$root/tests/fixtures/dev-ready-ap-northeast-2.json"
+run_rejected_with_slo "$tmp_dir/deployment-registry-root-only.json" \
+  "$tmp_dir/slo-registry-root-only.json" "$tmp_dir/dev-ready-registry-root-only.json"
+run_rejected_with_slo "$tmp_dir/deployment-invalid-image-repository.json" \
+  "$slo" "$root/tests/fixtures/dev-ready-ap-northeast-2.json"
+run_rejected_with_slo "$deployment" "$tmp_dir/slo-invalid-image-repository.json" \
+  "$root/tests/fixtures/dev-ready-ap-northeast-2.json"
 
 grep -Fq '"name": "ci"' "$root/README.md"
 grep -Fq '"event": "push"' "$root/README.md"

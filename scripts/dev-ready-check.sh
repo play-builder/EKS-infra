@@ -20,7 +20,9 @@ course_assert_json "$deployment" '
   (.status | keys == ["health","sync"]) and .status.sync == "Synced" and .status.health == "Healthy" and
   (.source | keys == ["repository","sha"]) and (.source.repository | type == "string" and length > 0) and
   (.source.sha | test("^[0-9a-f]{40}$")) and
-  (.image | keys == ["indexDigest","repository"]) and (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
+  (.image | keys == ["indexDigest","repository"]) and
+  (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/.+$")) and
+  (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
   (.gitopsRevision | test("^[0-9a-f]{40}$")) and .region == $ENV.AWS_REGION and
   (.observedAt | fromdateiso8601) <= now
 ' 'invalid course.dev-deployment/v1 evidence'
@@ -30,7 +32,9 @@ course_assert_json "$slo" '
   .schemaVersion == "course.dev-slo/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "PASS" and
   (.source | keys == ["repository","sha"]) and (.source.repository | type == "string" and length > 0) and
   (.source.sha | test("^[0-9a-f]{40}$")) and
-  (.image | keys == ["indexDigest","repository"]) and (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
+  (.image | keys == ["indexDigest","repository"]) and
+  (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/.+$")) and
+  (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
   (.gitopsRevision | test("^[0-9a-f]{40}$")) and .region == $ENV.AWS_REGION and
   (.evidenceId | type == "string" and length > 0) and
   (.observedAt | fromdateiso8601) <= now and now < (.expiresAt | fromdateiso8601)
@@ -49,7 +53,7 @@ course_assert_json "$ready" '
       capture("^https://github\\.com/(?<repository>[^/]+/cicd-course-sample-app)/actions/runs/(?<url_run_id>[0-9]+)$")) as $run_url |
     ($run_url.url_run_id == .workflow.runId) and
     (.image | keys == ["indexDigest","platforms","repository"]) and
-    (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/")) and
+    (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/.+$")) and
     (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and
     .image.platforms == ["linux/amd64","linux/arm64"] and
     (.attestation | keys == ["githubId","githubUrl","ociProvenanceDigest","ociSbomDigest"]) and
