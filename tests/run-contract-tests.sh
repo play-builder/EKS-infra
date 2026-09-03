@@ -7,6 +7,7 @@ tests=(
   state-backend-contract.sh
   cluster-identity-contract.sh
   saved-plan-cleanup-contract.sh
+  platform-telemetry-output-contract.sh
   course-check-contract.sh
   evidence-common-contract.sh
   ch10-runtime-contract.sh
@@ -45,6 +46,24 @@ tests=(
 for test_file in "${tests[@]}"; do
   echo "RUN: tests/$test_file"
   bash "$root/tests/$test_file"
+done
+
+terraform_tests=(
+  "terraform/iam-github-oidc|tests/state-lock-policy.tftest.hcl"
+  "terraform/iam-github-oidc|tests/ownership-and-ecr.tftest.hcl"
+  "modules/addons/adot-collector|tests/telemetry-contract.tftest.hcl"
+)
+
+initialized_roots=()
+for test_case in "${terraform_tests[@]}"; do
+  IFS='|' read -r terraform_root test_filter <<<"$test_case"
+  if [[ " ${initialized_roots[*]} " != *" $terraform_root "* ]]; then
+    echo "INIT: $terraform_root"
+    terraform -chdir="$root/$terraform_root" init -backend=false -input=false >/dev/null
+    initialized_roots+=("$terraform_root")
+  fi
+  echo "RUN: $terraform_root/$test_filter"
+  terraform -chdir="$root/$terraform_root" test -filter="$test_filter"
 done
 
 echo 'PASS: offline semantic contract suite'

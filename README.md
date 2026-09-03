@@ -139,7 +139,10 @@ Platform controller는 Chapter가 처음 필요로 할 때만 활성화합니다
 ADOT X-Ray trace 입력은 애플리케이션과 OTLP/HTTP protobuf 계약을 사용합니다. `enable_adot_xray=true`일
 때 platform output의 `otlp_http_traces_endpoint`를 `OTEL_EXPORTER_OTLP_ENDPOINT`에 그대로
 설정하며, endpoint는 `:4318/v1/traces`, protocol은 `http/protobuf`입니다. gRPC `4317` 입력은
-이 과정의 애플리케이션 계약에 포함하지 않습니다.
+이 과정의 애플리케이션 계약에 포함하지 않습니다. 이 active phase에서만 endpoint, protocol,
+`otlp_http_port=4318`, `otlp_http_traces_path=/v1/traces`, `adot_xray_enabled=true`가 함께 게시됩니다.
+AMP metric discovery는 `namespace`, `pod`, `app`, `rollouts_pod_template_hash`만 application label
+계약으로 보존하며 임의 Kubernetes label을 복사하지 않습니다.
 
 Secrets Manager에는 `sample-app-runtime`과 `sample-app-db` 두 shell만 만들며 값은 Terraform으로
 전달하지 않습니다. application reader IRSA는 두 exact ARN의 `DescribeSecret`/`GetSecretValue`만

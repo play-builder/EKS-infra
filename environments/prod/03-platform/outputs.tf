@@ -64,7 +64,7 @@ output "reloader_chart_version" {
 
 output "adot_xray_enabled" {
   description = "Whether the ADOT X-Ray trace pipeline is enabled"
-  value       = var.enable_adot_collector && var.enable_adot_xray
+  value       = var.enable_adot_collector ? module.adot_collector[0].xray_enabled : false
 }
 
 output "otlp_http_traces_endpoint" {
@@ -75,6 +75,16 @@ output "otlp_http_traces_endpoint" {
 output "otlp_traces_protocol" {
   description = "Application trace protocol"
   value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_traces_protocol : null
+}
+
+output "otlp_http_port" {
+  description = "OTLP HTTP receiver port during the active X-Ray phase"
+  value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_http_port : null
+}
+
+output "otlp_http_traces_path" {
+  description = "OTLP HTTP protobuf traces path during the active X-Ray phase"
+  value       = var.enable_adot_collector && var.enable_adot_xray ? module.adot_collector[0].otlp_http_traces_path : null
 }
 
 output "amp_alerting_enabled" {

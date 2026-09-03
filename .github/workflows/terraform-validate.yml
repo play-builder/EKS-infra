@@ -33,6 +33,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: "1.16.0"
+
       - name: Verify course repository contracts
         run: bash tests/run-contract-tests.sh
 
@@ -105,6 +110,7 @@ jobs:
           - terraform/state-backend
           - terraform/iam-github-oidc
           - terraform/github-governance
+          - modules/addons/adot-collector
           - environments/dev/01-network
           - environments/dev/02-eks
           - environments/dev/03-platform
