@@ -33,6 +33,9 @@ reject snapshot-quiesce-volume-attached.json
 reject snapshot-quiesce-unclean-db.json
 reject snapshot-quiesce-checksum-after-stop.json
 
+jq '.database.shutdownSignal="SIGTERM"' "$fixtures/snapshot-quiesce-valid.json" >"$tmp_dir/legacy-sigterm.json"
+reject_file "$tmp_dir/legacy-sigterm.json" legacy-sigterm
+
 jq '.unexpected=true' "$fixtures/snapshot-quiesce-valid.json" >"$tmp_dir/extra.json"
 set +e
 COURSE_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-quiesce-check.sh" "$tmp_dir/extra.json" >/dev/null 2>&1

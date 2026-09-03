@@ -7,7 +7,7 @@
   "gitopsRevision": "2222222222222222222222222222222222222222",
   "source": {"namespace":"app-dev","statefulSet":"sample-app-postgresql","pvcName":"data-sample-app-postgresql-0","pvcUid":"pvc-123","volumeName":"pvc-123"},
   "writers": {"applicationReplicas":0,"migrationActive":0,"migrationPending":0},
-  "database": {"desiredReplicas":0,"readyReplicas":0,"shutdownSignal":"SIGTERM","cleanShutdownObserved":true,"cleanShutdownEvidenceId":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","stoppedAt":"2026-09-03T00:05:00Z"},
+  "database": {"desiredReplicas":0,"readyReplicas":0,"shutdownSignal":"SIGINT","cleanShutdownObserved":true,"cleanShutdownEvidenceId":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","stoppedAt":"2026-09-03T00:05:00Z"},
   "storage": {"mountedPodUids":[],"volumeAttachmentNames":[]},
   "checksum": {"algorithm":"sha256","value":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","capturedAt":"2026-09-03T00:04:00Z"},
   "observedAt":"2026-09-03T00:06:00Z",

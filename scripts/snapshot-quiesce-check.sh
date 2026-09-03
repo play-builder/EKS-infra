@@ -21,7 +21,7 @@ course_assert_json "$evidence" '
   ([.source.namespace,.source.statefulSet,.source.pvcName,.source.pvcUid,.source.volumeName] | all(type == "string" and length > 0)) and
   (.writers | (keys | sort) == ["applicationReplicas","migrationActive","migrationPending"] and all(.[]; type == "number" and floor == . and . == 0)) and
   (.database | (keys | sort) == ["cleanShutdownEvidenceId","cleanShutdownObserved","desiredReplicas","readyReplicas","shutdownSignal","stoppedAt"] and
-    .desiredReplicas == 0 and .readyReplicas == 0 and .shutdownSignal == "SIGTERM" and
+    .desiredReplicas == 0 and .readyReplicas == 0 and .shutdownSignal == "SIGINT" and
     .cleanShutdownObserved == true and (.cleanShutdownEvidenceId | test("^sha256:[0-9a-f]{64}$")) and (.stoppedAt | fromdateiso8601)) and
   (.storage | (keys | sort) == ["mountedPodUids","volumeAttachmentNames"] and .mountedPodUids == [] and .volumeAttachmentNames == []) and
   (.checksum | (keys | sort) == ["algorithm","capturedAt","value"] and .algorithm == "sha256" and (.value | test("^sha256:[0-9a-f]{64}$")) and (.capturedAt | fromdateiso8601)) and
