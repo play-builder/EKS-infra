@@ -76,3 +76,14 @@ run "inactive_xray_withholds_trace_inputs" {
     error_message = "inactive X-Ray must not publish application trace inputs"
   }
 }
+
+run "xray_requires_a_real_collector_endpoint" {
+  command = plan
+
+  variables {
+    enable_xray            = true
+    amp_workspace_endpoint = ""
+  }
+
+  expect_failures = [var.enable_xray]
+}
