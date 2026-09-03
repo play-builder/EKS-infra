@@ -179,6 +179,25 @@ kubectl -n app-dev get deploy,pod,hpa,externalsecret,gateway,httproute
 - sample-app `/version`의 digest 앞 12자리가 GitOps values와 일치
 - AMP에서 `http_requests_total{namespace="app-dev"}` 조회 가능
 
+DEV_READY의 workflow identity는 sample-app의 canonical `ci` workflow에 결속합니다. `runId`는
+숫자로 파싱하지 않고 digit string으로 보존하며, `runUrl`의 마지막 run ID와 일치해야 합니다.
+multi-architecture image는 두 platform을 모두 포함해야 합니다.
+
+```json
+{
+  "workflow": {
+    "name": "ci",
+    "event": "push",
+    "runId": "<digits>",
+    "runAttempt": 1,
+    "runUrl": "https://github.com/play-builder/cicd-course-sample-app/actions/runs/<digits>"
+  },
+  "image": {
+    "platforms": ["linux/amd64", "linux/arm64"]
+  }
+}
+```
+
 Ch15와 Ch16 runtime evidence는 EKS-infra가 호출자가 지정한 임시 경로에만 원자적으로 씁니다.
 `argocd-gitops/evidence/dev` 경로에는 직접 쓰지 않으며, 사람이 검토한 뒤 GitOps 변경으로 반영합니다.
 fixture/fake CLI가 활성화된 실행은 항상 `STATIC`이고 promotion input으로 사용할 수 없습니다.

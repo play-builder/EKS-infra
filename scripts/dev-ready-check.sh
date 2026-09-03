@@ -41,10 +41,11 @@ course_assert_json "$ready" '
   .schemaVersion == "course.dev-ready/v1" and .environment == "dev" and .region == $ENV.AWS_REGION and
   (.sourceSha | test("^[0-9a-f]{40}$")) and
   (.workflow | keys == ["event","name","runAttempt","runId","runUrl"]) and
-  (.workflow.name | type == "string" and length > 0) and (.workflow.event | type == "string" and length > 0) and
-  (.workflow.runId | type == "number" and floor == . and . > 0) and
+  .workflow.name == "ci" and .workflow.event == "push" and
+  (.workflow.runId | type == "string" and test("^[0-9]+$")) and
   (.workflow.runAttempt | type == "number" and floor == . and . > 0) and
-  (.workflow.runUrl | test("^https://")) and
+  ((.workflow.runId) as $run_id |
+    .workflow.runUrl | test("^https://[^/]+/.+/actions/runs/" + $run_id + "$")) and
   (.image | keys == ["indexDigest","platforms","repository"]) and
   (.image.repository | test("^" + $ENV.AWS_ACCOUNT_ID + "\\.dkr\\.ecr\\." + $ENV.AWS_REGION + "\\.amazonaws\\.com/")) and
   (.image.indexDigest | test("^sha256:[0-9a-f]{64}$")) and

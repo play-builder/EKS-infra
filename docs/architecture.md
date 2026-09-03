@@ -50,6 +50,27 @@ External Secrets SA        ─IRSA─▶ Secrets Manager read
 이 그림에서 봐야 할 핵심은 image pull이 application ServiceAccount IRSA가 아니라 kubelet의
 worker node role을 사용한다는 점입니다. Pod별 AWS API 권한은 별도 IRSA로 제한합니다.
 
+## DEV_READY identity
+
+DEV_READY는 sample-app canonical workflow와 immutable image platform 집합을 함께 확인합니다.
+`workflow.name=ci`, `workflow.event=push`, digit string `runId`, positive integer
+`runAttempt`를 사용하고, `runUrl` 마지막 run ID는 `runId`와 같아야 합니다.
+
+```json
+{
+  "workflow": {
+    "name": "ci",
+    "event": "push",
+    "runId": "<digits>",
+    "runAttempt": 1,
+    "runUrl": "https://github.com/play-builder/cicd-course-sample-app/actions/runs/<digits>"
+  },
+  "image": {
+    "platforms": ["linux/amd64", "linux/arm64"]
+  }
+}
+```
+
 ## 네트워크와 가용성
 
 - Worker node는 private subnet에 배치합니다.

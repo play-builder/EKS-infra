@@ -4,9 +4,9 @@
   "region": "ap-northeast-2",
   "sourceSha": "1111111111111111111111111111111111111111",
   "workflow": {
-    "name": "Build and publish",
+    "name": "ci",
     "event": "push",
-    "runId": 101,
+    "runId": "101",
     "runAttempt": 1,
     "runUrl": "https://github.com/play-builder/cicd-course-sample-app/actions/runs/101"
   },
