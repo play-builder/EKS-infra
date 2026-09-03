@@ -16,6 +16,42 @@ jq --arg digest "sha256:$handoff_sha" '.handoffSha256=$digest' \
 bash "$root/scripts/external-secrets-owner-handoff.sh" validate-handoff \
   "$valid" "2026-09-03T12:00:00Z" >/dev/null
 
+expect_handoff_rejected() {
+  local label=$1 expression=$2 candidate
+  candidate="$tmp_dir/$label.json"
+  jq "$expression" "$valid" >"$candidate"
+  if bash "$root/scripts/external-secrets-owner-handoff.sh" validate-handoff \
+    "$candidate" "2026-09-03T12:00:00Z" >/dev/null 2>&1; then
+    echo "invalid handoff was accepted: $label" >&2
+    exit 1
+  fi
+}
+
+expect_cluster_name_accepted() {
+  local label=$1 cluster_name=$2 candidate
+  candidate="$tmp_dir/$label.json"
+  jq --arg name "$cluster_name" \
+    '.clusterArn = "arn:aws:eks:ap-northeast-2:123456789012:cluster/" + $name' \
+    "$valid" >"$candidate"
+  bash "$root/scripts/external-secrets-owner-handoff.sh" validate-handoff \
+    "$candidate" "2026-09-03T12:00:00Z" >/dev/null || {
+      echo "valid handoff cluster-name boundary was rejected: $label" >&2
+      exit 1
+    }
+}
+
+expect_handoff_rejected trailing-cluster-path '.clusterArn += "/junk"'
+expect_handoff_rejected region-mismatch '.region = "us-east-1"'
+expect_handoff_rejected application-identity-mismatch '.application.name = "external-secrets-prod"'
+
+one_character_name=a
+hundred_character_name=$(printf '%0100d' 0)
+hundred_one_character_name=$(printf '%0101d' 0)
+expect_cluster_name_accepted one-character-cluster-name "$one_character_name"
+expect_cluster_name_accepted hundred-character-cluster-name "$hundred_character_name"
+expect_handoff_rejected hundred-one-character-cluster-name \
+  ".clusterArn = \"arn:aws:eks:ap-northeast-2:123456789012:cluster/$hundred_one_character_name\""
+
 if bash "$root/scripts/external-secrets-owner-handoff.sh" validate-handoff \
   "$dual" "2026-09-03T12:00:00Z" >"$tmp_dir/dual.out" 2>&1; then
   echo "dual active reconcilers must be rejected" >&2

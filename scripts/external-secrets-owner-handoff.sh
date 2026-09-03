@@ -22,14 +22,17 @@ validate_handoff() {
   local file=$1 now=${2:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
   [[ -f "$file" ]] || fail "handoff evidence not found: $file"
   jq -e --arg now "$now" '
+    (.clusterArn |
+      capture("^arn:aws:eks:(?<region>ap-northeast-2|us-east-1):[0-9]{12}:cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")) as $cluster |
     (keys | sort) == (["application","clusterArn","environment","evidenceGrade","expiresAt","gitopsRevision","observedAt","ownership","readiness","region","release","schemaVersion"] | sort) and
     .schemaVersion == "course.platform-release-handoff/v1" and
     .evidenceGrade == "CLOUD_RUNTIME" and
     (.environment == "dev" or .environment == "prod") and
     (.region == "ap-northeast-2" or .region == "us-east-1") and
-    (.clusterArn | test("^arn:aws:eks:(ap-northeast-2|us-east-1):[0-9]{12}:cluster/")) and
+    $cluster.region == .region and
     (.gitopsRevision | test("^[0-9a-f]{40}$")) and
     (.application | keys | sort) == (["automated","name","operationInProgress","present","resourcesFinalizerPresent","uid"] | sort) and
+    .application.name == ("external-secrets-" + .environment) and
     .application.present == true and
     .application.automated == false and
     .application.resourcesFinalizerPresent == false and
