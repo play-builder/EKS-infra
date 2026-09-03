@@ -7,13 +7,15 @@ source "$SCRIPT_DIR/lib/evidence-common.sh"
 [[ $# -eq 1 ]] || course_fail 'usage: snapshot-quiesce-check.sh <snapshot-quiesce.json>' 64
 evidence=$1
 course_require_file "$evidence"
+course_assert_eks_cluster_arn \
+  "$(jq -r '.clusterArn // empty' "$evidence")" \
+  "$(jq -r '.region // empty' "$evidence")"
 
 course_assert_json "$evidence" '
   (keys | sort) == ["checksum","clusterArn","database","environment","evidenceGrade","expiresAt","gitopsRevision","observedAt","region","schemaVersion","source","storage","writers"] and
   .schemaVersion == "course.snapshot-quiesce/v1" and .evidenceGrade == "CLOUD_RUNTIME" and
   (.environment == "dev" or .environment == "prod") and
   (.region == "ap-northeast-2" or .region == "us-east-1") and
-  (.region as $region | .clusterArn as $cluster | ($cluster | test("^arn:aws:eks:" + $region + ":[0-9]{12}:cluster/[A-Za-z0-9][A-Za-z0-9_-]+$")) and (($cluster | split(":")[3]) == $region)) and
   (.gitopsRevision | test("^[0-9a-f]{40}$")) and
   (.source | (keys | sort) == ["namespace","pvcName","pvcUid","statefulSet","volumeName"]) and
   ([.source.namespace,.source.statefulSet,.source.pvcName,.source.pvcUid,.source.volumeName] | all(type == "string" and length > 0)) and

@@ -19,6 +19,17 @@ course_validate_account() {
   [[ "$1" =~ ^[0-9]{12}$ ]] || course_fail "invalid AWS account ID" 64
 }
 
+course_assert_eks_cluster_arn() {
+  local arn=$1 region=$2 account=${3:-} account_pattern='[0-9]{12}'
+  course_validate_region "$region"
+  if [[ -n "$account" ]]; then
+    course_validate_account "$account"
+    account_pattern=$account
+  fi
+  [[ "$arn" =~ ^arn:aws:eks:${region}:${account_pattern}:cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$ ]] || \
+    course_fail 'invalid canonical EKS cluster ARN'
+}
+
 course_sha256_file() {
   shasum -a 256 "$1" | awk '{print "sha256:" $1}'
 }

@@ -7,12 +7,14 @@ source "$SCRIPT_DIR/lib/evidence-common.sh"
 [[ $# -eq 1 || $# -eq 2 ]] || course_fail 'usage: snapshot-recovery-check.sh <snapshot-recovery.json> [snapshot-quiesce.json]' 64
 recovery=$1
 course_require_file "$recovery"
+course_assert_eks_cluster_arn \
+  "$(jq -r '.clusterArn // empty' "$recovery")" \
+  "$(jq -r '.region // empty' "$recovery")"
 
 course_assert_json "$recovery" '
   (keys | sort) == ["clusterArn","environment","evidenceGrade","expiresAt","gitopsRevision","integrity","observedAt","recovery","region","schemaVersion","snapshot","source"] and
   .schemaVersion == "course.snapshot-recovery/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .environment == "dev" and
   (.region == "ap-northeast-2" or .region == "us-east-1") and (.gitopsRevision | test("^[0-9a-f]{40}$")) and
-  (.region as $region | .clusterArn | test("^arn:aws:eks:" + $region + ":[0-9]{12}:cluster/[A-Za-z0-9][A-Za-z0-9_-]+$")) and
   (.source | (keys | sort) == ["namespace","pvcName","pvcUid","volumeName"]) and
   (.recovery | (keys | sort) == ["cleanupLabel","namespace","pvcName","roleArn","serviceAccount"]) and
   .source.namespace != .recovery.namespace and .source.pvcName != .recovery.pvcName and

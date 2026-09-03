@@ -17,14 +17,16 @@ output=$3
 : "${AWS_REGION:?AWS_REGION is required}"
 course_validate_region "$AWS_REGION"
 course_require_file "$profile"
+course_assert_eks_cluster_arn \
+  "$(jq -r '.clusterArn // empty' "$profile")" \
+  "$AWS_REGION" \
+  "$(jq -r '.accountId // empty' "$profile")"
 
 course_assert_json "$profile" '
   keys == ["accountId","billable","clusterArn","courseId","expiresAt","region","reserve","rollout","schemaVersion","subnetIds","workload"] and
   .schemaVersion == "course.prod-live-capacity-profile/v1" and
   (.courseId | type == "string" and length > 0) and (.accountId | test("^[0-9]{12}$")) and
   .region == $ENV.AWS_REGION and
-  .accountId as $accountId |
-  (.clusterArn | test("^arn:aws:eks:" + $ENV.AWS_REGION + ":" + $accountId + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]+$")) and
   (.subnetIds | type == "array" and length >= 2 and all(test("^subnet-"))) and
   (.reserve | keys == ["cpuMilli","memoryMiB","pods"]) and
   (.workload | keys == ["cpuMilliPerPod","memoryMiBPerPod","podsPerReplica","replicas"]) and

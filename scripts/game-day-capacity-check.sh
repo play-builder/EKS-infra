@@ -40,15 +40,17 @@ for name in AWS_PROFILE AWS_REGION; do [[ -n "${!name:-}" ]] || course_fail "$na
 course_validate_region "$AWS_REGION"
 course_require_file "$profile"
 [[ -d "$(dirname -- "$output")" ]] || course_fail "output directory not found: $(dirname -- "$output")" 66
+course_assert_eks_cluster_arn \
+  "$(jq -r '.clusterArn // empty' "$profile")" \
+  "$AWS_REGION" \
+  "$(jq -r '.accountId // empty' "$profile")"
 
 course_assert_json "$profile" '
-  .accountId as $accountId |
   keys == ["accountId","billable","clusterArn","courseId","expiresAt","region","reserve","rollout","schemaVersion","subnetIds","workload"] and
   .schemaVersion == "course.prod-live-capacity-profile/v1" and
   (.courseId | type == "string" and length > 0) and
   (.accountId | test("^[0-9]{12}$")) and
   .region == $ENV.AWS_REGION and
-  (.clusterArn | test("^arn:aws:eks:" + $ENV.AWS_REGION + ":" + $accountId + ":cluster/[A-Za-z0-9][A-Za-z0-9_-]+$")) and
   (.subnetIds | type == "array" and length >= 1 and all(test("^subnet-[A-Za-z0-9-]+$"))) and
   (.reserve | keys == ["cpuMilli","memoryMiB","pods"]) and
   (.workload | keys == ["cpuMilliPerPod","memoryMiBPerPod","podsPerReplica","replicas"]) and
