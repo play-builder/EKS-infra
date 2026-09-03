@@ -22,9 +22,9 @@ run "external_secret_health_is_generation_aware" {
   command = plan
 
   variables {
-    aws_region       = "ap-northeast-2"
+    aws_region        = "ap-northeast-2"
     state_bucket_name = "course-dev-state"
-    gitops_repo_url  = "https://github.com/play-builder/argocd-gitops.git"
+    gitops_repo_url   = "https://github.com/play-builder/argocd-gitops.git"
   }
 
   assert {

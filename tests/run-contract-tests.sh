@@ -54,13 +54,13 @@ terraform_tests=(
   "modules/addons/adot-collector|tests/telemetry-contract.tftest.hcl"
 )
 
-initialized_roots=()
+initialized_roots='|'
 for test_case in "${terraform_tests[@]}"; do
   IFS='|' read -r terraform_root test_filter <<<"$test_case"
-  if [[ " ${initialized_roots[*]} " != *" $terraform_root "* ]]; then
+  if [[ "$initialized_roots" != *"|$terraform_root|"* ]]; then
     echo "INIT: $terraform_root"
     terraform -chdir="$root/$terraform_root" init -backend=false -input=false >/dev/null
-    initialized_roots+=("$terraform_root")
+    initialized_roots+="$terraform_root|"
   fi
   echo "RUN: $terraform_root/$test_filter"
   terraform -chdir="$root/$terraform_root" test -filter="$test_filter"
