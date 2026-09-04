@@ -73,6 +73,7 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence"
 prepare_cleanup_fixtures "$root" "$tmp_dir/evidence" ap-northeast-2
+export CLEANUP_RUNTIME_EVIDENCE_MAX_AGE_SECONDS=3153600000
 
 plan="$root/tests/fixtures/cleanup-course-owned.json"
 plan_sha=$(raw_sha256 "$plan")
