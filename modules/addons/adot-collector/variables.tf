@@ -34,6 +34,11 @@ variable "enable_xray" {
   description = "Enable OTLP trace ingestion and the AWS X-Ray exporter"
   type        = bool
   default     = false
+
+  validation {
+    condition     = !var.enable_xray || trimspace(var.amp_workspace_endpoint) != ""
+    error_message = "enable_xray requires a non-empty amp_workspace_endpoint so the collector is created."
+  }
 }
 
 variable "cert_manager_chart_version" {

@@ -1,6 +1,7 @@
 # Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
+state_bucket_name = "replace-with-your-dev-state-bucket"
 course_id    = "replace-with-unique-course-id"
 environment  = "dev"
 

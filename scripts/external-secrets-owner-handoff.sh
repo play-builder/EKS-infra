@@ -198,10 +198,10 @@ verify_terraform_state_owner() {
         .module == "module.external_secrets[0]" and
         .mode == "managed" and .type == "helm_release" and .name == "this"
       )] as $resources |
+    ($resources[0].instances[0].attributes // {}) as $attributes |
     ($resources | length) == 1 and
     $resources[0].provider == "provider[\"registry.terraform.io/hashicorp/helm\"]" and
     ($resources[0].instances | length) == 1 and
-    $resources[0].instances[0].attributes as $attributes |
     $attributes.name == $release.name and
     $attributes.namespace == $release.namespace and
     $attributes.chart == $release.chart and

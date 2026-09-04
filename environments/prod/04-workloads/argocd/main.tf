@@ -4,7 +4,7 @@ data "terraform_remote_state" "eks" {
   backend = "s3"
 
   config = {
-    bucket = "${var.project_name}-infra-tf-${var.environment}"
+    bucket = var.state_bucket_name
     key    = "${var.environment}/02-eks/terraform.tfstate"
     region = var.aws_region
   }
@@ -14,7 +14,7 @@ data "terraform_remote_state" "platform" {
   backend = "s3"
 
   config = {
-    bucket = "${var.project_name}-infra-tf-${var.environment}"
+    bucket = var.state_bucket_name
     key    = "${var.environment}/03-platform/terraform.tfstate"
     region = var.aws_region
   }
@@ -81,10 +81,6 @@ locals {
 
 resource "terraform_data" "course_ownership" {
   input = local.course_ownership
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "helm_release" "argocd" {

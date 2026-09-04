@@ -3,14 +3,15 @@ data "terraform_remote_state" "network" {
   backend = "s3"
 
   config = {
-    bucket = "${var.project_name}-infra-tf-${var.environment}"
+    bucket = var.state_bucket_name
     key    = "${var.environment}/01-network/terraform.tfstate"
     region = var.aws_region
   }
 }
 
 locals {
-  name = "${var.environment}-${var.project_name}"
+  name         = "${var.environment}-${var.project_name}"
+  cluster_name = data.terraform_remote_state.network.outputs.eks_cluster_name
 
   common_tags = merge(
     var.tags,
@@ -33,7 +34,7 @@ module "eks_cluster" {
   source = "../../../modules/eks/cluster/"
 
   name            = local.name
-  cluster_name    = var.cluster_name
+  cluster_name    = local.cluster_name
   cluster_version = var.cluster_version
 
   vpc_id             = local.vpc_id
@@ -64,7 +65,7 @@ module "node_group_private" {
   source = "../../../modules/eks/node-group/"
   count  = var.enable_private_node_group ? 1 : 0
 
-  cluster_name    = module.eks_cluster.cluster_name
+  cluster_name    = local.cluster_name
   cluster_version = module.eks_cluster.cluster_version
 
   name            = local.name

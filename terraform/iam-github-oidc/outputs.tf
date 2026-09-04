@@ -13,6 +13,11 @@ output "sample_app_push_role_arn" {
   value       = aws_iam_role.sample_app_push.arn
 }
 
+output "sample_app_supply_chain_role_arn" {
+  description = "Repository-scoped role mapped to sample-app AWS_ATTEST_VERIFY_ROLE_ARN"
+  value       = aws_iam_role.sample_app_supply_chain.arn
+}
+
 output "sample_app_ecr_repository_url" {
   description = "ECR repository URL written into argocd-gitops env values"
   value       = aws_ecr_repository.sample_app.repository_url

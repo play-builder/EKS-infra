@@ -1,9 +1,9 @@
 # Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
+state_bucket_name = "replace-with-your-dev-state-bucket"
 course_id    = "replace-with-unique-course-id"
 environment  = "dev"
-cluster_name = "dev-playdevops-eks"
 
 # Resolve this value with aws eks describe-addon-versions for EKS 1.36 in the selected Region.
 vpc_cni_addon_version                  = "REPLACE_WITH_COMPATIBLE_EKS_ADDON_VERSION"
