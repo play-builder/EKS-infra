@@ -21,6 +21,11 @@ variable "project_name" {
   default     = "playdevops"
 }
 
+variable "state_bucket_name" {
+  description = "Exact S3 bucket name that stores this environment's Terraform states"
+  type        = string
+}
+
 variable "course_id" {
   description = "Unique CourseId binding all course-owned resources and cleanup evidence"
   type        = string
@@ -36,11 +41,6 @@ variable "division" {
   description = "Organizational or technical division responsible for this infrastructure"
   type        = string
   default     = "CloudInfra"
-}
-
-variable "cluster_name" {
-  description = "EKS Cluster name"
-  type        = string
 }
 
 variable "cluster_version" {

@@ -25,6 +25,11 @@ variable "project_name" {
   default     = "playdevops"
 }
 
+variable "state_bucket_name" {
+  description = "Exact S3 bucket name that stores this environment's Terraform states"
+  type        = string
+}
+
 variable "course_id" {
   description = "Unique CourseId binding this workload root to cleanup evidence"
   type        = string

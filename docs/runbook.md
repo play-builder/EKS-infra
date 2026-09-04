@@ -144,12 +144,14 @@ EKS는 한 minor씩 올리고 control plane → add-on compatibility → node gr
 
 Ch26 cleanup은 개별 Application, Gateway, PVC를 직접 삭제하거나 각 Terraform root에서 raw
 destroy하지 않습니다. `COURSE_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`,
-`COURSE_PROJECT`를 설정하고, 검토한 destroy plan과 현재 cloud inventory로 preflight를 먼저
-실행합니다.
+`COURSE_PROJECT`를 설정합니다. 각 allowlisted root의 binary `terraform plan -destroy -out` 결과를
+`terraform show`로 검토하고 exact path와 SHA-256을 `course.saved-destroy-plans/v1` manifest에
+결속합니다. raw plan JSON은 보관하지 않으며 이 `SAVED_DESTROY_PLAN_MANIFEST`와 cloud inventory로
+preflight를 먼저 실행합니다.
 
 ```bash
 bash scripts/cleanup-preflight.sh \
-  --plan "$REVIEWED_DESTROY_PLAN_JSON" \
+  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST" \
   --inventory-source "$LIVE_OWNERSHIP_INPUT" \
   --inventory-output evidence/cleanup/ownership-inventory.json \
   --retain-template evidence/cleanup/retain-decisions.json \
@@ -196,7 +198,8 @@ confirmation을 추가한 두 번째 호출만 실제 제거를 허용합니다.
 ```bash
 cd "$LAB_EKS_REPO"
 cleanup_args=(
-  --plan "$REVIEWED_DESTROY_PLAN_JSON"
+  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST"
+  --apply-progress evidence/cleanup/saved-plan-progress.json
   --inventory evidence/cleanup/ownership-inventory.json
   --retain-decisions evidence/cleanup/retain-decisions.json
   --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
@@ -217,7 +220,14 @@ bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
 ```
 
 `final-cleanup.sh`는 모든 identity, time, digest 검증과 Kubernetes pre-destroy 관찰을 첫 mutation
-전에 끝낸 뒤 다음 allowlist만 내부에서 역순으로 destroy합니다.
+전에 끝낸 뒤 다음 allowlist의 검토된 saved plan만 `terraform apply <saved-plan>`으로 실행합니다.
+각 성공 layer/path/digest는 권한 `0600`의 `course.saved-destroy-progress/v2`에 먼저 기록되고 적용된
+binary plan은 즉시 삭제됩니다. progress는 원본과 모든 reviewed replacement path/digest를 등록합니다.
+중간 실패 후에는 기록된 성공 prefix만 skip합니다. in-flight 결과가 불확실하면 같은 plan을 자동
+재시도하지 않으며, 현재 state에서 새 plan을 생성·review해야 합니다. replacement가 delete-only이면
+적용하고 no-change이면 `RECOVERED_NO_CHANGES`로 기록합니다. 모든 remaining plan의 semantic preflight가
+통과해야 새 manifest에 원자적으로 rebind하며, terminal completion에서는 등록된 모든 binary plan을
+제거합니다.
 
 - `environments/prod/04-workloads/argocd`
 - `environments/dev/04-workloads/argocd`

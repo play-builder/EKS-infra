@@ -78,12 +78,15 @@ terraform output
 정상 결과에서 다음 값을 기록합니다.
 
 - `sample_app_push_role_arn` → sample-app의 `AWS_ROLE_ARN` variable
+- `sample_app_supply_chain_role_arn` → sample-app의 `AWS_ATTEST_VERIFY_ROLE_ARN` variable
 - `sample_app_ecr_repository_url` → GitOps values의 `image.repository`
 - `infra_role_arn` → EKS-infra workflow role
 
 ## 1. dev 클러스터
 
-각 계층에서 example을 복사하고 placeholder를 교체합니다. 실제 `.tfvars`는 gitignore 대상입니다.
+각 계층에서 example을 복사하고 placeholder를 교체합니다. 모든 downstream root의
+`state_bucket_name`은 backend에 전달한 `STATE_BUCKET_NAME`과 동일해야 합니다. 실제 `.tfvars`는
+gitignore 대상이며 아래 `-var`도 같은 값을 명시해 backend와 remote-state 조회가 갈라지지 않게 합니다.
 
 ```bash
 cp environments/dev/01-network/terraform.tfvars.example environments/dev/01-network/terraform.tfvars
@@ -92,7 +95,7 @@ cp environments/dev/03-platform/terraform.tfvars.example environments/dev/03-pla
 cp environments/dev/04-workloads/argocd/terraform.tfvars.example environments/dev/04-workloads/argocd/terraform.tfvars
 ```
 
-계층별 실행 패턴은 같습니다. 아래에서 `<layer>`와 backend 파일만 바꿉니다.
+계층별 backend 초기화 패턴은 같습니다. 아래에서 `<layer>`와 backend 파일만 바꿉니다.
 
 ```bash
 terraform -chdir=environments/dev/<layer> init \
@@ -103,6 +106,15 @@ terraform -chdir=environments/dev/<layer> init \
 
 terraform -chdir=environments/dev/<layer> plan -out=tfplan
 terraform -chdir=environments/dev/<layer> apply tfplan
+```
+
+`01-network`에는 remote-state input이 없으므로 위 명령 그대로 실행합니다. `02-eks`,
+`03-platform`, `04-workloads/argocd` plan에만 다음 required input을 추가합니다.
+
+```bash
+terraform -chdir=environments/dev/<downstream-layer> plan \
+  -var="state_bucket_name=$STATE_BUCKET_NAME" \
+  -out=tfplan
 ```
 
 실제 매핑:
@@ -134,7 +146,10 @@ Platform controller는 Chapter가 처음 필요로 할 때만 활성화합니다
 ADOT X-Ray trace 입력은 애플리케이션과 OTLP/HTTP protobuf 계약을 사용합니다. `enable_adot_xray=true`일
 때 platform output의 `otlp_http_traces_endpoint`를 `OTEL_EXPORTER_OTLP_ENDPOINT`에 그대로
 설정하며, endpoint는 `:4318/v1/traces`, protocol은 `http/protobuf`입니다. gRPC `4317` 입력은
-이 과정의 애플리케이션 계약에 포함하지 않습니다.
+이 과정의 애플리케이션 계약에 포함하지 않습니다. 이 active phase에서만 endpoint, protocol,
+`otlp_http_port=4318`, `otlp_http_traces_path=/v1/traces`, `adot_xray_enabled=true`가 함께 게시됩니다.
+AMP metric discovery는 `namespace`, `pod`, `app`, `rollouts_pod_template_hash`만 application label
+계약으로 보존하며 임의 Kubernetes label을 복사하지 않습니다.
 
 Secrets Manager에는 `sample-app-runtime`과 `sample-app-db` 두 shell만 만들며 값은 Terraform으로
 전달하지 않습니다. application reader IRSA는 두 exact ARN의 `DescribeSecret`/`GetSecretValue`만
@@ -285,13 +300,16 @@ repository import와 위 설정 외의 예상하지 않은 변경이 없는지 �
 ## 제거 순서와 비용
 
 Ch26 제거는 개별 Kubernetes 리소스를 직접 삭제하지 않고, digest로 결속된 ownership·GitOps
-증거를 `final-cleanup.sh`가 검증한 뒤에만 수행합니다. 먼저 검토한 Terraform destroy plan과 현재
-cloud inventory를 입력으로 preflight를 실행합니다. 이 명령에는 `COURSE_ID`, `AWS_ACCOUNT_ID`,
-`AWS_REGION`, `COURSE_PROJECT`가 설정되어 있어야 합니다.
+증거를 `final-cleanup.sh`가 검증한 뒤에만 수행합니다. 각 allowlisted root에서 `terraform plan
+-destroy -out=<absolute-path>`로 binary plan을 저장하고 `terraform show <absolute-path>`를 사람이
+검토한 뒤, exact layer·absolute path·SHA-256을 `course.saved-destroy-plans/v1` 형식의
+`SAVED_DESTROY_PLAN_MANIFEST`에 기록합니다. raw plan JSON은 보관하지 않습니다. 현재 cloud
+inventory와 함께 preflight를 실행하며 `COURSE_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`,
+`COURSE_PROJECT`가 설정되어 있어야 합니다.
 
 ```bash
 bash scripts/cleanup-preflight.sh \
-  --plan "$REVIEWED_DESTROY_PLAN_JSON" \
+  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST" \
   --inventory-source "$LIVE_OWNERSHIP_INPUT" \
   --inventory-output evidence/cleanup/ownership-inventory.json \
   --retain-template evidence/cleanup/retain-decisions.json \
@@ -340,7 +358,8 @@ EKS 저장소로 돌아와 동일한 파일 집합으로 먼저 dry-run을 실�
 
 ```bash
 cleanup_args=(
-  --plan "$REVIEWED_DESTROY_PLAN_JSON"
+  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST"
+  --apply-progress evidence/cleanup/saved-plan-progress.json
   --inventory evidence/cleanup/ownership-inventory.json
   --retain-decisions evidence/cleanup/retain-decisions.json
   --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
@@ -360,7 +379,14 @@ bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
   --confirm-course-id "$COURSE_ID"
 ```
 
-실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist를 내부에서만 역순으로 제거합니다.
+실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist의 digest-bound saved plan을
+`terraform apply <saved-plan>`으로 적용합니다. 성공한 layer/digest는 권한 `0600`인
+`course.saved-destroy-progress/v2` progress에 원자적으로 기록한 뒤 해당 binary plan을 즉시 삭제합니다.
+progress는 원본과 교체 plan의 path/digest를 모두 등록합니다. 중간 실패 시 성공 prefix만 건너뛰며,
+결과가 불확실한 in-flight layer는 현재 state로 새 plan을 만들고 다시 review해야 합니다. 새 plan이
+delete-only이면 그 plan을 적용하고, no-change이면 `RECOVERED_NO_CHANGES`로 완료 처리합니다. 전체
+remaining plan의 semantic preflight가 끝나기 전에는 manifest binding을 변경하지 않습니다. 모든
+layer가 완료되면 등록된 원본/교체 binary plan을 모두 제거합니다.
 
 - `environments/prod/04-workloads/argocd`
 - `environments/dev/04-workloads/argocd`
