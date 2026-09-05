@@ -5,19 +5,28 @@ on:
     inputs:
       terraform_root:
         required: true
-        type: string
+        type: choice
+        options:
+          - environments/dev/01-network
+          - environments/dev/02-eks
+          - environments/dev/03-platform
+          - environments/dev/04-workloads/argocd
+          - environments/prod/01-network
+          - environments/prod/02-eks
+          - environments/prod/03-platform
+          - environments/prod/04-workloads/argocd
       backend_config:
         required: true
-        type: string
-      account_id:
-        required: true
-        type: string
-      backend_bucket:
-        required: true
-        type: string
-      backend_key:
-        required: true
-        type: string
+        type: choice
+        options:
+          - environments/dev/config/network.tfbackend
+          - environments/dev/config/eks.tfbackend
+          - environments/dev/config/platform.tfbackend
+          - environments/dev/config/argocd.tfbackend
+          - environments/prod/config/network.tfbackend
+          - environments/prod/config/eks.tfbackend
+          - environments/prod/config/platform.tfbackend
+          - environments/prod/config/argocd.tfbackend
   pull_request:
     paths:
       - "**/*.tf"
@@ -43,7 +52,7 @@ on:
 permissions:
   contents: read
 
-  # Plan jobs deliberately cannot assume AWS identities or apply infrastructure.
+  # Repository access stays read-only; AWS mutation is isolated to the protected apply job.
 
 jobs:
   reviewed-plan:
@@ -64,25 +73,35 @@ jobs:
       - name: Create reviewed plan artifact
         env:
           AWS_REGION: ${{ vars.AWS_REGION }}
-        run: bash scripts/create-saved-plan.sh "${{ inputs.terraform_root }}" "${{ inputs.backend_config }}" plan-artifact
-      - uses: actions/upload-artifact@v4
+          BACKEND_BUCKET: ${{ vars.STATE_BUCKET_NAME }}
+          PLAN_REQUEST_IDENTITY: ${{ github.triggering_actor }}
+          PLAN_RUN_ID: ${{ github.run_id }}
+        run: bash "$GITHUB_WORKSPACE/scripts/create-saved-plan.sh" "$GITHUB_WORKSPACE/${{ inputs.terraform_root }}" "$GITHUB_WORKSPACE/${{ inputs.backend_config }}" "$GITHUB_WORKSPACE/plan-artifact" apply
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: reviewed-terraform-plan
-          path: plan-artifact
+          path: ${{ github.workspace }}/plan-artifact
+          retention-days: 1
 
   reviewed-plan-apply:
     if: github.event_name == 'workflow_dispatch'
+    needs: reviewed-plan
     runs-on: ubuntu-latest
     environment: production
+    concurrency:
+      group: terraform-apply-${{ vars.AWS_REGION }}-${{ inputs.terraform_root }}
+      cancel-in-progress: false
+    timeout-minutes: 30
     permissions:
+      actions: read
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: reviewed-terraform-plan
-          path: plan-artifact
+          path: ${{ github.workspace }}/plan-artifact
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
         with:
           terraform_version: "1.16.0"
@@ -90,10 +109,19 @@ jobs:
         with:
           role-to-assume: ${{ secrets.TERRAFORM_APPLY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+      - name: Bind protected environment approval history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" > "$RUNNER_TEMP/approval-history.json"
+          bash "$GITHUB_WORKSPACE/scripts/bind-saved-plan-approval.sh" "$GITHUB_WORKSPACE/plan-artifact" "$RUNNER_TEMP/approval-history.json" production "$GITHUB_TRIGGERING_ACTOR" "$GITHUB_RUN_ID"
       - name: Verify reviewed saved plan before apply
-        run: bash scripts/verify-saved-plan.sh plan-artifact "${{ inputs.terraform_root }}" "${{ inputs.account_id }}" "${{ vars.AWS_REGION }}" "${{ inputs.backend_bucket }}" "${{ inputs.backend_key }}" s3-native-lockfile "$GITHUB_SHA"
+        run: |
+          LIVE_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BACKEND_KEY=$(jq -r '.backendKey' "$GITHUB_WORKSPACE/plan-artifact/plan-identity.json")
+          bash "$GITHUB_WORKSPACE/scripts/verify-saved-plan.sh" "$GITHUB_WORKSPACE/plan-artifact" "${{ inputs.terraform_root }}" "$LIVE_ACCOUNT_ID" "${{ vars.AWS_REGION }}" "${{ vars.STATE_BUCKET_NAME }}" "$BACKEND_KEY" s3-native-lockfile "$GITHUB_SHA" "$GITHUB_TRIGGERING_ACTOR" "$GITHUB_RUN_ID" apply
       - name: Apply the verified binary plan
-        run: terraform -chdir="${{ inputs.terraform_root }}" apply plan-artifact/tfplan
+        run: terraform -chdir="$GITHUB_WORKSPACE/${{ inputs.terraform_root }}" apply "$GITHUB_WORKSPACE/plan-artifact/tfplan"
 
   contract:
     runs-on: ubuntu-latest

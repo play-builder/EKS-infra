@@ -38,7 +38,7 @@ GitHub OIDC + ECR
 
 ## 전제 도구
 
-- Terraform 1.15.9
+- Terraform 1.16.0
 - AWS CLI 2
 - kubectl 1.36 계열
 - Helm 4.2.4
@@ -53,6 +53,12 @@ GitHub OIDC + ECR
 export AWS_REGION="ap-northeast-2"
 export STATE_BUCKET_NAME="replace-with-your-state-bucket"
 ```
+
+`.github/workflows/terraform-validate.yml`을 dispatch하기 전 repository Actions Variables에
+`AWS_REGION`, `STATE_BUCKET_NAME`을 등록하고, Secrets에 별도 최소 권한 role의
+`TERRAFORM_PLAN_ROLE_ARN`, `TERRAFORM_APPLY_ROLE_ARN`을 등록합니다. `production` environment에는
+required reviewer와 self-review 차단을 설정합니다. Plan role은 state 조회와 plan에 필요한 읽기
+권한만, apply role은 승인된 plan 실행에 필요한 mutation 권한만 가져야 합니다.
 
 ## 0. 공통 GitHub OIDC와 ECR
 
@@ -338,9 +344,18 @@ bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$LAB_EKS_REPO"
 EKS 저장소로 돌아와 동일한 파일 집합으로 먼저 dry-run을 실행합니다. `--execute`와 세 confirmation을
 추가한 두 번째 호출만 실제 제거를 허용합니다.
 
+`$DESTROY_PLAN_DIR`에는 동일한 protected workflow run에서 생성하고 승인 이력에 결속한 여덟 개의
+`destroy` saved-plan directory가 있어야 합니다. 각 manifest의 `requestIdentity`와 `approvalRunId`,
+state bucket은 아래 입력값과 일치해야 하며, `final-cleanup.sh`는 layer별 backend key를 자체
+allowlist에서 다시 계산합니다.
+
 ```bash
 cleanup_args=(
   --plan "$REVIEWED_DESTROY_PLAN_JSON"
+  --saved-plan-dir "$DESTROY_PLAN_DIR"
+  --backend-bucket "$STATE_BUCKET_NAME"
+  --request-identity "$TERRAFORM_PLAN_REQUESTER"
+  --approval-run-id "$TERRAFORM_APPROVAL_RUN_ID"
   --inventory evidence/cleanup/ownership-inventory.json
   --retain-decisions evidence/cleanup/retain-decisions.json
   --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"

@@ -3,6 +3,9 @@ aws_region   = "ap-northeast-2"
 project_name = "playdevops"
 course_id    = "replace-with-unique-course-id"
 environment  = "prod"
+platform_instance_id = "replace-with-platform-instance-id"
+owner                = "platform-sre"
+cost_center          = "replace-with-cost-center"
 cluster_name = "prod-playdevops-eks"
 
 # Resolve this value with aws eks describe-addon-versions for EKS 1.36 in the selected Region.
@@ -29,7 +32,7 @@ private_node_group_instance_types = ["m7i.large"]
 
 operator_access = {
   mode              = "ssm"
-  operator_role_arn = "arn:aws:iam::123456789012:role/AWSReservedSSO_PlatformOperator"
+  trusted_sso_principal_arn = "arn:aws:iam::123456789012:role/aws-reserved/sso.amazonaws.com/ap-northeast-2/AWSReservedSSO_PlatformOperator_REPLACE_ME"
   subnet_id         = "subnet-0123456789abcdef0"
   ami_id            = "ami-0123456789abcdef0"
   instance_type     = "t3.micro"

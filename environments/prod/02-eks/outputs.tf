@@ -70,15 +70,18 @@ output "operator_access_status" {
 }
 
 output "vpc_cni_addon_version" {
-  value = module.eks_cluster.vpc_cni_addon_version
+  description = "Pinned VPC CNI managed add-on version"
+  value       = module.eks_cluster.vpc_cni_addon_version
 }
 
 output "vpc_cni_network_policy_enabled" {
-  value = module.eks_cluster.vpc_cni_network_policy_enabled
+  description = "Whether VPC CNI network policy enforcement is enabled"
+  value       = module.eks_cluster.vpc_cni_network_policy_enabled
 }
 
 output "vpc_cni_network_policy_enforcing_mode" {
-  value = module.eks_cluster.vpc_cni_network_policy_enforcing_mode
+  description = "VPC CNI network policy enforcement mode"
+  value       = module.eks_cluster.vpc_cni_network_policy_enforcing_mode
 }
 
 output "configure_kubectl" {

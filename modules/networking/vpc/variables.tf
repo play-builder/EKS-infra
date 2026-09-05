@@ -82,7 +82,7 @@ variable "enable_vpc_flow_logs" {
 }
 
 variable "vpc_flow_log_retention_in_days" {
-  description = "Retention period for VPC Flow Logs before Task 9 adds KMS protection"
+  description = "Retention period for VPC Flow Logs"
   type        = number
   default     = 30
 
@@ -120,4 +120,12 @@ variable "tags" {
   description = "Additional tags"
   type        = map(string)
   default     = {}
+
+  validation {
+    condition = var.environment != "prod" || alltrue([
+      for key in ["PlatformInstanceId", "Owner", "CostCenter", "Environment"] :
+      try(length(trimspace(var.tags[key])) > 0, false)
+    ])
+    error_message = "PLATFORM_TAGS_REQUIRED: production VPC resources require nonblank PlatformInstanceId, Owner, CostCenter, and Environment tags."
+  }
 }

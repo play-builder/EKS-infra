@@ -14,12 +14,15 @@ locals {
   common_tags = merge(
     var.tags,
     {
-      CourseId    = var.course_id
-      Environment = var.environment
-      Project     = var.project_name
-      division    = var.division
-      ManagedBy   = "Terraform"
-      Layer       = "network"
+      CourseId           = var.course_id
+      Environment        = var.environment
+      PlatformInstanceId = var.platform_instance_id
+      Owner              = var.owner
+      CostCenter         = var.cost_center
+      Project            = var.project_name
+      division           = var.division
+      ManagedBy          = "Terraform"
+      Layer              = "network"
     }
   )
 

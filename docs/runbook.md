@@ -23,6 +23,18 @@ kubectl cluster-info
 
 prod 작업 전에는 출력의 account ID와 cluster name을 작업 티켓의 값과 대조합니다.
 
+## Reviewed Terraform apply 설정
+
+`terraform-validate` workflow의 repository Actions Variables에는 `AWS_REGION`과
+`STATE_BUCKET_NAME`을, Secrets에는 `TERRAFORM_PLAN_ROLE_ARN`과 `TERRAFORM_APPLY_ROLE_ARN`을
+등록합니다. 두 IAM role은 GitHub OIDC로만 assume하고 plan role에는 mutation 권한을 주지 않습니다.
+`production` environment에는 required reviewer와 self-review 차단을 설정합니다.
+
+Apply job은 live STS account, source SHA, backend root/key, Terraform executable/version, tracked provider
+lock, plan digests와 GitHub environment approval history가 모두 일치할 때만 저장된 binary plan을
+실행합니다. `STATE_BUCKET_NAME`은 dispatch input이 아니라 repository-managed Variable이므로 state
+선택을 실행자가 임의로 바꿀 수 없습니다.
+
 ## 클러스터 접속
 
 ```bash
@@ -56,8 +68,14 @@ optional log-group KMS key is supplied only after the central log-key layer is a
 ## Private EKS operator access
 
 Production API access is private-only. Use the `operator_access` SSM instance in a private subnet and the
-scoped federated role; the production node group and operator instance have no SSH key or public IP. Retain
-an evidence record from an SSM session and `kubectl auth can-i --list` before making a production change.
+customer-managed EKS operator role; the production node group and operator instance have no SSH key or
+public IP. The selected AMI must be Amazon Linux 2023 with SSM Agent. Resolve it from the public parameter
+`/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64` for the selected Region.
+
+The SSO permission set is a trust principal only; Terraform does not attach policies to the protected
+`AWSReservedSSO_*` role. `scripts/prod-operator-access-check.sh --execute` sends an SSM Run Command, assumes
+the customer-managed role on the instance, checks the exact cluster ARN, and records a successful
+`kubectl auth can-i get pods -n platform-system` result before an operator change.
 
 ```bash
 kubectl --context course-dev -n kube-system get pods
@@ -206,10 +224,18 @@ bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$LAB_EKS_REPO"
 EKS 저장소로 돌아와 동일한 evidence 집합으로 dry-run을 먼저 실행합니다. `--execute`와 세
 confirmation을 추가한 두 번째 호출만 실제 제거를 허용합니다.
 
+`$DESTROY_PLAN_DIR`에는 하나의 protected workflow run과 승인 이력에 결속된 여덟 개의 `destroy`
+saved-plan directory가 있어야 합니다. `final-cleanup.sh`는 요청자, approval run, state bucket과
+hard-coded layer/backend-key pair를 첫 mutation 전에 모두 검증합니다.
+
 ```bash
 cd "$LAB_EKS_REPO"
 cleanup_args=(
   --plan "$REVIEWED_DESTROY_PLAN_JSON"
+  --saved-plan-dir "$DESTROY_PLAN_DIR"
+  --backend-bucket "$STATE_BUCKET_NAME"
+  --request-identity "$TERRAFORM_PLAN_REQUESTER"
+  --approval-run-id "$TERRAFORM_APPROVAL_RUN_ID"
   --inventory evidence/cleanup/ownership-inventory.json
   --retain-decisions evidence/cleanup/retain-decisions.json
   --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"

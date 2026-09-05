@@ -24,6 +24,36 @@ variable "course_id" {
   }
 }
 
+variable "platform_instance_id" {
+  description = "Stable identifier shared by all resources in this platform instance"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.platform_instance_id)) > 0
+    error_message = "platform_instance_id must not be blank."
+  }
+}
+
+variable "owner" {
+  description = "Team accountable for this production platform"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.owner)) > 0
+    error_message = "owner must not be blank."
+  }
+}
+
+variable "cost_center" {
+  description = "Cost allocation identifier for this production platform"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.cost_center)) > 0
+    error_message = "cost_center must not be blank."
+  }
+}
+
 variable "environment" {
   description = "Name of the environment (e.g., prod)"
   type        = string
@@ -111,7 +141,7 @@ variable "vpc_flow_log_retention_in_days" {
 }
 
 variable "vpc_flow_log_kms_key_arn" {
-  description = "Optional KMS key ARN for VPC Flow Logs; supplied after the Task 9 log key exists"
+  description = "Optional customer-managed KMS key ARN for VPC Flow Logs"
   type        = string
   default     = null
   nullable    = true

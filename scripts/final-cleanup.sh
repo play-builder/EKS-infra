@@ -5,6 +5,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
+source "$SCRIPT_DIR/lib/terraform-plan-contract.sh"
 
 if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
   [[ -d "$COURSE_CHECK_BIN_DIR" ]] || course_fail 'COURSE_CHECK_BIN_DIR is not a directory' 64
@@ -23,6 +24,9 @@ dev_context=''
 prod_context=''
 pre_destroy_output=''
 residual_output=''
+backend_bucket=''
+request_identity=''
+approval_run_id=''
 execute=false
 confirm_account=''
 confirm_region=''
@@ -41,6 +45,9 @@ while [[ $# -gt 0 ]]; do
     --prod-context) prod_context=${2:-}; shift 2 ;;
     --kubernetes-pre-destroy-output) pre_destroy_output=${2:-}; shift 2 ;;
     --residual-output) residual_output=${2:-}; shift 2 ;;
+    --backend-bucket) backend_bucket=${2:-}; shift 2 ;;
+    --request-identity) request_identity=${2:-}; shift 2 ;;
+    --approval-run-id) approval_run_id=${2:-}; shift 2 ;;
     --execute) execute=true; shift ;;
     --confirm-account-id) confirm_account=${2:-}; shift 2 ;;
     --confirm-region) confirm_region=${2:-}; shift 2 ;;
@@ -48,9 +55,15 @@ while [[ $# -gt 0 ]]; do
     *) course_fail "unknown argument: $1" 64 ;;
   esac
 done
-for name in plan inventory decisions preflight in_flight freeze removal dev_context prod_context pre_destroy_output residual_output; do
+for name in plan saved_plan_dir inventory decisions preflight in_flight freeze removal dev_context prod_context \
+  pre_destroy_output residual_output backend_bucket request_identity approval_run_id; do
   [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64
 done
+[[ -d "$saved_plan_dir" ]] || course_fail 'FINAL_CLEANUP_SAVED_PLAN_REQUIRED' 64
+saved_plan_dir=$(cd -- "$saved_plan_dir" && pwd -P)
+[[ "$request_identity" =~ [^[:space:]] && "$request_identity" != pending ]] || \
+  course_fail 'FINAL_CLEANUP_REQUEST_IDENTITY_INVALID' 64
+[[ "$approval_run_id" =~ ^[1-9][0-9]*$ ]] || course_fail 'FINAL_CLEANUP_APPROVAL_RUN_ID_INVALID' 64
 
 course_require_file "$plan"
 cleanup_validate_decisions "$inventory" "$decisions"
@@ -128,12 +141,28 @@ print_dry_run() {
 }
 
 if [[ "$execute" != true ]]; then
+  source_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
+  for layer in \
+    environments/prod/04-workloads/argocd environments/dev/04-workloads/argocd \
+    environments/prod/03-platform environments/dev/03-platform \
+    environments/prod/02-eks environments/dev/02-eks \
+    environments/prod/01-network environments/dev/01-network; do
+    artifact_dir="$saved_plan_dir/${layer//\//_}"
+    expected_backend_key=$(terraform_plan_expected_backend_key_for_root "$layer")
+    jq -e '
+      (.resource_changes | type == "array") and
+      all(.resource_changes[]?; (.change.actions | type == "array") and
+        all(.change.actions[]; . == "delete" or . == "no-op" or . == "read"))
+    ' "$artifact_dir/tfplan.json" >/dev/null || course_fail "CLEANUP_PLAN_ACTION_NOT_ALLOWED: $layer"
+    bash "$SCRIPT_DIR/verify-saved-plan.sh" "$artifact_dir" "$layer" "$inventory_account" "$inventory_region" \
+      "$backend_bucket" "$expected_backend_key" s3-native-lockfile "$source_sha" \
+      "$request_identity" "$approval_run_id" destroy || course_fail "FINAL_CLEANUP_PLAN_VERIFICATION_FAILED: $layer"
+  done
   print_dry_run
   exit 0
 fi
 
 [[ -n "$confirm_account" && -n "$confirm_region" && -n "$confirm_course" ]] || course_fail 'FINAL_CLEANUP_CONFIRMATIONS_REQUIRED' 64
-[[ -n "$saved_plan_dir" && -d "$saved_plan_dir" ]] || course_fail 'FINAL_CLEANUP_SAVED_PLAN_REQUIRED' 64
 [[ "$confirm_account" == "$inventory_account" ]] || course_fail 'FINAL_CLEANUP_ACCOUNT_CONFIRMATION_MISMATCH'
 [[ "$confirm_region" == "$inventory_region" ]] || course_fail 'FINAL_CLEANUP_REGION_CONFIRMATION_MISMATCH'
 [[ "$confirm_course" == "$inventory_course" ]] || course_fail 'FINAL_CLEANUP_COURSE_CONFIRMATION_MISMATCH'
@@ -160,6 +189,19 @@ layers=(
   environments/dev/01-network
 )
 for layer in "${layers[@]}"; do [[ -d "$REPO_ROOT/$layer" ]] || course_fail "cleanup layer not found: $layer"; done
+source_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
+for layer in "${layers[@]}"; do
+  artifact_dir="$saved_plan_dir/${layer//\//_}"
+  expected_backend_key=$(terraform_plan_expected_backend_key_for_root "$layer")
+  jq -e '
+    (.resource_changes | type == "array") and
+    all(.resource_changes[]?; (.change.actions | type == "array") and
+      all(.change.actions[]; . == "delete" or . == "no-op" or . == "read"))
+  ' "$artifact_dir/tfplan.json" >/dev/null || course_fail "CLEANUP_PLAN_ACTION_NOT_ALLOWED: $layer"
+  bash "$SCRIPT_DIR/verify-saved-plan.sh" "$artifact_dir" "$layer" "$inventory_account" "$inventory_region" \
+    "$backend_bucket" "$expected_backend_key" s3-native-lockfile "$source_sha" \
+    "$request_identity" "$approval_run_id" destroy || course_fail "FINAL_CLEANUP_PLAN_VERIFICATION_FAILED: $layer"
+done
 caller=$(aws sts get-caller-identity --profile "$AWS_PROFILE" --region "$confirm_region" --output json)
 [[ $(jq -r '.Account' <<<"$caller") == "$confirm_account" ]] || course_fail 'FINAL_CLEANUP_CALLER_ACCOUNT_MISMATCH'
 
@@ -196,15 +238,7 @@ stage 11
 stage 12
 stage 13
 for layer in "${layers[@]}"; do
-  plan_id=${layer//\//_}
-  artifact_dir="$saved_plan_dir/$plan_id"
-  manifest="$artifact_dir/plan-identity.json"
-  backend_bucket=$(jq -r '.backendBucket // empty' "$manifest" 2>/dev/null || true)
-  backend_key=$(jq -r '.backendKey // empty' "$manifest" 2>/dev/null || true)
-  lock_identity=$(jq -r '.lockIdentity // empty' "$manifest" 2>/dev/null || true)
-  [[ -n "$backend_bucket" && -n "$backend_key" && -n "$lock_identity" ]] || course_fail "FINAL_CLEANUP_PLAN_MANIFEST_INVALID: $layer"
-  bash "$SCRIPT_DIR/verify-saved-plan.sh" "$artifact_dir" "$layer" "$inventory_account" "$inventory_region" \
-    "$backend_bucket" "$backend_key" "$lock_identity" "$(git -C "$REPO_ROOT" rev-parse HEAD)" || course_fail "FINAL_CLEANUP_PLAN_VERIFICATION_FAILED: $layer"
+  artifact_dir="$saved_plan_dir/${layer//\//_}"
   terraform -chdir="$REPO_ROOT/$layer" apply "$artifact_dir/tfplan" || course_fail "TERRAFORM_APPLY_FAILED: $layer"
 done
 stage 14

@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$root/tests/cleanup-fixture-helpers.sh"
+source "$root/scripts/lib/terraform-plan-contract.sh"
 
 if grep -Eq 'kubectl .*delete[[:space:]]+pvc' "$root/README.md"; then
   echo 'README bypasses guarded cleanup with direct PVC deletion' >&2
@@ -19,6 +20,16 @@ grep -Fq 'aws sts get-caller-identity --region "$AWS_REGION"' "$runbook" || {
   echo 'runbook AWS identity check must carry the selected Region explicitly' >&2
   exit 1
 }
+for required_argument in --saved-plan-dir --backend-bucket --request-identity --approval-run-id; do
+  grep -Fq -- "$required_argument" "$root/README.md" || {
+    echo "README cleanup invocation is missing $required_argument" >&2
+    exit 1
+  }
+  grep -Fq -- "$required_argument" "$runbook" || {
+    echo "runbook cleanup invocation is missing $required_argument" >&2
+    exit 1
+  }
+done
 
 runbook_line() {
   local marker=$1
@@ -85,18 +96,7 @@ for layer in "${cleanup_layers[@]}"; do
   plan_dir="$tmp_dir/saved-plan/${layer//\//_}"
   mkdir -p "$plan_dir"
   cp "$plan" "$plan_dir/tfplan"
-  cp "$plan" "$plan_dir/tfplan.json"
-  saved_plan_sha=$(raw_sha256 "$plan_dir/tfplan")
-  saved_plan_json_sha=$(raw_sha256 "$plan_dir/tfplan.json")
-  jq -n --arg plan "$saved_plan_sha" --arg planJson "$saved_plan_json_sha" --arg source "$(git -C "$root" rev-parse HEAD)" --arg layer "$layer" '
-    {schemaVersion:"platform.saved-plan/v1",accountId:"123456789012",region:"ap-northeast-2",
-     terraformRoot:$layer,backendBucket:"cleanup-state",backendKey:("cleanup/" + ($layer | gsub("/";"_")) + ".tfstate"),
-     lockIdentity:"s3-native-lockfile",sourceSha:$source,terraformVersion:"1.16.0",
-     terraformBinarySha256:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-     providerLockSha256:"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-     planSha256:("sha256:" + $plan),planJsonSha256:("sha256:" + $planJson),
-     approvalIdentity:"platform-approver",createdAt:"2026-09-05T00:00:00Z"}
-  ' >"$plan_dir/plan-identity.json"
+  jq '.terraform_version="1.16.0"' "$plan" >"$plan_dir/tfplan.json"
 done
 plan_sha=$(raw_sha256 "$plan")
 inventory_sha=$(raw_sha256 "$tmp_dir/evidence/inventory.json")
@@ -120,6 +120,10 @@ jq -n --arg observed "$observed" --arg expires "$expires" '
 cat >"$tmp_dir/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+if [[ "$*" == 'version -json' ]]; then
+  printf '{"terraform_version":"1.16.0"}\n'
+  exit 0
+fi
 printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
 if [[ "$*" == *"/02-eks apply"* ]]; then : >"$COURSE_EKS_DELETED_SENTINEL"; fi
 EOF
@@ -150,12 +154,47 @@ case "$1 $2" in
 esac
 EOF
 chmod +x "$tmp_dir/bin/terraform" "$tmp_dir/bin/kubectl" "$tmp_dir/bin/aws"
+
+request_identity=release-requester
+approval_identity=platform-approver
+approval_run_id=987654321
+for layer in "${cleanup_layers[@]}"; do
+  plan_dir="$tmp_dir/saved-plan/${layer//\//_}"
+  backend_key=$(terraform_plan_expected_backend_key_for_root "$layer")
+  jq -n --arg request "$request_identity" --arg run "$approval_run_id" --arg approver "$approval_identity" '
+    {schemaVersion:"platform.saved-plan-approval/v1",source:"github-actions-review-history",
+     environment:"production",state:"approved",runId:$run,requestIdentity:$request,
+     approvalIdentity:$approver}' >"$plan_dir/approval-evidence.json"
+  saved_plan_sha=$(raw_sha256 "$plan_dir/tfplan")
+  saved_plan_json_sha=$(raw_sha256 "$plan_dir/tfplan.json")
+  binary_sha=$(raw_sha256 "$tmp_dir/bin/terraform")
+  lock_sha=$(raw_sha256 "$root/$layer/.terraform.lock.hcl")
+  approval_sha=$(raw_sha256 "$plan_dir/approval-evidence.json")
+  printf '%s  tfplan\n' "$saved_plan_sha" >"$plan_dir/tfplan.sha256"
+  printf '%s  tfplan.json\n' "$saved_plan_json_sha" >"$plan_dir/tfplan.json.sha256"
+  jq -n --arg plan "$saved_plan_sha" --arg planJson "$saved_plan_json_sha" \
+    --arg source "$(git -C "$root" rev-parse HEAD)" --arg layer "$layer" \
+    --arg backend "$backend_key" --arg binary "$binary_sha" --arg lock "$lock_sha" \
+    --arg request "$request_identity" --arg approver "$approval_identity" --arg run "$approval_run_id" \
+    --arg approval "$approval_sha" '
+    {schemaVersion:"platform.saved-plan/v1",accountId:"123456789012",region:"ap-northeast-2",
+     terraformRoot:$layer,backendBucket:"cleanup-state",backendKey:$backend,
+     lockIdentity:"s3-native-lockfile",sourceSha:$source,terraformVersion:"1.16.0",
+     terraformBinarySha256:("sha256:"+$binary),providerLockSha256:("sha256:"+$lock),
+     planSha256:("sha256:"+$plan),planJsonSha256:("sha256:"+$planJson),operation:"destroy",
+     requestIdentity:$request,approvalIdentity:$approver,approvalRunId:$run,
+     approvalEvidenceSha256:("sha256:"+$approval),createdAt:(now|todateiso8601)}
+  ' >"$plan_dir/plan-identity.json"
+done
 : >"$tmp_dir/mutations.log"
 : >"$tmp_dir/kubectl.log"
 : >"$tmp_dir/aws.log"
 
 common=(
   --saved-plan-dir "$tmp_dir/saved-plan"
+  --backend-bucket cleanup-state
+  --request-identity "$request_identity"
+  --approval-run-id "$approval_run_id"
   --plan "$plan"
   --inventory "$tmp_dir/evidence/inventory.json"
   --retain-decisions "$tmp_dir/evidence/decisions.json"
@@ -167,6 +206,35 @@ common=(
   --kubernetes-pre-destroy-output "$tmp_dir/evidence/generated-pre-destroy.json"
   --residual-output "$tmp_dir/evidence/generated-residual.json"
 )
+
+first_plan="$tmp_dir/saved-plan/environments_prod_04-workloads_argocd"
+cp "$first_plan/tfplan.json" "$first_plan/tfplan.json.valid"
+cp "$first_plan/tfplan.json.sha256" "$first_plan/tfplan.json.sha256.valid"
+cp "$first_plan/plan-identity.json" "$first_plan/plan-identity.json.valid"
+jq '.resource_changes[0].change.actions=["update"]' "$first_plan/tfplan.json.valid" >"$first_plan/tfplan.json"
+changed_sha=$(raw_sha256 "$first_plan/tfplan.json")
+printf '%s  tfplan.json\n' "$changed_sha" >"$first_plan/tfplan.json.sha256"
+jq --arg digest "$changed_sha" '.planJsonSha256=("sha256:"+$digest)' \
+  "$first_plan/plan-identity.json.valid" >"$first_plan/plan-identity.json"
+set +e
+output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  bash "$root/scripts/final-cleanup.sh" "${common[@]}" 2>&1)
+status=$?
+set -e
+[[ "$status" -ne 0 && "$output" == *CLEANUP_PLAN_ACTION_NOT_ALLOWED* && ! -s "$tmp_dir/mutations.log" ]]
+mv "$first_plan/tfplan.json.valid" "$first_plan/tfplan.json"
+mv "$first_plan/tfplan.json.sha256.valid" "$first_plan/tfplan.json.sha256"
+mv "$first_plan/plan-identity.json.valid" "$first_plan/plan-identity.json"
+
+cp "$first_plan/plan-identity.json" "$first_plan/plan-identity.json.valid"
+jq '.backendKey="attacker/other.tfstate"' "$first_plan/plan-identity.json.valid" >"$first_plan/plan-identity.json"
+set +e
+output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  bash "$root/scripts/final-cleanup.sh" "${common[@]}" 2>&1)
+status=$?
+set -e
+[[ "$status" -ne 0 && "$output" == *SAVED_PLAN_BACKEND_KEY_MISMATCH* && ! -s "$tmp_dir/mutations.log" ]]
+mv "$first_plan/plan-identity.json.valid" "$first_plan/plan-identity.json"
 
 cp "$tmp_dir/evidence/preflight.json" "$tmp_dir/evidence/preflight-valid.json"
 assert_preflight_timestamp_rejected_before_cloud_calls() {

@@ -3,6 +3,9 @@ aws_region   = "ap-northeast-2"
 project_name = "playdevops"
 course_id    = "replace-with-unique-course-id"
 environment  = "prod"
+platform_instance_id = "replace-with-platform-instance-id"
+owner                = "platform-sre"
+cost_center          = "replace-with-cost-center"
 
 # Never overlap the dev VPC CIDR. Non-overlap keeps future peering possible.
 vpc_cidr = "10.1.0.0/16"

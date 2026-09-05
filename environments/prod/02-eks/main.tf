@@ -15,12 +15,15 @@ locals {
   common_tags = merge(
     var.tags,
     {
-      CourseId    = var.course_id
-      Environment = var.environment
-      Project     = var.project_name
-      division    = var.division
-      ManagedBy   = "Terraform"
-      Layer       = "eks"
+      CourseId           = var.course_id
+      Environment        = var.environment
+      PlatformInstanceId = var.platform_instance_id
+      Owner              = var.owner
+      CostCenter         = var.cost_center
+      Project            = var.project_name
+      division           = var.division
+      ManagedBy          = "Terraform"
+      Layer              = "eks"
     }
   )
 
@@ -103,15 +106,16 @@ module "node_group_private" {
 module "operator_access" {
   source = "../../../modules/compute/operator-access"
 
-  name              = local.name
-  vpc_id            = local.vpc_id
-  subnet_id         = var.operator_access.subnet_id
-  cluster_arn       = module.eks_cluster.cluster_arn
-  operator_role_arn = var.operator_access.operator_role_arn
-  ami_id            = var.operator_access.ami_id
-  instance_type     = var.operator_access.instance_type
-  mode              = var.operator_access.mode
-  tags              = local.common_tags
+  name                      = local.name
+  vpc_id                    = local.vpc_id
+  subnet_id                 = var.operator_access.subnet_id
+  cluster_name              = module.eks_cluster.cluster_name
+  cluster_arn               = module.eks_cluster.cluster_arn
+  trusted_sso_principal_arn = var.operator_access.trusted_sso_principal_arn
+  ami_id                    = var.operator_access.ami_id
+  instance_type             = var.operator_access.instance_type
+  mode                      = var.operator_access.mode
+  tags                      = local.common_tags
 
   depends_on = [module.eks_cluster]
 }

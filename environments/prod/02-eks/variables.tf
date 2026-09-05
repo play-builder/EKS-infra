@@ -32,6 +32,36 @@ variable "course_id" {
   }
 }
 
+variable "platform_instance_id" {
+  description = "Stable identifier shared by all resources in this platform instance"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.platform_instance_id)) > 0
+    error_message = "platform_instance_id must not be blank."
+  }
+}
+
+variable "owner" {
+  description = "Team accountable for this production platform"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.owner)) > 0
+    error_message = "owner must not be blank."
+  }
+}
+
+variable "cost_center" {
+  description = "Cost allocation identifier for this production platform"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.cost_center)) > 0
+    error_message = "cost_center must not be blank."
+  }
+}
+
 variable "division" {
   description = "Organizational or technical division responsible for this infrastructure"
   type        = string
@@ -88,17 +118,17 @@ variable "cluster_endpoint_public_access" {
 variable "operator_access" {
   description = "Private production EKS operator path"
   type = object({
-    mode              = string
-    operator_role_arn = string
-    subnet_id         = string
-    ami_id            = string
-    instance_type     = string
+    mode                      = string
+    trusted_sso_principal_arn = string
+    subnet_id                 = string
+    ami_id                    = string
+    instance_type             = string
   })
 
   validation {
     condition = (
       var.operator_access.mode == "ssm" &&
-      can(regex("^arn:aws:iam::[0-9]{12}:role/.+", var.operator_access.operator_role_arn)) &&
+      can(regex("^arn:aws(-[a-z]+)?:iam::[0-9]{12}:role/(aws-reserved/sso.amazonaws.com/[^/]+/)?AWSReservedSSO_.+", var.operator_access.trusted_sso_principal_arn)) &&
       can(regex("^subnet-[0-9a-f]+$", var.operator_access.subnet_id)) &&
       can(regex("^ami-[0-9a-f]+$", var.operator_access.ami_id))
     )
