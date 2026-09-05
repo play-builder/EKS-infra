@@ -31,3 +31,6 @@ private_node_group_instance_types = ["t3.large"]
 
 # Required by the module even when the bastion is disabled; leave empty.
 bastion_instance_keypair = ""
+# Required before plan: exact values from AWS in this account/Region, never copy fixture pins.
+# managed_addon_versions = { coredns = "<AWS-verified>", kube_proxy = "<AWS-verified>" }
+# node_release_version = "<AWS-verified MNG release>"

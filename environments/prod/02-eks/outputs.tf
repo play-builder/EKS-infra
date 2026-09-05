@@ -88,3 +88,13 @@ output "configure_kubectl" {
   description = "Configure kubectl command"
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks_cluster.cluster_name}"
 }
+output "eks_upgrade_contract" {
+  value = {
+    cluster_version          = module.eks_cluster.cluster_version
+    vpc_cni_version          = var.vpc_cni_addon_version
+    coredns_version          = module.managed_addons.versions.coredns
+    kube_proxy_version       = module.managed_addons.versions.kube_proxy
+    node_release_version     = var.node_release_version
+    managed_addon_owner_hash = module.managed_addons.owner_hash
+  }
+}

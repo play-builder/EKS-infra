@@ -37,3 +37,6 @@ operator_access = {
   ami_id            = "ami-0123456789abcdef0"
   instance_type     = "t3.micro"
 }
+# Required before plan: exact values from AWS in this account/Region, never copy fixture pins.
+# managed_addon_versions = { coredns = "<AWS-verified>", kube_proxy = "<AWS-verified>" }
+# node_release_version = "<AWS-verified MNG release>"

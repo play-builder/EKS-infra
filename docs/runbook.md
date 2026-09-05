@@ -274,3 +274,17 @@ EKS 삭제 전 `evidence/cleanup/kubernetes-pre-destroy.json`, 삭제 후 AWS/Te
 NAT Gateway, EKS control plane, EC2 node, ALB, AMP는 실행 시간 동안 비용이 발생합니다.
 ECR은 `force_delete=false`, Secrets Manager는 recovery window를 사용하므로 별도 정리가 필요할
 수 있습니다.
+## EKS lifecycle gates
+
+CoreDNS and kube-proxy belong to the 02-eks managed-addons module. VPC CNI stays in
+cluster, EBS CSI and snapshot-controller stay in 03-platform. Supply regional AWS
+verified pins and MNG release explicitly; example values do not claim AWS availability.
+Pinning an existing MNG release may roll nodes. Rollback requires a supported newer
+release or blue/green MNG, not an assumed AMI downgrade.
+
+Run `bash scripts/eks-upgrade-preflight.sh CLUSTER REGION FROM TO NODEGROUP RELEASE OUTPUT`
+from the operator path with a kubeconfig pointing at that cluster. It refreshes
+upgrade insights with a bounded wait, reads every returned insight, nodes, PDBs,
+all five add-ons and six controller families, and rejects missing/unknown data.
+It performs no upgrade. PDBs with zero allowed disruption block this conservative
+gate. Fixture parsing is local verification only; AWS pins and rollout remain unverified.

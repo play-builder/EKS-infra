@@ -269,3 +269,7 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+variable "managed_addon_versions" {
+  type = object({ coredns = string, kube_proxy = string })
+}
+variable "node_release_version" { type = string }

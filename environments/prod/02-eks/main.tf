@@ -67,8 +67,9 @@ module "node_group_private" {
   source = "../../../modules/eks/node-group/"
   count  = var.enable_private_node_group ? 1 : 0
 
-  cluster_name    = module.eks_cluster.cluster_name
-  cluster_version = module.eks_cluster.cluster_version
+  cluster_name         = module.eks_cluster.cluster_name
+  cluster_version      = module.eks_cluster.cluster_version
+  node_release_version = var.node_release_version
 
   name            = local.name
   node_group_name = var.private_node_group_name
@@ -119,4 +120,11 @@ module "operator_access" {
   tags                      = local.common_tags
 
   depends_on = [module.eks_cluster]
+}
+module "managed_addons" {
+  source                 = "../../../modules/eks/managed-addons"
+  cluster_name           = module.eks_cluster.cluster_name
+  managed_addon_versions = var.managed_addon_versions
+  tags                   = local.common_tags
+  depends_on             = [module.node_group_private]
 }

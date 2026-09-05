@@ -112,3 +112,13 @@ output "vpc_cni_network_policy_enabled" {
 output "vpc_cni_network_policy_enforcing_mode" {
   value = module.eks_cluster.vpc_cni_network_policy_enforcing_mode
 }
+output "eks_upgrade_contract" {
+  value = {
+    cluster_version          = module.eks_cluster.cluster_version
+    vpc_cni_version          = var.vpc_cni_addon_version
+    coredns_version          = module.managed_addons.versions.coredns
+    kube_proxy_version       = module.managed_addons.versions.kube_proxy
+    node_release_version     = var.node_release_version
+    managed_addon_owner_hash = module.managed_addons.owner_hash
+  }
+}

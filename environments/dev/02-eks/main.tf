@@ -63,8 +63,9 @@ module "node_group_public" {
   source = "../../../modules/eks/node-group/"
   count  = var.enable_public_node_group ? 1 : 0
 
-  cluster_name    = module.eks_cluster.cluster_name
-  cluster_version = module.eks_cluster.cluster_version
+  cluster_name         = module.eks_cluster.cluster_name
+  cluster_version      = module.eks_cluster.cluster_version
+  node_release_version = var.node_release_version
 
   name            = local.name
   node_group_name = var.public_node_group_name
@@ -101,8 +102,9 @@ module "node_group_private" {
   source = "../../../modules/eks/node-group/"
   count  = var.enable_private_node_group ? 1 : 0
 
-  cluster_name    = module.eks_cluster.cluster_name
-  cluster_version = module.eks_cluster.cluster_version
+  cluster_name         = module.eks_cluster.cluster_name
+  cluster_version      = module.eks_cluster.cluster_version
+  node_release_version = var.node_release_version
 
   name            = local.name
   node_group_name = var.private_node_group_name
@@ -153,4 +155,11 @@ module "bastion" {
   private_key_path = "private-key/${var.bastion_instance_keypair}.pem"
 
   tags = local.common_tags
+}
+module "managed_addons" {
+  source                 = "../../../modules/eks/managed-addons"
+  cluster_name           = module.eks_cluster.cluster_name
+  managed_addon_versions = var.managed_addon_versions
+  tags                   = local.common_tags
+  depends_on             = [module.node_group_private, module.node_group_public]
 }

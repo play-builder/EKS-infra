@@ -67,3 +67,6 @@ platform:
   chaosMeshRelease: "https://github.com/chaos-mesh/chaos-mesh/releases/tag/v2.8.0"
   chaosMeshVerifiedAt: "2026-09-03"
   chaosMeshChartDigest: "sha256:d8d650368b632ea6409971a4778a77475ac47573861a378326a2ca45561d2aae"
+regional_eks_lifecycle:
+  ap-northeast-2: {status: LIVE_NOT_VERIFIED, source: OPERATOR_AWS_LOOKUP_REQUIRED}
+  us-east-1: {status: LIVE_NOT_VERIFIED, source: OPERATOR_AWS_LOOKUP_REQUIRED}
