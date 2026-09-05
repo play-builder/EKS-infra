@@ -37,7 +37,10 @@ def collect(cluster,region,readonly,admin,output):
  x["externalSecretsReady"]=sum(1 for e in es if e["spec"].get("target",{}).get("name") in targets and e.get("status",{}).get("refreshTime") and any(v["type"]=="Ready" and v["status"]=="True" for v in e.get("status",{}).get("conditions",[])))
  x["secretMetadataHashes"]=[hashlib.sha256(raw("kubectl","-n","argocd","get","secret",n,"-o","jsonpath={.metadata.uid}/{.metadata.resourceVersion}").encode()).hexdigest() for n in sorted(targets)]
  def can(group,verb):
-  return raw("argocd","admin","settings","rbac","can",group,verb,"applications","*/*","--namespace","argocd").lower()=="yes"
+  result=subprocess.run(["argocd","admin","settings","rbac","can",group,verb,"applications","*/*","--namespace","argocd"],capture_output=True,text=True,timeout=90)
+  decision=(result.returncode,result.stdout.strip())
+  require(not result.stderr.strip() and decision in [(0,"Yes"),(1,"No")],"ARGO_RBAC_COMMAND_FAILED")
+  return decision==(0,"Yes")
  x["rbac"]={"readonlyGet":can(readonly,"get"),"readonlyDelete":can(readonly,"delete"),"adminSync":can(admin,"sync")}
  validate(x)
  x.update(schemaVersion="platform.argocd-ha/v1",evidenceGrade="CLOUD_RUNTIME",decision="PASS",clusterArn=c["arn"],region=region,observedAt=datetime.datetime.now(datetime.timezone.utc).isoformat())
