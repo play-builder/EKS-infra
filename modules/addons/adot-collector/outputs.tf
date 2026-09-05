@@ -3,6 +3,19 @@ output "iam_role_arn" {
   value       = aws_iam_role.adot.arn
 }
 
+output "scrape_contract" {
+  description = "GitOps must permit these exact private scrape targets; not ingestion evidence."
+  value = {
+    namespace                 = "app-${var.environment}"
+    collector_namespace       = "opentelemetry-operator-system"
+    collector_service_account = "adot-collector"
+    management                = { port = 3001, path = "/metrics", container_port_name = "management" }
+    proxy                     = { port = 15090, path = "/stats/prometheus", container_name = "istio-proxy", container_port_name = "http-envoy-prom" }
+    merge_metrics             = false
+    environment               = var.environment
+  }
+}
+
 output "addon_version" {
   description = "ADOT EKS addon version"
   value       = aws_eks_addon.adot.addon_version

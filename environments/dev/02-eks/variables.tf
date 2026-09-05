@@ -64,6 +64,10 @@ variable "cluster_admin_principal_arns" {
   description = "Explicit IAM principals granted cluster-admin through Access Entries"
   type        = set(string)
   default     = []
+  validation {
+    condition     = length(var.cluster_admin_principal_arns) == 0
+    error_message = "Migrate existing state to typed access_entries before applying; legacy all-admin grants are disabled."
+  }
 }
 
 variable "cluster_service_ipv4_cidr" {
@@ -242,7 +246,7 @@ variable "vpc_cni_addon_version" {
 }
 
 variable "vpc_cni_enable_network_policy" {
-  description = "False in Ch03; changed to true in Ch14"
+  description = "Enable VPC CNI network-policy enforcement after the approved policy rollout"
   type        = bool
   default     = false
 }
@@ -269,4 +273,12 @@ variable "tags" {
   description = "Additional tags"
   type        = map(string)
   default     = {}
+}
+variable "managed_addon_versions" {
+  type = object({ coredns = string, kube_proxy = string })
+}
+variable "node_release_version" { type = string }
+variable "access_entries" {
+  type    = map(object({ principal_arn = string, policy_arn = string, scope_type = string, namespaces = set(string), break_glass = bool }))
+  default = {}
 }

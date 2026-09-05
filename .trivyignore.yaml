@@ -3,6 +3,10 @@ misconfigurations:
     paths: ["modules/compute/bastion/main.tf"]
     statement: "Sandbox bastion requires outbound HTTPS; ingress remains restricted."
     expired_at: 2027-09-02
+  - id: AWS-0104
+    paths: ["modules/compute/operator-access/main.tf"]
+    statement: "The private operator requires outbound HTTPS for SSM, STS, EKS, and checksum-verified tool bootstrap; it has no inbound rule, public IP, or SSH key. Replace this exception with private service endpoints and a golden AMI before the expiry date."
+    expired_at: 2026-12-05
   - id: AWS-0039
     paths: ["modules/eks/cluster/main.tf"]
     statement: "EKS 1.36 encrypts Kubernetes API data at rest by default; a customer-managed KMS key is outside the course cost boundary."

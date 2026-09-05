@@ -14,6 +14,7 @@ locals {
 
   common_tags = merge(
     var.tags,
+    data.terraform_remote_state.network.outputs.logging_contract.platform_tags,
     {
       CourseId    = var.course_id
       Environment = var.environment
@@ -47,10 +48,12 @@ module "eks_cluster" {
 
   authentication_mode                         = var.authentication_mode
   bootstrap_cluster_creator_admin_permissions = var.bootstrap_cluster_creator_admin_permissions
-  cluster_admin_principal_arns                = var.cluster_admin_principal_arns
 
   cluster_enabled_log_types     = var.cluster_enabled_log_types
   cluster_log_retention_in_days = var.cluster_log_retention_in_days
+  cluster_log_kms_key_arn       = data.terraform_remote_state.network.outputs.logging_contract.kms_key_arn
+  environment                   = var.environment
+  depends_on                    = [terraform_data.logging_identity]
 
   vpc_cni_addon_version                 = var.vpc_cni_addon_version
   vpc_cni_enable_network_policy         = var.vpc_cni_enable_network_policy
@@ -64,8 +67,9 @@ module "node_group_public" {
   source = "../../../modules/eks/node-group/"
   count  = var.enable_public_node_group ? 1 : 0
 
-  cluster_name    = local.cluster_name
-  cluster_version = module.eks_cluster.cluster_version
+  cluster_name         = local.cluster_name
+  cluster_version      = module.eks_cluster.cluster_version
+  node_release_version = var.node_release_version
 
   name            = local.name
   node_group_name = var.public_node_group_name
@@ -102,8 +106,9 @@ module "node_group_private" {
   source = "../../../modules/eks/node-group/"
   count  = var.enable_private_node_group ? 1 : 0
 
-  cluster_name    = local.cluster_name
-  cluster_version = module.eks_cluster.cluster_version
+  cluster_name         = local.cluster_name
+  cluster_version      = module.eks_cluster.cluster_version
+  node_release_version = var.node_release_version
 
   name            = local.name
   node_group_name = var.private_node_group_name
@@ -154,4 +159,17 @@ module "bastion" {
   private_key_path = "private-key/${var.bastion_instance_keypair}.pem"
 
   tags = local.common_tags
+}
+module "managed_addons" {
+  source                 = "../../../modules/eks/managed-addons"
+  cluster_name           = module.eks_cluster.cluster_name
+  managed_addon_versions = var.managed_addon_versions
+  tags                   = local.common_tags
+  depends_on             = [module.node_group_private, module.node_group_public]
+}
+module "access_entries" {
+  source         = "../../../modules/eks/access-entries"
+  cluster_name   = module.eks_cluster.cluster_name
+  tags           = local.common_tags
+  access_entries = var.access_entries
 }

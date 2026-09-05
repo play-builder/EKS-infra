@@ -1,5 +1,5 @@
 variable "enable_chaos_mesh" {
-  description = "Enable the Ch25 Chaos Mesh controller"
+  description = "Enable the Chaos Mesh controller"
   type        = bool
   default     = false
 
@@ -10,7 +10,7 @@ variable "enable_chaos_mesh" {
 }
 
 variable "environment" {
-  description = "Course environment owning this controller"
+  description = "Deployment environment owning this controller"
   type        = string
   default     = "dev"
 
@@ -43,7 +43,7 @@ variable "namespace" {
 }
 
 variable "allowed_namespaces" {
-  description = "Application namespaces eligible for Ch25 faults"
+  description = "Application namespaces eligible for fault injection"
   type        = list(string)
   default     = ["app-dev"]
 
@@ -56,7 +56,7 @@ variable "allowed_namespaces" {
 }
 
 variable "max_fault_duration_seconds" {
-  description = "Maximum duration for one Ch25 fault"
+  description = "Maximum duration for one injected fault"
   type        = number
   default     = 60
 
@@ -67,7 +67,7 @@ variable "max_fault_duration_seconds" {
 }
 
 variable "max_faults" {
-  description = "Maximum number of simultaneous faults admitted by the course"
+  description = "Maximum number of simultaneous admitted faults"
   type        = number
   default     = 1
 
@@ -78,7 +78,7 @@ variable "max_faults" {
 }
 
 variable "chart_version" {
-  description = "Pinned Chaos Mesh Helm chart version verified for the course"
+  description = "Pinned Chaos Mesh Helm chart version"
   type        = string
   default     = "2.8.0"
 }

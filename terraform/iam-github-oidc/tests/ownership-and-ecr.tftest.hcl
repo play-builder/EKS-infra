@@ -71,6 +71,10 @@ run "external_mode_does_not_own_provider" {
     error_message = "external mode must not report course ownership"
   }
 }
+variables {
+  state_bucket_arns = ["arn:aws:s3:::course-state"]
+  tags              = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" }
+}
 
 run "supply_chain_role_is_repository_scoped" {
   command = plan

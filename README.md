@@ -1,8 +1,14 @@
-# EKS Infrastructure — CI/CD GitOps course
+# EKS Infrastructure — Mini Commerce Platform
 
 이 저장소는 dev와 prod를 **서로 다른 EKS 클러스터**로 만드는 Terraform 전체 코드입니다.
 먼저 dev의 네 계층을 완성하고 `DEV_READY`를 확인한 뒤에만 prod를 만듭니다. 두 환경의
 Terraform state, VPC CIDR, Argo CD instance, AMP workspace가 분리됩니다.
+
+현재 플랫폼은 Mini Commerce의 business/management 포트 분리, Istio native Rollouts,
+독립 Prod RDS·복구, 보호 백업 및 FinOps 계약을 사용합니다. 전체 운영 경계와 준비 순서는
+[enterprise integration](docs/runbooks/enterprise-integration.md)에 있습니다.
+아래 `sample-app` 이름과 `chNN` CLI는 기존 배포를 위한 호환 인터페이스입니다. 신규
+`mini-commerce` 배포에 legacy 실행 예시를 그대로 적용하지 않습니다.
 
 Shared identity는 전용 계정의 Terraform-owned GitHub OIDC provider와 기존 account-wide provider를
 구분합니다. 기존 provider는 삭제하지 않고 external mode로 참조하며, ECR lifecycle 변경 전에는
@@ -33,12 +39,12 @@ GitHub OIDC + ECR
 | shared | GitHub OIDC, ECR, GitHub Actions IAM role | EKS cluster |
 | 01-network | VPC, subnet, NAT, route | EKS |
 | 02-eks | EKS 1.36, node group, Access Entry, OIDC provider | platform chart |
-| 03-platform | Gateway CRD, AWS LBC, External Secrets, AMP/ADOT, IRSA, `course-gp3`, Ch23 snapshot add-on (opt-in) | sample-app/PVC |
-| 04-workloads | Argo CD, Argo Rollouts, Gateway plugin, bootstrap Application | app manifest 원본 |
+| 03-platform | Gateway CRD, AWS LBC, External Secrets, AMP/ADOT, IRSA, `course-gp3`, snapshot add-on (opt-in) | application/PVC |
+| 04-workloads | HA Argo CD, Argo Rollouts native Istio RBAC, bootstrap Application | app manifest 원본 |
 
 ## 전제 도구
 
-- Terraform 1.15.9
+- Terraform 1.16.0
 - AWS CLI 2
 - kubectl 1.36 계열
 - Helm 4.2.4
@@ -46,13 +52,22 @@ GitHub OIDC + ECR
 
 버전 계약은 [versions.lock.yaml](./versions.lock.yaml)에 있습니다.
 
-과정 시작 시 두 검증 Region 중 하나를 선택하고 모든 Terraform root와 AWS CLI에서 같은 값을
+배포 시작 시 두 지원 Region 중 하나를 선택하고 모든 Terraform root와 AWS CLI에서 같은 값을
 사용합니다. 아래 예시는 서울이며 버지니아 북부를 선택하면 `us-east-1`로 바꿉니다.
 
 ```bash
 export AWS_REGION="ap-northeast-2"
 export STATE_BUCKET_NAME="replace-with-your-state-bucket"
 ```
+
+`.github/workflows/terraform-validate.yml`을 dispatch하기 전 repository Actions Variables에
+`AWS_ACCOUNT_ID`, `AWS_REGION`, `STATE_BUCKET_NAME`을 등록하고, Secrets에 별도 최소 권한 role의
+`TERRAFORM_PLAN_ROLE_ARN`, `TERRAFORM_APPLY_ROLE_ARN`을 등록합니다. `production` environment에는
+required reviewer와 self-review 차단을 설정합니다. Plan role은 state 조회와 plan에 필요한 읽기
+권한만, apply role은 승인된 plan 실행에 필요한 mutation 권한만 가져야 합니다.
+`TERRAFORM_PLAN_INPUTS_JSON`에는 선택 root의 실제 Terraform 입력도 등록해야 합니다.
+CI는 Git에 없는 로컬 tfvars를 읽지 않습니다. plan/drift 입력의 계정·region·bucket 결속과
+비공개 파일 처리는 [CI 입력 계약](docs/runbooks/enterprise-integration.md#scheduled-read-only-drift)을 확인합니다.
 
 ## 0. 공통 GitHub OIDC와 ECR
 
@@ -78,9 +93,10 @@ terraform output
 정상 결과에서 다음 값을 기록합니다.
 
 - `sample_app_push_role_arn` → sample-app의 `AWS_ROLE_ARN` variable
-- `sample_app_supply_chain_role_arn` → sample-app의 `AWS_ATTEST_VERIFY_ROLE_ARN` variable
-- `sample_app_ecr_repository_url` → GitOps values의 `image.repository`
-- `infra_role_arn` → EKS-infra workflow role
+- `sample_app_attest_verify_role_arn` → application의 `AWS_ATTEST_VERIFY_ROLE_ARN` variable
+- `mini_commerce_repositories.image` → 신규 Mini Commerce GitOps values의 `image.repository`
+- `sample_app_ecr_repository_url` → legacy sample-app image repository; 신규 image 주소와 구분
+- `infra_role_arn` → 기존 infra role의 호환 output; 별도 plan/apply/drift role 생성자가 아님
 
 ## 1. dev 클러스터
 
@@ -130,18 +146,18 @@ terraform -chdir=environments/dev/<downstream-layer> plan \
 placeholder, secret value, repository 접근을 준비한 뒤 `true`로 바꾸고 다시 적용합니다.
 
 `03-platform`은 EBS CSI Driver와 non-default `course-gp3` StorageClass도 만듭니다. StorageClass는
-encrypted gp3, volume expansion, `WaitForFirstConsumer`를 사용합니다. Ch01~Ch14에서는 PVC가
-없으므로 EBS volume 비용이 추가되지 않고, Ch14 이후 Stateful 실습에서 처음 provisioning됩니다.
+encrypted gp3, volume expansion, `WaitForFirstConsumer`를 사용합니다. StorageClass 생성만으로는
+EBS volume이 생성되지 않습니다. PVC를 소비하는 Pod가 스케줄링될 때 volume이 provisioning됩니다.
 
-Platform controller는 Chapter가 처음 필요로 할 때만 활성화합니다.
+Platform controller는 해당 운영 기능과 선행 조건이 준비됐을 때 활성화합니다.
 
 | 시점 | `03-platform` flag | 결과 |
 | --- | --- | --- |
-| Ch03 baseline | `enable_external_secrets=true` | Terraform이 External Secrets의 유일한 writer |
-| Ch12 | `enable_reloader=true` | runtime secret rotation이 Rollout의 새 Pod를 생성 |
-| Ch16 Dev | `enable_k6_operator=true`, `enable_amp_alerting=true` | 제한된 부하와 SLO/alert 검증 |
-| Prod | `enable_k6_operator=false` | 강의 load controller 설치 차단 |
-| Ch23 | `enable_snapshot_controller=true` | EKS managed `snapshot-controller`와 Retain `VolumeSnapshotClass` 설치 |
+| controller 초기화 | `enable_external_secrets=true` | Terraform이 External Secrets의 유일한 writer |
+| secret rotation | `enable_reloader=true` | runtime secret rotation이 Rollout의 새 Pod를 생성 |
+| Dev 부하 검증 | `enable_k6_operator=true`, `enable_amp_alerting=true` | 제한된 부하와 SLO/alert 검증 |
+| Prod | `enable_k6_operator=false` | 부하 생성 controller 설치 차단 |
+| snapshot 복구 준비 | `enable_snapshot_controller=true` | EKS managed `snapshot-controller`와 Retain `VolumeSnapshotClass` 설치 |
 
 ADOT X-Ray trace 입력은 애플리케이션과 OTLP/HTTP protobuf 계약을 사용합니다. `enable_adot_xray=true`일
 때 platform output의 `otlp_http_traces_endpoint`를 `OTEL_EXPORTER_OTLP_ENDPOINT`에 그대로
@@ -223,7 +239,7 @@ DEV_READY의 workflow identity는 sample-app의 canonical `ci` workflow에 결�
 }
 ```
 
-Ch15와 Ch16 runtime evidence는 EKS-infra가 호출자가 지정한 임시 경로에만 원자적으로 씁니다.
+Dev 배포 및 SLO runtime evidence는 EKS-infra가 호출자가 지정한 임시 경로에만 원자적으로 씁니다.
 `argocd-gitops/evidence/dev` 경로에는 직접 쓰지 않으며, 사람이 검토한 뒤 GitOps 변경으로 반영합니다.
 fixture/fake CLI가 활성화된 실행은 항상 `STATIC`이고 promotion input으로 사용할 수 없습니다.
 
@@ -237,8 +253,8 @@ bash scripts/course-check.sh ch16 <ch15-evidence> <context> <k6-namespace> \
   <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <temporary-path>
 ```
 
-Ch15는 Stateless deployment 상태만 증명합니다. DB endpoint, DB query span, PostgreSQL PVC는 Ch20
-이후 evidence에서만 다룹니다. Ch16은 현재 Ch15 identity와 동일한 source/image/GitOps/cluster/Region,
+배포 evidence는 Stateless deployment 상태만 증명합니다. DB endpoint, DB query span,
+PostgreSQL PVC는 별도 Stateful evidence에서 다룹니다. SLO evidence는 배포 evidence와 동일한 source/image/GitOps/cluster/Region,
 k6 controller와 bounded TestRun, AMP query, confirmed SNS subscription, Firing/Resolved 전달을 모두
 확인해야 `course.dev-slo/v1`을 생성합니다.
 
@@ -248,15 +264,15 @@ k6 controller와 bounded TestRun, AMP query, confirmed SNS subscription, Firing/
 `10.1.0.0/16`으로 dev와 겹치지 않습니다. prod bootstrap은 `argocd/bootstrap/prod`만
 읽으며 `envs/prod/values.yaml`을 `Rollout`으로 렌더링합니다.
 
-prod에서 추가로 확인합니다.
+신규 Mini Commerce에서는 native Istio 경로를 확인합니다.
 
 ```bash
-kubectl -n app-prod get rollout sample-app
-kubectl -n app-prod get analysistemplate sample-app-success-rate
-kubectl -n argo-rollouts logs deploy/argo-rollouts | rg 'gatewayAPI|plugin'
+kubectl -n app-prod get rollout mini-commerce
+kubectl -n app-prod get analysistemplate
+kubectl -n app-prod get virtualservice
 ```
 
-EKS-infra의 Ch17 runtime assertion은 namespace를 caller에게 받지 않고 항상 `app-prod`의
+기존 배포용 baseline assertion은 namespace를 caller에게 받지 않고 항상 `app-prod`의
 `sample-app` Rollout을 조회하며, 필요하면 내부 record `course.prod-rollout-baseline/v1`을 씁니다.
 이 record는 infrastructure gate일 뿐 promotion evidence가 아닙니다.
 
@@ -270,9 +286,10 @@ GitOps revision, stable Rollout revision/hash, 100% route, EKS ARN/Region을 결
 `argocd-gitops/evidence/prod/baseline.json`에 기록합니다. 두 schema나 output을 서로 대신 사용하지
 않습니다.
 
-## 4. Ch14 이후 Stateful runtime 검증
+## 4. Stateful runtime 검증과 legacy 호환
 
-GitOps의 `stateful-values.yaml`을 활성화하고 Argo CD 동기화가 끝난 뒤 consolidated checker로
+아래 명령은 legacy sample-app의 Dev PostgreSQL 경로를 위한 호환 검사입니다.
+GitOps의 해당 `stateful-values.yaml`을 활성화하고 Argo CD 동기화가 끝난 뒤 consolidated checker로
 StorageClass, PVC, PostgreSQL, migration Job, application Pod, 상품·재고·멱등 주문 API를 함께 확인합니다.
 
 ```bash
@@ -281,7 +298,9 @@ bash scripts/course-check.sh stateful course-dev app-dev https://sample-app.dev.
 
 정상 종료는 `PASS: Stateful Mini Commerce...`이고, 상품 수와 첫 SKU, 상품 1번의 재고가 함께
 출력됩니다. 이 검증은 secret 값을 출력하지 않습니다. 단일 replica PostgreSQL은 schema migration과
-rollback을 관찰하기 위한 교육용이며 운영 HA 구성으로 간주하지 않습니다.
+rollback을 검증하는 비운영 구성으로, 운영 HA 구성으로 간주하지 않습니다. 신규 Mini Commerce는
+분리된 Dev DB chart와 Prod RDS 경로를 사용합니다. 현재 앱의 schema `002` 호환성과 별도
+복구 경계는 [RDS runbook](docs/runbooks/enterprise-integration.md)과 GitOps의 data cutover runbook을 따릅니다.
 
 ## GitHub governance state
 
@@ -299,7 +318,7 @@ repository import와 위 설정 외의 예상하지 않은 변경이 없는지 �
 
 ## 제거 순서와 비용
 
-Ch26 제거는 개별 Kubernetes 리소스를 직접 삭제하지 않고, digest로 결속된 ownership·GitOps
+리소스 제거는 개별 Kubernetes 리소스를 직접 삭제하지 않고, digest로 결속된 ownership·GitOps
 증거를 `final-cleanup.sh`가 검증한 뒤에만 수행합니다. 각 allowlisted root에서 `terraform plan
 -destroy -out=<absolute-path>`로 binary plan을 저장하고 `terraform show <absolute-path>`를 사람이
 검토한 뒤, exact layer·absolute path·SHA-256을 `course.saved-destroy-plans/v1` 형식의
@@ -355,6 +374,12 @@ bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$LAB_EKS_REPO"
 
 EKS 저장소로 돌아와 동일한 파일 집합으로 먼저 dry-run을 실행합니다. `--execute`와 세 confirmation을
 추가한 두 번째 호출만 실제 제거를 허용합니다.
+
+`$SAVED_DESTROY_PLAN_MANIFEST`는 운영자가 검토한 exact binary path/SHA256와 layer 순서를 결속합니다.
+완료/실패/교체 plan은 crash-safe progress registry로 관리하므로 이전 `--saved-plan-dir` 인터페이스를
+대체합니다. 이는 별도의 명시적 운영자 cleanup 승인이지 GitHub protected-apply 승인 증거가 아닙니다.
+일반 CI 생성/apply의 source/account/backend/approval/FinOps gate는 그대로 유지합니다.
+기본 8개 root에 inventory가 요구하는 recovery/prod DB가 controllers 뒤에 추가됩니다.
 
 ```bash
 cleanup_args=(

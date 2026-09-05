@@ -25,6 +25,8 @@ locals {
     "prod/02-eks/terraform.tfstate",
     "prod/03-platform/terraform.tfstate",
     "prod/04-workloads/argocd/terraform.tfstate",
+    "prod/03-database/terraform.tfstate",
+    "recovery/03-database/terraform.tfstate",
   ])
   terraform_state_object_arns = toset(flatten([
     for bucket_arn in var.state_bucket_arns : [
@@ -189,7 +191,7 @@ resource "aws_iam_policy" "infra" {
       {
         Sid      = "CourseInfrastructure"
         Effect   = "Allow"
-        Action   = ["acm:*", "aps:*", "ec2:*", "eks:*", "elasticloadbalancing:*", "logs:*", "route53:*", "secretsmanager:*"]
+        Action   = ["acm:*", "aps:*", "ec2:*", "eks:*", "elasticloadbalancing:*", "logs:*", "route53:*"]
         Resource = "*"
       },
       {
@@ -206,6 +208,14 @@ resource "aws_iam_policy" "infra" {
           "iam:GetPolicy",
           "iam:GetPolicyVersion",
           "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:ListRolePolicies",
+          "iam:ListRoleTags",
+          "iam:UpdateAssumeRolePolicy",
+          "iam:UntagRole",
+          "iam:CreatePolicyVersion",
+          "iam:DeletePolicyVersion",
+          "iam:SetDefaultPolicyVersion",
           "iam:ListAttachedRolePolicies",
           "iam:ListInstanceProfilesForRole",
           "iam:ListPolicyVersions",
@@ -219,10 +229,11 @@ resource "aws_iam_policy" "infra" {
         Resource = "*"
       },
       {
-        Sid      = "TerraformStateBucketList"
-        Effect   = "Allow"
-        Action   = ["s3:ListBucket"]
-        Resource = sort(tolist(var.state_bucket_arns))
+        Sid       = "TerraformStateBucketList"
+        Effect    = "Allow"
+        Action    = ["s3:ListBucket"]
+        Resource  = sort(tolist(var.state_bucket_arns))
+        Condition = { StringEquals = { "s3:prefix" = concat(sort(tolist(local.terraform_state_keys)), [for k in local.terraform_state_keys : "${k}.tflock"]) } }
       },
       {
         Sid      = "TerraformStateObjects"
@@ -302,7 +313,7 @@ resource "aws_iam_policy" "sample_app_push" {
           "ecr:PutImage",
           "ecr:UploadLayerPart"
         ]
-        Resource = aws_ecr_repository.sample_app.arn
+        Resource = local.mini_commerce_image_arns
       }
     ]
   })
@@ -313,6 +324,55 @@ resource "aws_iam_policy" "sample_app_push" {
 resource "aws_iam_role_policy_attachment" "sample_app_push" {
   role       = aws_iam_role.sample_app_push.name
   policy_arn = aws_iam_policy.sample_app_push.arn
+}
+locals {
+  mini_commerce_image_arns = [aws_ecr_repository.sample_app.arn, aws_ecr_repository.mini_commerce.arn]
+  attestation_actions      = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer", "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"]
+}
+resource "aws_ecr_repository" "mini_commerce" {
+  name                 = var.mini_commerce_ecr_repository
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+  encryption_configuration { encryption_type = "AES256" }
+  image_scanning_configuration { scan_on_push = true }
+  tags = local.common_tags
+  lifecycle { prevent_destroy = true }
+}
+resource "aws_ecr_repository" "mini_commerce_chart" {
+  name                 = var.mini_commerce_chart_ecr_repository
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = false
+  encryption_configuration { encryption_type = "AES256" }
+  image_scanning_configuration { scan_on_push = true }
+  tags = local.common_tags
+  lifecycle { prevent_destroy = true }
+}
+resource "aws_iam_role" "sample_app_attest_verify" {
+  name = var.sample_app_attest_verify_role_name
+  tags = local.common_tags
+  assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{
+    Effect    = "Allow"
+    Action    = "sts:AssumeRoleWithWebIdentity"
+    Principal = { Federated = local.oidc_provider_arn }
+    Condition = { StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com", "token.actions.githubusercontent.com:sub" = var.sample_app_attest_verify_oidc_subjects } }
+  }] })
+}
+resource "aws_iam_policy" "sample_app_attest_verify" {
+  name = "${var.sample_app_attest_verify_role_name}-policy"
+  tags = local.common_tags
+  policy = jsonencode({ Version = "2012-10-17", Statement = [
+    { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
+    { Effect = "Allow", Action = local.attestation_actions, Resource = local.mini_commerce_image_arns }
+  ] })
+}
+resource "aws_iam_role_policy_attachment" "sample_app_attest_verify" {
+  role       = aws_iam_role.sample_app_attest_verify.name
+  policy_arn = aws_iam_policy.sample_app_attest_verify.arn
+}
+module "ecr_registry_scanning" {
+  source                = "../../modules/security/ecr-registry-scanning"
+  configuration         = var.ecr_registry_scanning
+  required_repositories = [var.sample_app_ecr_repository, var.mini_commerce_ecr_repository, aws_ecr_repository.platform_istio_proxy.name]
 }
 
 resource "aws_iam_role" "sample_app_supply_chain" {

@@ -53,18 +53,6 @@ variable "argo_rollouts_chart_version" {
   default     = "2.42.0"
 }
 
-variable "gateway_plugin_version" {
-  description = "Pinned Gateway API traffic router plugin version"
-  type        = string
-  default     = "0.16.0"
-}
-
-variable "gateway_plugin_digest" {
-  description = "Immutable multi-architecture index digest for the Gateway API traffic router plugin"
-  type        = string
-  default     = "sha256:af5aaba7e34c2b8eb0d52128ac91cb913f065b710c7dea88db59d626a96c53c2"
-}
-
 variable "gitops_repo_url" {
   description = "HTTPS clone URL of the argocd-gitops repository"
   type        = string
@@ -87,3 +75,5 @@ variable "enable_bootstrap" {
   type        = bool
   default     = false
 }
+variable "tags" { type = map(string) }
+variable "argocd_platform" { type = object({ server_replicas = number, repo_server_replicas = number, controller_replicas = number, applicationset_replicas = number, redis_ha = bool, node_count = number, az_count = number, public_url = string, oidc_issuer_url = string, oidc_client_id = string, admin_group = string, readonly_group = string }) }

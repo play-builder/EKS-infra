@@ -1,0 +1,3 @@
+# Use an isolated Python 3.10+ environment for operator-side archive collection.
+-r requirements-amp-slo.txt
+PyYAML==6.0.3

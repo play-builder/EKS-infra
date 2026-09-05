@@ -10,3 +10,20 @@ gitops_target_revision = "main"
 
 # First apply with false. Set true after the repository exists and is reachable.
 enable_bootstrap = false
+# Bootstrap source must be publicly readable. Fill OIDC values; secret values go
+# directly to Secrets Manager out of Terraform. Keep admin until live SSO proof.
+tags = { PlatformInstanceId = "replace-me", Owner = "platform-sre", CostCenter = "replace-me" }
+argocd_platform = {
+ server_replicas = 1
+ repo_server_replicas = 1
+ controller_replicas = 1
+ applicationset_replicas = 1
+ redis_ha = false
+ node_count = 2
+ az_count = 2
+ public_url = "https://argocd.example.com"
+ oidc_issuer_url = "https://id.example.com"
+ oidc_client_id = "argocd-dev"
+ admin_group = "platform-admin"
+ readonly_group = "platform-readonly"
+}

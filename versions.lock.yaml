@@ -27,8 +27,6 @@ delivery:
   gatewayApi: "1.6.0"
   awsLoadBalancerControllerChart: "3.5.0"
   awsLoadBalancerController: "3.5.0"
-  gatewayApiTrafficRouterPlugin: "0.16.0"
-  gatewayApiTrafficRouterPluginDigest: "sha256:af5aaba7e34c2b8eb0d52128ac91cb913f065b710c7dea88db59d626a96c53c2"
   externalSecretsChart: "2.10.0"
   externalSecretsChartDigest: "sha256:b96e948fff3674638b5d3f9e43886f3796e04739c4b4127929aed2ddac7d1418"
   externalSecretsChartSource: "https://github.com/external-secrets/external-secrets/releases/download/helm-chart-2.10.0/external-secrets-2.10.0.tgz"
@@ -77,3 +75,23 @@ platform:
   chaosMeshRelease: "https://github.com/chaos-mesh/chaos-mesh/releases/tag/v2.8.0"
   chaosMeshVerifiedAt: "2026-09-03"
   chaosMeshChartDigest: "sha256:d8d650368b632ea6409971a4778a77475ac47573861a378326a2ca45561d2aae"
+regional_eks_lifecycle:
+  ap-northeast-2: {status: LIVE_NOT_VERIFIED, source: OPERATOR_AWS_LOOKUP_REQUIRED}
+  us-east-1: {status: LIVE_NOT_VERIFIED, source: OPERATOR_AWS_LOOKUP_REQUIRED}
+cluster_autoscaler_bridge:
+  chart: 9.59.0
+  chartSha256: 90276dafe65cf5d4328ef8313baf6cfb9d130683e0c9f3c28a03b4d8a9ed8f6e
+  image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.36.0@sha256:dc5d62770338c2902f31b01f95c9fc8c456fd88baa5364ca154d6e47069ec885
+  status: OVERRIDE_REQUIRES_CLOUD_RUNTIME
+sigstore_prerequisites:
+  chartVersion: 0.10.5
+  appVersion: 0.13.1
+  chartOciDigest: sha256:bd825655f80a062a23e71725cb33118566ff6a90daf97a1ce17a52a4bc6e010d
+  chartArchiveSha256: d1c243d566ef11c7e206cc9f6a1187f9e4291325d011d8fc432f50632296336c
+  controllerImageDigest: sha256:0bcd60beb93f4427c29cf3a669743caf58490e98ded4380c33c09f092734a6ab
+  cleanupImageDigest: sha256:1e1ef597cf577885d2b1b5fa927efad03164292069bc67f20ee3c15db62e7f5d
+  cipServedVersions: [v1alpha1, v1beta1]
+  cipStorageVersion: v1alpha1
+  trustrootApiVersion: v1alpha1
+  policyOwner: argocd-gitops
+  runtime: LIVE_NOT_VERIFIED

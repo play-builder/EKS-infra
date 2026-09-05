@@ -39,6 +39,22 @@ exit 98
 EOF
 chmod +x "$tmp_dir/bin/aws" "$tmp_dir/bin/kubectl"
 
+# The old preflight incorrectly emitted GO with no billing configuration.
+if COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
+FINOPS_CONTRACT_JSON= PLATFORM_INSTANCE_ID= FINOPS_GATE_POLICY= \
+COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/missing-finops.log" \
+COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
+COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
+  bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
+    "$tmp_dir/design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/missing-finops.json" >/dev/null 2>&1; then
+  echo 'FAIL: production GO bypassed required FinOps configuration' >&2
+  exit 1
+fi
+
+python3 "$root/tests/finops_readiness_test.py" --export-fixture "$tmp_dir/finops.json" "$tmp_dir/finops-observations.json"
+export FINOPS_CONTRACT_JSON="$tmp_dir/finops.json" FINOPS_FIXTURE_JSON="$tmp_dir/finops-observations.json"
+export PLATFORM_INSTANCE_ID=commerce-123 FINOPS_GATE_POLICY=configuration-only
+
 COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
 COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
@@ -46,13 +62,40 @@ COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
   bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
     "$tmp_dir/design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/estimate.json"
 
-jq -e '.stage == "estimate" and .decision == "GO" and .evidenceGrade == "STATIC"' \
+jq -e '.schemaVersion == "course.prod-preflight/v2" and .stage == "estimate" and .decision == "GO" and .evidenceGrade == "STATIC" and
+  .finops.configurationStatus == "CONFIGURED" and .finops.dataStatus == "DATA_PENDING" and .finops.deliveryStatus == "NOT_VERIFIED" and
+  .finops.evidenceGrade == "LOCAL_VERIFIED" and .bindings.finopsContractSha256 == .finops.bindings.contractSha256' \
   "$tmp_dir/estimate.json" >/dev/null
 grep -Fq -- '--region ap-northeast-2' "$tmp_dir/aws.log"
 if grep -Fq '[CLOUD_RUNTIME]' "$tmp_dir/estimate.json"; then
   echo 'fake AWS must not produce CLOUD_RUNTIME evidence' >&2
   exit 1
 fi
+
+for mutation in '.notifications |= .[0:2]' '.costTags[0].Status="Inactive"'; do
+  jq "$mutation" "$tmp_dir/finops-observations.json" >"$tmp_dir/bad-finops.json"
+  : >"$tmp_dir/bad-finops-aws.log"
+  if COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
+    COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/bad-finops-aws.log" \
+    COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
+    COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" FINOPS_FIXTURE_JSON="$tmp_dir/bad-finops.json" \
+      bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
+        "$tmp_dir/design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/bad-go.json" >/dev/null 2>&1; then
+    echo 'invalid FinOps controls must reject production GO' >&2
+    exit 1
+  fi
+  [[ ! -s "$tmp_dir/bad-finops-aws.log" && ! -e "$tmp_dir/bad-go.json" ]]
+done
+
+# A caller cannot promote fixture observations by omitting the static mode marker.
+if COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
+  COURSE_CHECK_BIN_DIR= FINOPS_RUNTIME_VERIFIED=true \
+    bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
+      "$tmp_dir/design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/promoted.json" >/dev/null 2>&1; then
+  echo 'fixture promotion must fail' >&2
+  exit 1
+fi
+[[ ! -e "$tmp_dir/promoted.json" ]]
 
 expect_preflight_timestamp_rejected_before_cloud() {
   local label=$1 input_kind=$2 field=$3 value=$4

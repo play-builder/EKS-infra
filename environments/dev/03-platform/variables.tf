@@ -77,7 +77,7 @@ variable "ebs_csi_driver_use_aws_managed_policy" {
 }
 
 variable "enable_course_storage_class" {
-  description = "Create the non-default encrypted gp3 StorageClass used by the Stateful course lab"
+  description = "Create the non-default encrypted gp3 StorageClass for stateful workloads"
   type        = bool
   default     = true
 }
@@ -218,7 +218,7 @@ variable "amg_authentication_providers" {
 }
 
 variable "enable_external_secrets" {
-  description = "Install the Terraform-owned External Secrets controller from the Ch03 baseline"
+  description = "Install the Terraform-owned External Secrets controller"
   type        = bool
   default     = true
 }
@@ -248,7 +248,7 @@ variable "external_secrets_adoption_evidence_path" {
 }
 
 variable "enable_reloader" {
-  description = "Enable Reloader at the first Ch12 platform apply"
+  description = "Enable Reloader for application secret rotation"
   type        = bool
   default     = false
 }
@@ -266,13 +266,62 @@ variable "enable_adot_xray" {
 }
 
 variable "enable_amp_alerting" {
-  description = "Enable Ch16 AMP recording rules and Alertmanager"
+  description = "Enable AMP recording rules and Alertmanager"
   type        = bool
   default     = false
 }
 
+variable "amp_alert_owner" {
+  type    = string
+  default = "platform"
+}
+
+variable "amp_runbook_url" {
+  type    = string
+  default = "https://github.com/play-builder/EKS-infra/blob/main/docs/runbooks/amp-slo.md"
+}
+
+variable "slo" {
+  type = object({
+    success_target                = number
+    latency_ms_target             = number
+    short_window                  = string
+    long_window                   = string
+    short_burn_threshold          = number
+    long_burn_threshold           = number
+    traffic_floor_rps             = number
+    paging_severity               = string
+    escalation_route              = string
+    alert_resolve_timeout_minutes = number
+  })
+  default = {
+    success_target                = 0.999
+    latency_ms_target             = 500
+    short_window                  = "5m"
+    long_window                   = "1h"
+    short_burn_threshold          = 14.4
+    long_burn_threshold           = 14.4
+    traffic_floor_rps             = 0.1
+    paging_severity               = "critical"
+    escalation_route              = "platform-sns"
+    alert_resolve_timeout_minutes = 15
+  }
+  validation {
+    condition     = var.slo.success_target > 0 && var.slo.success_target < 1 && var.slo.latency_ms_target > 0 && var.slo.traffic_floor_rps > 0 && var.slo.short_burn_threshold > 0 && var.slo.long_burn_threshold > 0 && var.slo.alert_resolve_timeout_minutes > 0
+    error_message = "SLO targets, burn thresholds, traffic floor and resolve timeout must be positive; success_target must be below one."
+  }
+  validation {
+    condition     = can(regex("^[1-9][0-9]*[mh]$", var.slo.short_window)) && can(regex("^[1-9][0-9]*[mh]$", var.slo.long_window)) && try(tonumber(trimsuffix(trimsuffix(var.slo.short_window, "m"), "h")) * (endswith(var.slo.short_window, "h") ? 60 : 1) < tonumber(trimsuffix(trimsuffix(var.slo.long_window, "m"), "h")) * (endswith(var.slo.long_window, "h") ? 60 : 1), false)
+    error_message = "Use positive minute/hour windows with short strictly below long."
+  }
+  validation {
+    condition     = contains(["warning", "critical"], var.slo.paging_severity) && can(regex("^[a-z][a-z0-9-]+$", var.slo.escalation_route))
+    error_message = "Use a bounded severity and an explicit receiver name."
+  }
+}
+
 variable "enable_sns_alert_delivery" {
-  description = "Enable Ch16 SNS alert delivery after an endpoint is supplied"
+  description = "Enable SNS alert delivery after an endpoint is supplied"
   type        = bool
   default     = false
 
@@ -290,13 +339,13 @@ variable "sns_alert_email_endpoint" {
 }
 
 variable "enable_k6_operator" {
-  description = "Enable the Dev-only k6 operator at the first Ch16 platform apply"
+  description = "Enable the Dev-only k6 operator for bounded load generation"
   type        = bool
   default     = false
 }
 
 variable "enable_chaos_mesh" {
-  description = "Enable the Ch25 Dev-only Chaos Mesh controller"
+  description = "Enable the Dev-only Chaos Mesh controller"
   type        = bool
   default     = false
 }
@@ -314,19 +363,19 @@ variable "chaos_mesh_namespace" {
 }
 
 variable "chaos_mesh_allowed_namespaces" {
-  description = "Non-prod application namespaces eligible for Ch25 faults"
+  description = "Non-prod application namespaces eligible for fault injection"
   type        = list(string)
   default     = ["app-dev"]
 }
 
 variable "chaos_mesh_max_fault_duration_seconds" {
-  description = "Maximum duration for one Ch25 fault"
+  description = "Maximum duration for one injected fault"
   type        = number
   default     = 60
 }
 
 variable "chaos_mesh_max_faults" {
-  description = "Maximum number of simultaneous Ch25 faults"
+  description = "Maximum number of simultaneous injected faults"
   type        = number
   default     = 1
 
@@ -360,7 +409,7 @@ variable "k6_operator_namespace" {
 }
 
 variable "enable_snapshot_controller" {
-  description = "Enable the EKS managed snapshot-controller add-on at Ch23"
+  description = "Enable the EKS managed snapshot-controller add-on"
   type        = bool
   default     = false
 }
@@ -377,13 +426,13 @@ variable "snapshot_controller_addon_version" {
 }
 
 variable "volume_snapshot_class_name" {
-  description = "Course-owned VolumeSnapshotClass name"
+  description = "Platform-owned VolumeSnapshotClass name"
   type        = string
   default     = "course-ebs-snapshots"
 }
 
 variable "snapshot_driver" {
-  description = "CSI driver used by the course VolumeSnapshotClass"
+  description = "CSI driver used by the platform VolumeSnapshotClass"
   type        = string
   default     = "ebs.csi.aws.com"
 
@@ -405,3 +454,46 @@ variable "recovery_secret_kms_key_arn" {
   default     = null
   nullable    = true
 }
+variable "autoscaling_mode" {
+  type    = string
+  default = "mng_cluster_autoscaler"
+  validation {
+    condition     = contains(["fixed", "mng_cluster_autoscaler"], var.autoscaling_mode) && (var.environment != "prod" || (var.autoscaling_mode == "mng_cluster_autoscaler" && var.enable_cluster_autoscaler))
+    error_message = "Production requires enabled managed-node Cluster Autoscaler."
+  }
+}
+variable "autoscaler_capacity" {
+  type = object({
+    min_nodes                    = number
+    max_nodes                    = number
+    max_pods_per_node            = number
+    hpa_max_replicas             = number
+    rollout_surge_replicas       = number
+    platform_reserve_pods        = number
+    stable_replicas              = number
+    canary_replicas              = number
+    usable_subnet_ips_by_az      = map(number)
+    required_headroom_percentage = number
+  })
+  validation {
+    condition = (
+      var.autoscaler_capacity.min_nodes >= 1 &&
+      var.autoscaler_capacity.max_nodes >= var.autoscaler_capacity.min_nodes &&
+      var.autoscaler_capacity.max_pods_per_node >= 1 &&
+      alltrue([for n in [var.autoscaler_capacity.hpa_max_replicas, var.autoscaler_capacity.rollout_surge_replicas, var.autoscaler_capacity.platform_reserve_pods, var.autoscaler_capacity.stable_replicas, var.autoscaler_capacity.canary_replicas] : n >= 0 && floor(n) == n]) &&
+      var.autoscaler_capacity.required_headroom_percentage >= 10 &&
+      var.autoscaler_capacity.required_headroom_percentage <= 100 &&
+      (max(var.autoscaler_capacity.hpa_max_replicas, var.autoscaler_capacity.stable_replicas + var.autoscaler_capacity.canary_replicas) + var.autoscaler_capacity.rollout_surge_replicas + var.autoscaler_capacity.platform_reserve_pods) * (1 + var.autoscaler_capacity.required_headroom_percentage / 100) <= var.autoscaler_capacity.max_nodes * var.autoscaler_capacity.max_pods_per_node &&
+      length(var.autoscaler_capacity.usable_subnet_ips_by_az) >= (var.environment == "prod" ? 3 : 2) &&
+      alltrue([for ip in values(var.autoscaler_capacity.usable_subnet_ips_by_az) : ip >= ceil(var.autoscaler_capacity.max_nodes / max(length(var.autoscaler_capacity.usable_subnet_ips_by_az), 1)) * var.autoscaler_capacity.max_pods_per_node * (1 + var.autoscaler_capacity.required_headroom_percentage / 100)])
+    )
+    error_message = "Node/pod capacity and every AZ IP pool must cover workload, surge, reserve and headroom."
+  }
+}
+variable "sigstore_controller_replicas" {
+  type    = number
+  default = 1
+}
+variable "sigstore_ecr_repository_arns" { type = set(string) }
+variable "sigstore_api_server_cidrs" { type = set(string) }
+variable "sigstore_https_egress_cidrs" { type = set(string) }

@@ -19,3 +19,11 @@ test_allows_immutable_repository if {
   }]}
   count(warnings) == 0
 }
+test_rejects_mutable_mini_commerce_repository if {
+  violations := deny with input as {"resource_changes": [{
+    "address": "aws_ecr_repository.mini_commerce",
+    "type": "aws_ecr_repository",
+    "change": {"after": {"image_tag_mutability": "MUTABLE"}},
+  }]}
+  count(violations) == 1
+}

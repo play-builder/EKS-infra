@@ -64,34 +64,39 @@ output "private_node_role_arn" {
   value       = var.enable_private_node_group ? module.node_group_private[0].node_role_arn : null
 }
 
-output "bastion_instance_id" {
-  description = "Bastion Host instance ID"
-  value       = var.enable_bastion ? module.bastion[0].instance_id : null
-}
-
-output "bastion_public_ip" {
-  description = "Bastion Host Elastic IP"
-  value       = var.enable_bastion ? module.bastion[0].public_ip : null
-}
-
-output "bastion_security_group_id" {
-  description = "Bastion Host security group ID"
-  value       = var.enable_bastion ? module.bastion[0].security_group_id : null
+output "operator_access_status" {
+  description = "Private SSM operator access identity and instance"
+  value       = module.operator_access.operator_access_status
 }
 
 output "vpc_cni_addon_version" {
-  value = module.eks_cluster.vpc_cni_addon_version
+  description = "Pinned VPC CNI managed add-on version"
+  value       = module.eks_cluster.vpc_cni_addon_version
 }
 
 output "vpc_cni_network_policy_enabled" {
-  value = module.eks_cluster.vpc_cni_network_policy_enabled
+  description = "Whether VPC CNI network policy enforcement is enabled"
+  value       = module.eks_cluster.vpc_cni_network_policy_enabled
 }
 
 output "vpc_cni_network_policy_enforcing_mode" {
-  value = module.eks_cluster.vpc_cni_network_policy_enforcing_mode
+  description = "VPC CNI network policy enforcement mode"
+  value       = module.eks_cluster.vpc_cni_network_policy_enforcing_mode
 }
 
 output "configure_kubectl" {
   description = "Configure kubectl command"
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks_cluster.cluster_name}"
 }
+output "eks_upgrade_contract" {
+  value = {
+    cluster_version          = module.eks_cluster.cluster_version
+    vpc_cni_version          = var.vpc_cni_addon_version
+    coredns_version          = module.managed_addons.versions.coredns
+    kube_proxy_version       = module.managed_addons.versions.kube_proxy
+    node_release_version     = var.node_release_version
+    managed_addon_owner_hash = module.managed_addons.owner_hash
+  }
+}
+output "access_entries" { value = module.access_entries.access_entries }
+output "workload_identity" { value = module.access_entries.workload_identity }

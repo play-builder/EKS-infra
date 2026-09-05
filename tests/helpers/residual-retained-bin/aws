@@ -5,6 +5,7 @@ set -Eeuo pipefail
 printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
 
 case "$1 $2" in
+  'resourcegroupstaggingapi get-resources') printf '{"ResourceTagMappingList":[]}\n' ;;
   'elbv2 describe-load-balancers') printf '{"LoadBalancers":[]}\n' ;;
   'ec2 describe-nat-gateways') printf '{"NatGateways":[]}\n' ;;
   'eks list-clusters') printf '{"clusters":[]}\n' ;;

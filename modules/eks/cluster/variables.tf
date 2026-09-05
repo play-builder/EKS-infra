@@ -21,7 +21,7 @@ variable "cluster_version" {
 }
 
 variable "authentication_mode" {
-  description = "EKS authentication mode. This course uses Access Entry API instead of aws-auth."
+  description = "EKS authentication mode; use Access Entry API instead of aws-auth."
   type        = string
   default     = "API"
 
@@ -35,6 +35,10 @@ variable "bootstrap_cluster_creator_admin_permissions" {
   description = "Grant the creating principal automatic cluster-admin permissions"
   type        = bool
   default     = false
+  validation {
+    condition     = !var.bootstrap_cluster_creator_admin_permissions
+    error_message = "Use the named typed break-glass Access Entry; automatic creator admin is disabled."
+  }
 }
 
 variable "cluster_admin_principal_arns" {
@@ -43,8 +47,8 @@ variable "cluster_admin_principal_arns" {
   default     = []
 
   validation {
-    condition     = alltrue([for arn in var.cluster_admin_principal_arns : can(regex("^arn:aws(-[a-z]+)?:iam::[0-9]{12}:(role|user)/", arn))])
-    error_message = "Every cluster admin principal must be an IAM role or user ARN."
+    condition     = length(var.cluster_admin_principal_arns) == 0
+    error_message = "Migrate legacy principal state to the access-entries module."
   }
 }
 
@@ -128,13 +132,13 @@ variable "cluster_log_retention_in_days" {
   default     = 7
 
   validation {
-    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653], var.cluster_log_retention_in_days)
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.cluster_log_retention_in_days) && (var.environment != "prod" || var.cluster_log_retention_in_days >= 90)
     error_message = "cluster_log_retention_in_days must be a valid CloudWatch Logs retention period."
   }
 }
 
 variable "vpc_cni_addon_version" {
-  description = "EKS-compatible VPC CNI add-on version verified in both course Regions"
+  description = "EKS-compatible VPC CNI add-on version selected for the supported AWS Regions"
   type        = string
 
   validation {
@@ -177,10 +181,26 @@ variable "enable_cluster_creator_access" {
   description = "Enable Access Entry for cluster creator (for initial kubectl access)"
   type        = bool
   default     = false
+  validation {
+    condition     = !var.enable_cluster_creator_access
+    error_message = "Use the typed access-entries module."
+  }
 }
 
 variable "cluster_creator_arn" {
   description = "IAM ARN of the cluster creator (user or role) for Access Entry"
   type        = string
   default     = ""
+}
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+variable "cluster_log_kms_key_arn" {
+  type    = string
+  default = null
+  validation {
+    condition     = var.environment != "prod" || try(can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[0-9a-f-]{36}$", var.cluster_log_kms_key_arn)), false)
+    error_message = "Production audit logs require a customer-managed KMS key ARN."
+  }
 }

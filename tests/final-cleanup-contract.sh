@@ -120,6 +120,7 @@ cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+if [[ "$1 $2" == "resourcegroupstaggingapi get-resources" ]]; then echo '{"ResourceTagMappingList":[]}'; exit 0; fi
 case "$1 $2" in
   'sts get-caller-identity') printf '{"Account":"123456789012"}\n' ;;
   'elbv2 describe-load-balancers') printf '{"LoadBalancers":[]}\n' ;;

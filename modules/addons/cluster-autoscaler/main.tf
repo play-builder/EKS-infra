@@ -41,6 +41,10 @@ resource "helm_release" "cluster_autoscaler" {
     yamlencode({
       cloudProvider = "aws"
       awsRegion     = var.aws_region
+      image = {
+        repository = "registry.k8s.io/autoscaling/cluster-autoscaler"
+        tag        = "v1.36.0@sha256:dc5d62770338c2902f31b01f95c9fc8c456fd88baa5364ca154d6e47069ec885"
+      }
 
       autoDiscovery = {
         clusterName = var.cluster_name

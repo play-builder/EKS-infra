@@ -1,0 +1,14 @@
+aws_region = "ap-northeast-2"
+course_id = "course-2026"
+project_name = "mini-commerce"
+platform_instance_id = "replace-with-organization-unique-platform-id"
+owner = "platform-sre"
+cost_center = "replace-with-cost-center"
+billing_account_id = "REPLACE_WITH_MANAGEMENT_ACCOUNT_ID"
+workload_account_id = "REPLACE_WITH_WORKLOAD_ACCOUNT_ID"
+billing_access = { profile = "billing-management" }
+finops = {
+  monthly_budget_usd = 300
+  anomaly_threshold_usd = 20
+  notification_topic_arn = "REPLACE_WITH_EXISTING_MANAGEMENT_ACCOUNT_SNS_ARN_IN_US_EAST_1"
+}

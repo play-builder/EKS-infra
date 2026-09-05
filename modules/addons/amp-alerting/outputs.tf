@@ -3,6 +3,16 @@ output "enabled" {
   value       = var.enabled
 }
 
+output "slo" {
+  description = "Typed SLO consumed by GitOps and captured-evidence validation; not live readiness."
+  value       = var.slo
+}
+
+output "rules_yaml" {
+  description = "Exact raw provider payload for offline promtool validation."
+  value       = yamlencode(local.rule_groups)
+}
+
 output "sns_delivery_enabled" {
   description = "Whether an SNS route and subscription are declared"
   value       = local.subscription_enabled

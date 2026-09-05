@@ -1,5 +1,5 @@
 variable "enable_course_resources" {
-  description = "Create course-specific Gateway CRDs, secret shell, and IRSA roles"
+  description = "Create Gateway CRDs, Secrets Manager containers, and IRSA roles"
   type        = bool
   default     = true
 }
@@ -11,7 +11,7 @@ variable "enable_gateway_api" {
 }
 
 variable "secret_recovery_window_in_days" {
-  description = "Secrets Manager recovery window. Use 7 in the course; set 0 only for disposable labs."
+  description = "Secrets Manager recovery window in days; zero disables recovery and is only suitable for disposable environments."
   type        = number
   default     = 7
 
@@ -230,6 +230,6 @@ output "gateway_crd_versions" {
 }
 
 output "course_storage_class_name" {
-  description = "Non-default encrypted gp3 StorageClass for the Stateful course lab"
+  description = "Non-default encrypted gp3 StorageClass for stateful workloads"
   value       = var.enable_course_resources && var.enable_course_storage_class && var.enable_ebs_csi_driver ? kubernetes_storage_class_v1.course_gp3[0].metadata[0].name : null
 }

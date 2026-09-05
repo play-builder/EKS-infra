@@ -28,7 +28,7 @@ skip_files=$(yq -r '.jobs.security.steps[] | select(.name == "Scan Terraform wit
   echo 'Trivy Action ref must match versions.lock.yaml' >&2
   exit 1
 }
-[[ "$scanner_version" == "$locked_version" ]] || {
+[[ "$scanner_version" == "v$locked_version" && "${scanner_version#v}" == "$locked_version" ]] || {
   echo 'Trivy scanner version input must match versions.lock.yaml' >&2
   exit 1
 }

@@ -82,10 +82,7 @@ run "sns_policy_scopes_amp_publish_to_workspace" {
   }
 
   assert {
-    condition = strcontains(
-      base64decode(aws_prometheus_alert_manager_definition.course[0].definition),
-      "\"region\": \"ap-northeast-2\""
-    )
+    condition     = try(yamldecode(yamldecode(aws_prometheus_alert_manager_definition.course[0].definition).alertmanager_config).receivers[0].sns_configs[0].sigv4.region == "ap-northeast-2", false)
     error_message = "Alertmanager SNS receiver must sign in the selected AWS Region."
   }
 }

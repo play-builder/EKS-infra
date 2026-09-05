@@ -1,0 +1,7 @@
+project_name = "commerce"
+course_id = "REPLACE_OWNERSHIP_ID"
+aws_region = "ap-northeast-2"
+administrator_role_arns = ["arn:aws:iam::REPLACE_ACCOUNT_ID:role/REPLACE_KEY_ADMIN_ROLE"]
+operator_role_arns = ["arn:aws:iam::REPLACE_ACCOUNT_ID:role/REPLACE_BACKUP_OPERATOR_ROLE"]
+retention_days = 120
+tags = { PlatformInstanceId = "REPLACE_PLATFORM_ID", Owner = "platform-sre", CostCenter = "REPLACE_COST_CENTER" }

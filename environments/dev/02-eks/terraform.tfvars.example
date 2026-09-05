@@ -13,9 +13,7 @@ vpc_cni_network_policy_enforcing_mode  = "standard"
 cluster_version                            = "1.36"
 authentication_mode                        = "API"
 bootstrap_cluster_creator_admin_permissions = false
-cluster_admin_principal_arns = [
-  "arn:aws:iam::123456789012:role/AWSReservedSSO_AdministratorAccess_REPLACE_ME",
-]
+cluster_admin_principal_arns = []
 
 # Restrict public API access to the operator's /32; never use 0.0.0.0/0.
 cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
@@ -31,3 +29,15 @@ private_node_group_instance_types = ["t3.large"]
 
 # Required by the module even when the bastion is disabled; leave empty.
 bastion_instance_keypair = ""
+# Required before plan: exact values from AWS in this account/Region, never copy fixture pins.
+# managed_addon_versions = { coredns = "<AWS-verified>", kube_proxy = "<AWS-verified>" }
+# node_release_version = "<AWS-verified MNG release>"
+# External principals only. Existing installations must follow access-entry-state-migration.md.
+access_entries = {
+ "platform-break-glass" = { principal_arn = "arn:aws:iam::123456789012:role/platform-break-glass", policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy", scope_type = "cluster", namespaces = [], break_glass = true }
+ "release-automation" = { principal_arn = "arn:aws:iam::123456789012:role/release-automation", policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy", scope_type = "namespace", namespaces = ["app-dev"], break_glass = false }
+ "developer-readonly" = { principal_arn = "arn:aws:iam::123456789012:role/developer-readonly", policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy", scope_type = "namespace", namespaces = ["app-dev"], break_glass = false }
+}
+
+# Must match the 01-network logging contract cluster name.
+cluster_log_retention_in_days = 30

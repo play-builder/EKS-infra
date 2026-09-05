@@ -16,12 +16,15 @@ locals {
   common_tags = merge(
     var.tags,
     {
-      CourseId    = var.course_id
-      Environment = var.environment
-      Project     = var.project_name
-      division    = var.division
-      ManagedBy   = "Terraform"
-      Layer       = "eks"
+      CourseId           = var.course_id
+      Environment        = var.environment
+      PlatformInstanceId = var.platform_instance_id
+      Owner              = var.owner
+      CostCenter         = var.cost_center
+      Project            = var.project_name
+      division           = var.division
+      ManagedBy          = "Terraform"
+      Layer              = "eks"
     }
   )
 
@@ -48,10 +51,12 @@ module "eks_cluster" {
 
   authentication_mode                         = var.authentication_mode
   bootstrap_cluster_creator_admin_permissions = var.bootstrap_cluster_creator_admin_permissions
-  cluster_admin_principal_arns                = var.cluster_admin_principal_arns
 
   cluster_enabled_log_types     = var.cluster_enabled_log_types
   cluster_log_retention_in_days = var.cluster_log_retention_in_days
+  cluster_log_kms_key_arn       = data.terraform_remote_state.network.outputs.logging_contract.kms_key_arn
+  environment                   = var.environment
+  depends_on                    = [terraform_data.logging_identity]
 
   vpc_cni_addon_version                 = var.vpc_cni_addon_version
   vpc_cni_enable_network_policy         = var.vpc_cni_enable_network_policy
@@ -65,8 +70,9 @@ module "node_group_private" {
   source = "../../../modules/eks/node-group/"
   count  = var.enable_private_node_group ? 1 : 0
 
-  cluster_name    = local.cluster_name
-  cluster_version = module.eks_cluster.cluster_version
+  cluster_name         = local.cluster_name
+  cluster_version      = module.eks_cluster.cluster_version
+  node_release_version = var.node_release_version
 
   name            = local.name
   node_group_name = var.private_node_group_name
@@ -84,8 +90,8 @@ module "node_group_private" {
 
   max_unavailable_percentage = var.node_group_max_unavailable
 
-  ssh_key_name                  = var.bastion_instance_keypair
-  ssh_source_security_group_ids = var.enable_bastion ? [module.bastion[0].security_group_id] : []
+  ssh_key_name                  = ""
+  ssh_source_security_group_ids = []
 
   enable_ssm        = true
   enable_cloudwatch = true
@@ -101,21 +107,41 @@ module "node_group_private" {
 }
 
 
-module "bastion" {
-  source = "../../../modules/compute/bastion"
-  count  = var.enable_bastion ? 1 : 0
+module "operator_access" {
+  source = "../../../modules/compute/operator-access"
 
-  name = "${local.name}-bastion"
+  name                      = local.name
+  vpc_id                    = local.vpc_id
+  subnet_id                 = var.operator_access.subnet_id
+  cluster_name              = module.eks_cluster.cluster_name
+  cluster_arn               = module.eks_cluster.cluster_arn
+  cluster_security_group_id = module.eks_cluster.cluster_security_group_id
+  trusted_sso_principal_arn = var.operator_access.trusted_sso_principal_arn
+  ami_id                    = var.operator_access.ami_id
+  instance_type             = var.operator_access.instance_type
+  mode                      = var.operator_access.mode
+  tags                      = local.common_tags
 
-  vpc_id           = local.vpc_id
-  public_subnet_id = local.public_subnet_ids[0]
-
-  instance_type    = var.bastion_instance_type
-  instance_keypair = var.bastion_instance_keypair
-
-  ssh_cidr_blocks = var.bastion_ssh_cidr_blocks
-
-  private_key_path = "private-key/${var.bastion_instance_keypair}.pem"
-
-  tags = local.common_tags
+  depends_on = [module.eks_cluster]
+}
+module "managed_addons" {
+  source                 = "../../../modules/eks/managed-addons"
+  cluster_name           = module.eks_cluster.cluster_name
+  managed_addon_versions = var.managed_addon_versions
+  tags                   = local.common_tags
+  depends_on             = [module.node_group_private]
+}
+module "access_entries" {
+  source       = "../../../modules/eks/access-entries"
+  cluster_name = module.eks_cluster.cluster_name
+  tags         = local.common_tags
+  access_entries = merge(var.access_entries, {
+    platform-operator = {
+      principal_arn = module.operator_access.operator_role_arn
+      policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
+      scope_type    = "namespace"
+      namespaces    = [module.operator_access.authorization_namespace, "app-prod"]
+      break_glass   = false
+    }
+  })
 }

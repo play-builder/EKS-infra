@@ -17,7 +17,7 @@ design_decision=$4
 eks_plan=$5
 capacity_input=$6
 output=$7
-for name in COURSE_ID AWS_ACCOUNT_ID AWS_REGION AWS_PROFILE; do [[ -n "${!name:-}" ]] || course_fail "$name is required" 64; done
+for name in COURSE_ID AWS_ACCOUNT_ID AWS_REGION AWS_PROFILE FINOPS_CONTRACT_JSON PLATFORM_INSTANCE_ID FINOPS_GATE_POLICY; do [[ -n "${!name:-}" ]] || course_fail "$name is required" 64; done
 course_validate_region "$AWS_REGION"
 course_validate_account "$AWS_ACCOUNT_ID"
 for file in "$design_decision" "$eks_plan" "$capacity_input"; do course_require_file "$file"; done
@@ -60,6 +60,28 @@ plan_path=$(jq -r '.savedPlan.path' "$eks_plan")
 plan_digest=$(course_sha256_file "$plan_path")
 [[ "$plan_digest" == "$(jq -r '.savedPlan.sha256' "$eks_plan")" ]] || course_fail 'EKS_PLAN_DIGEST_MISMATCH'
 
+tmp_dir=$(mktemp -d)
+trap 'rm -rf -- "$tmp_dir"' EXIT
+finops_mode=collect
+finops_access=()
+if [[ -n "${FINOPS_FIXTURE_JSON:-}" ]]; then
+  [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]] || course_fail 'FinOps fixture requires explicit static test mode'
+  finops_mode=fixture
+  finops_access=(--observations "$FINOPS_FIXTURE_JSON")
+else
+  [[ -z "${COURSE_CHECK_BIN_DIR:-}" ]] || course_fail 'static preflight must use FinOps fixture observations'
+  if [[ -n "${FINOPS_BILLING_PROFILE:-}" && -z "${FINOPS_BILLING_ROLE_ARN:-}" ]]; then
+    finops_access=(--profile "$FINOPS_BILLING_PROFILE")
+  elif [[ -n "${FINOPS_BILLING_ROLE_ARN:-}" && -z "${FINOPS_BILLING_PROFILE:-}" ]]; then
+    finops_access=(--role-arn "$FINOPS_BILLING_ROLE_ARN")
+  else
+    course_fail 'select one explicit FINOPS_BILLING_PROFILE or FINOPS_BILLING_ROLE_ARN'
+  fi
+fi
+bash "$SCRIPT_DIR/finops-readiness-check.sh" "$finops_mode" --contract "$FINOPS_CONTRACT_JSON" \
+  --account "$AWS_ACCOUNT_ID" --region "$AWS_REGION" --platform-id "$PLATFORM_INSTANCE_ID" \
+  --gate-policy "$FINOPS_GATE_POLICY" "${finops_access[@]}" --output "$tmp_dir/finops-readiness.json" >/dev/null
+
 instance_types=()
 while IFS= read -r value; do instance_types+=("$value"); done < <(jq -r '[.nodeGroups[].instanceType] | unique[]' "$eks_plan")
 subnet_ids=()
@@ -92,8 +114,6 @@ jq -e --argjson derived "$derived" --arg course "$COURSE_ID" --arg account "$AWS
   .nodes == ($derived | del(.subnetAvailableIps)) and .network.subnetAvailableIps == $derived.subnetAvailableIps
 ' "$capacity_input" >/dev/null || course_fail 'ESTIMATE_CAPACITY_DOES_NOT_MATCH_COLLECTED_SHAPE'
 
-tmp_dir=$(mktemp -d)
-trap 'rm -rf -- "$tmp_dir"' EXIT
 COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/capacity-check.sh" --mode estimate --input "$capacity_input" \
   --output "$tmp_dir/capacity-decision.json" >/dev/null
 
@@ -106,13 +126,15 @@ payload=$(jq -n \
   --arg ready_sha "$ready_digest" --arg plan_sha "$plan_digest" \
   --arg capacity_sha "$(course_sha256_file "$capacity_input")" \
   --arg previous_sha "$(course_sha256_file "$design_decision")" \
+  --argjson finops "$(jq -c . "$tmp_dir/finops-readiness.json")" \
   --arg issued "$issued_at" --arg expires "$expires_at" '
   {
-    schemaVersion:"course.prod-preflight/v1", evidenceGrade:$grade, stage:"estimate", decision:"GO",
+    schemaVersion:"course.prod-preflight/v2", evidenceGrade:$grade, stage:"estimate", decision:"GO", finops:$finops,
     courseId:$course, accountId:$account, region:$region,
     bindings:{
       devDeploymentSha256:$deployment_sha, devSloSha256:$slo_sha, devReadySha256:$ready_sha,
-      savedPlanSha256:$plan_sha, capacityInputSha256:$capacity_sha, previousDecisionSha256:$previous_sha
+      savedPlanSha256:$plan_sha, capacityInputSha256:$capacity_sha, previousDecisionSha256:$previous_sha,
+      finopsContractSha256:$finops.bindings.contractSha256
     },
     issuedAt:$issued, expiresAt:$expires
   }

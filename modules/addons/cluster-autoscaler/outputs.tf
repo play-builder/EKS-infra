@@ -17,3 +17,6 @@ output "helm_release_status" {
   description = "Status of the Helm release"
   value       = helm_release.cluster_autoscaler.status
 }
+output "capacity_contract" {
+  value = { mode = var.autoscaling_mode, capacity = var.autoscaler_capacity, image = "registry.k8s.io/autoscaling/cluster-autoscaler:v1.36.0@sha256:dc5d62770338c2902f31b01f95c9fc8c456fd88baa5364ca154d6e47069ec885", compatibility = "OVERRIDE_REQUIRES_CLOUD_RUNTIME" }
+}

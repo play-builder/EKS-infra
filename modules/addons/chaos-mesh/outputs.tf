@@ -14,7 +14,7 @@ output "chart_version" {
 }
 
 output "game_day_contract" {
-  description = "Bounded Ch25 admission settings"
+  description = "Bounded fault admission settings"
   value = {
     courseId                   = var.course_id
     allowedNamespaces          = var.allowed_namespaces

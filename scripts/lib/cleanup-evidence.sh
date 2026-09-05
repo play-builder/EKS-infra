@@ -24,18 +24,21 @@ cleanup_expected_destroy_layers_json() {
 }
 
 cleanup_validate_saved_plan_manifest() {
-  local manifest=$1 repo_root=$2 layer
+  local manifest=$1 repo_root=$2 inventory=${3:-} layer
   course_require_file "$manifest"
   cleanup_assert_canonical_utc_seconds "$manifest" 'saved destroy plans reviewedAt' '["reviewedAt"]'
   course_assert_json "$manifest" '
     def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
+    . as $manifest |
     keys == ["plans","reviewedAt","schemaVersion","status"] and
     .schemaVersion == "course.saved-destroy-plans/v1" and .status == "REVIEWED" and
     (.reviewedAt | fromdateiso8601) <= now and
-    (.plans | type == "array" and length == 8) and
+    (.plans | type == "array" and length >= 8 and length <= 10) and
     ([.plans[].layer] == [
       "environments/prod/04-workloads/argocd",
       "environments/dev/04-workloads/argocd",
+      (if any($manifest.plans[]; .layer == "environments/recovery/03-database") then "environments/recovery/03-database" else empty end),
+      (if any($manifest.plans[]; .layer == "environments/prod/03-database") then "environments/prod/03-database" else empty end),
       "environments/prod/03-platform",
       "environments/dev/03-platform",
       "environments/prod/02-eks",
@@ -43,12 +46,17 @@ cleanup_validate_saved_plan_manifest() {
       "environments/prod/01-network",
       "environments/dev/01-network"
     ]) and
-    ([.plans[].path] | unique | length) == 8 and
+    ([.plans[].path] | unique | length) == (.plans | length) and
     all(.plans[];
       keys == ["layer","path","sha256"] and
       (.layer | nonblank) and (.path | startswith("/")) and
       (.sha256 | test("^[0-9a-f]{64}$")))
   ' 'invalid reviewed saved destroy plan manifest'
+  if [[ -n "$inventory" ]]; then
+    local expected_layers
+    expected_layers=$(python3 "$repo_root/scripts/lib/enterprise-cleanup.py" layers "$inventory") || course_fail ENTERPRISE_CLEANUP_ORDER_BLOCKED
+    [[ "$(jq -r '.plans[].layer' "$manifest")" == "$expected_layers" ]] || course_fail ENTERPRISE_DATABASE_PLAN_ORDER_MISMATCH
+  fi
 
   while IFS= read -r layer; do
     [[ -d "$repo_root/$layer" ]] || course_fail "cleanup layer not found: $layer"
@@ -69,10 +77,12 @@ cleanup_inspect_saved_destroy_plan() {
   environment=${layer#environments/}
   environment=${environment%%/*}
   case "$layer" in
-    */01-network) semantic_layer=network ;;
-    */02-eks) semantic_layer=eks ;;
-    */03-platform) semantic_layer=platform ;;
-    */04-workloads/argocd) semantic_layer=workloads ;;
+    environments/dev/01-network|environments/prod/01-network) semantic_layer=network ;;
+    environments/dev/02-eks|environments/prod/02-eks) semantic_layer=eks ;;
+    environments/dev/03-platform|environments/prod/03-platform) semantic_layer=platform ;;
+    environments/prod/03-database) semantic_layer=database ;;
+    environments/recovery/03-database) semantic_layer=recovery-database ;;
+    environments/dev/04-workloads/argocd|environments/prod/04-workloads/argocd) semantic_layer=workloads ;;
     *) course_fail "SAVED_DESTROY_PLAN_LAYER_UNSUPPORTED: $layer" ;;
   esac
 
@@ -104,20 +114,32 @@ cleanup_inspect_saved_destroy_plan() {
     (.resource_changes | type == "array" and length > 0) and
     all(.resource_changes[]; .mode == "managed" and .change.actions == ["delete"] and (.change.before | type == "object"))
   ' <<<"$plan_json" >/dev/null || course_fail "SAVED_DESTROY_PLAN_NOT_DELETE_ONLY: $layer"
+  printf '%s' "$plan_json" | python3 "$repo_root/scripts/lib/enterprise-cleanup.py" guard-stdin "$inventory" || course_fail "ENTERPRISE_CLEANUP_GUARD_FAILED: $layer"
 
   jq -e --arg environment "$environment" --arg semanticLayer "$semantic_layer" \
     --arg course "$course" --arg account "$account" --arg region "$region" \
     --arg project "$project" --slurpfile inventory "$inventory" '
     def address_allowed:
       if $semanticLayer == "network" then
-        .address | test("^module\\.vpc(\\[[^]]+\\])?\\.")
+        .address | test("^module\\.(vpc|log_key)(\\[[^]]+\\])?\\.")
       elif $semanticLayer == "eks" then
-        .address | test("^module\\.(eks_cluster|node_group_public|node_group_private|bastion)(\\[[^]]+\\])?\\.")
+        (.address | test("^module\\.(eks_cluster|node_group_public|node_group_private|bastion)(\\[[^]]+\\])?\\.")) or
+        (.type == "terraform_data" and .address == "terraform_data.logging_identity") or
+        (.type == "aws_eks_addon" and (.address | test("^module\\.managed_addons\\.aws_eks_addon\\.(coredns|kube_proxy)$"))) or
+        ((.type == "aws_eks_access_entry" or .type == "aws_eks_access_policy_association") and
+          (.type as $type | .address | startswith("module.access_entries." + $type + ".")) and
+          (.address | test("^module\\.access_entries\\.aws_eks_access_(entry|policy_association)\\.this\\[\"[^\"]+\"\\]$"))) or
+        ($environment == "prod" and
+          (.type as $type | .address | startswith("module.operator_access." + $type + ".")) and
+          (.address | test("^module\\.operator_access\\.(aws_security_group\\.operator|aws_vpc_security_group_ingress_rule\\.operator_eks_api|aws_iam_role\\.(instance|operator)|aws_iam_role_policy\\.(instance_assume_operator|operator_eks)|aws_iam_role_policy_attachment\\.instance_ssm|aws_iam_instance_profile\\.instance|aws_instance\\.operator)$")))
       elif $semanticLayer == "platform" then
-        (.address | test("^(terraform_data\\.external_secrets_ownership_gate|kubernetes_storage_class_v1\\.course_gp3|kubectl_manifest\\.(gateway_api|aws_lbc_gateway|volume_snapshot_class)(\\[[^]]+\\])?|aws_secretsmanager_secret\\.(sample_app_runtime|sample_app_db)|aws_eks_addon\\.snapshot_controller(\\[[^]]+\\])?|aws_iam_(role|policy|role_policy_attachment)\\.recovery_db_secret_reader(\\[[^]]+\\])?)$")) or
-        (.address | test("^module\\.(external_secrets_reader_irsa|rollouts_amp_irsa|external_secrets|reloader|k6_operator|chaos_mesh|ebs_csi_driver|aws_load_balancer_controller|external_dns|acm|metrics_server|cluster_autoscaler|container_insights|amp|adot_collector|amp_alerting|amg)(\\[[^]]+\\])?\\."))
+        (.address | test("^(terraform_data\\.(external_secrets_ownership_gate|logging_identity)|kubernetes_storage_class_v1\\.course_gp3|kubectl_manifest\\.(gateway_api|aws_lbc_gateway|volume_snapshot_class)(\\[[^]]+\\])?|aws_secretsmanager_secret\\.(sample_app_runtime|sample_app_db)|aws_eks_addon\\.snapshot_controller(\\[[^]]+\\])?|aws_iam_(role|policy|role_policy_attachment)\\.recovery_db_secret_reader(\\[[^]]+\\])?)$")) or
+        (.address | test("^module\\.(external_secrets_reader_irsa|rollouts_amp_irsa|external_secrets|reloader|k6_operator|chaos_mesh|ebs_csi_driver|aws_load_balancer_controller|external_dns|acm|metrics_server|cluster_autoscaler|container_insights|amp|adot_collector|amp_alerting|amg|sigstore_policy_controller|mini_commerce_secrets|waf)(\\[[^]]+\\])?\\."))
+      elif $semanticLayer == "database" or $semanticLayer == "recovery-database" then
+        (.address == "terraform_data.identity") or (.address | test("^module\\.(database|recovery_secrets)\\."))
       else
-        .address | test("^(terraform_data\\.course_ownership|helm_release\\.(argocd|argo_rollouts)|kubectl_manifest\\.(gateway_plugin_cluster_role|gateway_plugin_cluster_role_binding|bootstrap))(\\[[^]]+\\])?$")
+        (.address | test("^module\\.argocd\\.")) or
+        (.address | test("^(terraform_data\\.course_ownership|helm_release\\.(argocd|argo_rollouts)|kubectl_manifest\\.(gateway_plugin_cluster_role|gateway_plugin_cluster_role_binding|bootstrap))(\\[[^]]+\\])?$"))
       end;
     def untaggable:
       .type == "terraform_data" or .type == "helm_release" or .type == "kubectl_manifest" or
@@ -125,10 +147,11 @@ cleanup_inspect_saved_destroy_plan() {
       .type == "aws_acm_certificate_validation" or .type == "aws_eks_access_policy_association" or
       .type == "aws_iam_role_policy" or .type == "aws_iam_role_policy_attachment" or
       .type == "aws_prometheus_alert_manager_definition" or .type == "aws_prometheus_rule_group_namespace" or
+      .type == "aws_kms_alias" or .type == "aws_wafv2_web_acl_association" or .type == "aws_wafv2_web_acl_logging_configuration" or
       .type == "aws_route" or .type == "aws_route53_record" or .type == "aws_route_table_association" or
       .type == "aws_security_group_rule" or .type == "aws_sns_topic_policy" or .type == "aws_sns_topic_subscription";
     def matching_inventory:
-      (.change.before.id // "") as $id |
+      (.change.before.arn // .change.before.id // "") as $id |
       [$inventory[0].resources[] | select(.id == $id)];
     def inventory_allows_delete:
       matching_inventory as $matches |
@@ -141,7 +164,7 @@ cleanup_inspect_saved_destroy_plan() {
       (.change.before.tags_all // .change.before.tags // null) as $tags |
       if ($tags | type) == "object" and ($tags | length) > 0 then
         $tags.CourseId == $course and $tags.Project == $project and
-        $tags.Environment == $environment and $tags.Layer == $semanticLayer and
+        $tags.Environment == (if $environment == "recovery" then "prod" else $environment end) and $tags.Layer == $semanticLayer and
         $tags.ManagedBy == "Terraform"
       elif .type == "terraform_data" and .address == "terraform_data.course_ownership" then
         .change.before.input.CourseId == $course and .change.before.input.AccountId == $account and
@@ -164,13 +187,15 @@ cleanup_validate_apply_progress() {
   local progress=$1 manifest=$2
   course_require_file "$progress"
   cleanup_assert_canonical_utc_seconds "$progress" 'saved plan progress updatedAt' '["updatedAt"]'
-  course_assert_json "$progress" '
+  local plan_count
+  plan_count=$(jq '.plans | length' "$manifest")
+  jq -e --argjson planCount "$plan_count" '
     . as $progress |
     keys == ["completed","inFlight","manifestSha256","registeredPlans","schemaVersion","status","updatedAt"] and
     .schemaVersion == "course.saved-destroy-progress/v2" and
     (.manifestSha256 | test("^[0-9a-f]{64}$")) and
     (.status == "IN_PROGRESS" or .status == "COMPLETE") and
-    (.completed | type == "array" and length <= 8) and
+    (.completed | type == "array" and length <= $planCount) and
     all(.completed[]; keys == ["appliedAt","layer","outcome","path","sha256"] and
       (.layer | type == "string" and test("[^[:space:]\uFEFF]")) and
       (.path | type == "string" and startswith("/")) and
@@ -184,7 +209,7 @@ cleanup_validate_apply_progress() {
       (.sha256 | test("^[0-9a-f]{64}$")) and
       (.startedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
         ((try (fromdateiso8601 | todateiso8601) catch "") == .)))) and
-    (.registeredPlans | type == "array" and length >= 8 and length <= 32) and
+    (.registeredPlans | type == "array" and length >= $planCount and length <= ($planCount * 4)) and
     all(.registeredPlans[];
       keys == ["layer","path","sha256"] and
       (.layer | type == "string" and test("[^[:space:]\uFEFF]")) and
@@ -198,10 +223,10 @@ cleanup_validate_apply_progress() {
       .layer == $done.layer and .path == $done.path and .sha256 == $done.sha256)) and
     (.inFlight == null or (.inFlight as $active | any(.registeredPlans[];
       .layer == $active.layer and .path == $active.path and .sha256 == $active.sha256))) and
-    (if .status == "COMPLETE" then (.completed | length) == 8 and .inFlight == null
-     else (.completed | length) <= 8 and
-       (if (.completed | length) == 8 then .inFlight == null else true end) end)
-  ' 'invalid saved destroy plan progress'
+    (if .status == "COMPLETE" then (.completed | length) == $planCount and .inFlight == null
+     else (.completed | length) <= $planCount and
+       (if (.completed | length) == $planCount then .inFlight == null else true end) end)
+  ' "$progress" >/dev/null || course_fail 'invalid saved destroy plan progress'
   while IFS=$'\t' read -r index layer path sha; do
     [[ $(jq -r --argjson index "$index" '.plans[$index].layer' "$manifest") == "$layer" ]] || \
       course_fail 'SAVED_DESTROY_PROGRESS_LAYER_MISMATCH'
@@ -239,7 +264,7 @@ cleanup_validate_plan_registry_extension() {
   jq -en --argjson existing "$(jq -c '.registeredPlans' "$progress")" \
     --argjson plans "$(jq -c '[.plans[] | {layer,path,sha256}]' "$manifest")" '
     ($existing + $plans | unique_by([.path,.sha256])) as $all |
-    ($all | length) <= 32 and
+    ($all | length) <= 40 and
     all(($all | group_by(.layer)[]); length <= 4) and
     all($all[]; . as $registered |
       all($all[]; .path != $registered.path or .layer == $registered.layer))
@@ -254,7 +279,7 @@ cleanup_register_replacement_candidate() {
   jq -en --argjson existing "$(jq -c '.registeredPlans' "$progress")" \
     --arg layer "$layer" --arg path "$saved_plan" --arg sha "$expected_sha" '
     ($existing + [{layer:$layer,path:$path,sha256:$sha}] | unique_by([.path,.sha256])) as $all |
-    ($all | length) <= 32 and
+    ($all | length) <= 40 and
     all(($all | group_by(.layer)[]); length <= 4) and
     all($all[]; . as $registered |
       all($all[]; .path != $registered.path or .layer == $registered.layer))
@@ -271,8 +296,9 @@ cleanup_register_replacement_candidate() {
 cleanup_apply_saved_plans() {
   local manifest=$1 repo_root=$2 inventory=$3 progress=$4 project=$5
   local manifest_sha progress_manifest_sha completed_count layer saved_plan expected_sha actual_manifest_sha now payload
-  local course account region recovery=false recovery_kind='' index plan_kind
-  cleanup_validate_saved_plan_manifest "$manifest" "$repo_root"
+  local course account region recovery=false recovery_kind='' index plan_kind plan_count
+  plan_count=$(jq '.plans | length' "$manifest")
+  cleanup_validate_saved_plan_manifest "$manifest" "$repo_root" "$inventory"
   cleanup_validate_inventory "$inventory"
   course=$(jq -r '.courseId' "$inventory")
   account=$(jq -r '.accountId' "$inventory")
@@ -285,7 +311,7 @@ cleanup_apply_saved_plans() {
     course_assert_file_mode "$progress" 600
     progress_manifest_sha=$(jq -r '.manifestSha256' "$progress")
     completed_count=$(jq -r '.completed | length' "$progress")
-    if [[ "$completed_count" -eq 8 ]]; then
+    if [[ "$completed_count" -eq "$plan_count" ]]; then
       [[ "$progress_manifest_sha" == "$manifest_sha" ]] || course_fail 'SAVED_DESTROY_PROGRESS_MANIFEST_MISMATCH'
       if [[ $(jq -r '.status' "$progress") != COMPLETE ]]; then
         now=$(course_now)
@@ -372,7 +398,7 @@ cleanup_apply_saved_plans() {
   fi
 
   cleanup_remove_registered_plan_files "$progress" COMPLETED
-  if [[ "$completed_count" -eq 8 ]]; then
+  if [[ "$completed_count" -eq "$plan_count" ]]; then
     now=$(course_now)
     payload=$(jq --arg now "$now" '.status="COMPLETE" | .updatedAt=$now' "$progress")
     course_write_json "$progress" "$payload"
@@ -384,6 +410,7 @@ cleanup_apply_saved_plans() {
     actual_manifest_sha=$(course_raw_sha256_file "$manifest")
     [[ "$actual_manifest_sha" == "$manifest_sha" ]] || course_fail 'SAVED_DESTROY_PLAN_MANIFEST_CHANGED'
     cleanup_validate_saved_plan_file "$saved_plan" "$expected_sha" "$layer"
+    terraform -chdir="$repo_root/$layer" show -json "$saved_plan" | python3 "$repo_root/scripts/lib/enterprise-cleanup.py" log-key-ready-stdin "$inventory" || course_fail "LOG_KEY_DELETE_READINESS_FAILED: $layer"
     now=$(course_now)
     payload=$(jq --arg layer "$layer" --arg path "$saved_plan" --arg sha "$expected_sha" --arg now "$now" '
       .inFlight={layer:$layer,path:$path,sha256:$sha,startedAt:$now} | .updatedAt=$now
@@ -506,9 +533,9 @@ cleanup_validate_inventory() {
     ([.resources[] | [.kind,.id]] == ([.resources[] | [.kind,.id]] | sort)) and
     ([.resources[] | [.kind,.id]] | unique | length) == (.resources | length) and
     all(.resources[];
-      keys == ["billable","classification","decision","environment","followUpAction","id","kind","managedBy","owner","reason"] and
+      (keys - ["purpose","logGroupArns","kmsKeyArn","retentionReleaseApproval","deletionWindowInDays"]) == ["billable","classification","decision","environment","followUpAction","id","kind","managedBy","owner","reason"] and
       (.kind | nonblank) and (.id | nonblank) and
-      (.environment == "dev" or .environment == "prod" or .environment == "shared") and
+      (.environment == "dev" or .environment == "prod" or .environment == "recovery" or .environment == "shared") and
       (.classification | nonblank) and
       (.owner | nonblank) and .managedBy == "terraform" and
       (.billable | type == "boolean") and
@@ -680,9 +707,14 @@ cleanup_validate_residual() {
   cleanup_grade_is_valid "$residual" || course_fail 'invalid residual evidence grade'
   course_assert_json "$residual" '
     def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
-    keys == ["accountId","courseId","evidenceGrade","externalShared","gitopsRemovalSha256","inventorySha256","kubernetesPreDestroySha256","observedAt","region","retainDecisionsSha256","retained","schemaVersion","status","unapprovedCourseOwned"] and
+    (keys - ["scheduledKeyDeletions"]) == ["accountId","courseId","evidenceGrade","externalShared","gitopsRemovalSha256","inventorySha256","kubernetesPreDestroySha256","observedAt","region","retainDecisionsSha256","retained","schemaVersion","status","unapprovedCourseOwned"] and
+    ((.scheduledKeyDeletions // []) | type == "array") and
+    all((.scheduledKeyDeletions // [])[];
+      keys == ["deletionDate","keyArn","keyState"] and
+      (.keyArn | nonblank) and .keyState == "PendingDeletion" and
+      (.deletionDate | fromdateiso8601) > now) and
     .schemaVersion == "course.cleanup-residual/v1" and .status == "PASS" and
-    (.unapprovedCourseOwned | keys == ["ampWorkspaces","ebsSnapshots","ebsVolumes","ecrRepositories","eksClusters","loadBalancers","natGateways","snsTopics","total"]) and
+    (.unapprovedCourseOwned | (keys - ["enterpriseResources"]) == ["ampWorkspaces","ebsSnapshots","ebsVolumes","ecrRepositories","eksClusters","loadBalancers","natGateways","snsTopics","total"]) and
     ([.unapprovedCourseOwned[]] | all(type == "number" and floor == . and . == 0)) and
     (.courseId | nonblank) and
     (.externalShared | type == "array") and
@@ -705,6 +737,7 @@ cleanup_validate_residual() {
   [[ $(jq -r '.gitopsRemovalSha256' "$residual") == "$(course_raw_sha256_file "$removal")" ]] || course_fail 'RESIDUAL_GITOPS_DIGEST_MISMATCH'
   jq -en --argjson inventory "$(jq -c . "$inventory")" --argjson decisions "$(jq -c . "$decisions")" --argjson residual "$(jq -c . "$residual")" '
     $inventory.courseId == $residual.courseId and $inventory.accountId == $residual.accountId and $inventory.region == $residual.region and
+    ([$inventory.resources[] | select(.kind == "KmsLogKey" and .decision == "DELETE") | .id] | sort) == ([$residual.scheduledKeyDeletions[]? | .keyArn] | sort) and
     ([ $inventory.resources[] | select(.decision == "EXTERNAL_SHARED") | {kind,id,owner,deletePlanned:false,presentAfterCleanup:true} ] | sort_by(.kind,.id)) == $residual.externalShared and
     ([ $decisions.decisions[] | select(.decision == "RETAIN") as $d |
       ($inventory.resources[] | select(.kind == $d.kind and .id == $d.id)) as $i |

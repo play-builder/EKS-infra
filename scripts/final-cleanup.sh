@@ -52,7 +52,7 @@ for name in saved_plan_manifest apply_progress inventory decisions preflight in_
   [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64
 done
 
-cleanup_validate_saved_plan_manifest "$saved_plan_manifest" "$REPO_ROOT"
+cleanup_validate_saved_plan_manifest "$saved_plan_manifest" "$REPO_ROOT" "$inventory"
 cleanup_require_canonical_runtime_output "$apply_progress" "$REPO_ROOT" saved-plan-progress.json
 cleanup_validate_decisions "$inventory" "$decisions"
 cleanup_validate_freeze_removal "$inventory" "$freeze" "$removal"
@@ -163,6 +163,7 @@ stage() {
 }
 
 stage 1
+python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" discover "$inventory" || course_fail ENTERPRISE_DISCOVERY_INCOMPLETE
 echo 'PHASE 1/6 scope: account identity verified.'
 stage 2
 stage 3

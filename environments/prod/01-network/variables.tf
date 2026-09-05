@@ -24,6 +24,36 @@ variable "course_id" {
   }
 }
 
+variable "platform_instance_id" {
+  description = "Stable identifier shared by all resources in this platform instance"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.platform_instance_id)) > 0
+    error_message = "platform_instance_id must not be blank."
+  }
+}
+
+variable "owner" {
+  description = "Team accountable for this production platform"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.owner)) > 0
+    error_message = "owner must not be blank."
+  }
+}
+
+variable "cost_center" {
+  description = "Cost allocation identifier for this production platform"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.cost_center)) > 0
+    error_message = "cost_center must not be blank."
+  }
+}
+
 variable "environment" {
   description = "Name of the environment (e.g., prod)"
   type        = string
@@ -85,6 +115,41 @@ variable "one_nat_gateway_per_az" {
   description = "One NAT Gateway per AZ (true for HA in Production)"
   type        = bool
   default     = true
+}
+
+variable "production_nat_topology" {
+  description = "Production NAT topology; resilient production egress requires per_az"
+  type        = string
+  default     = "per_az"
+
+  validation {
+    condition     = var.production_nat_topology == "per_az"
+    error_message = "Production network must use production_nat_topology = per_az."
+  }
+}
+
+variable "enable_vpc_flow_logs" {
+  type    = bool
+  default = true
+  validation {
+    condition     = var.enable_vpc_flow_logs
+    error_message = "Production requires VPC Flow Logs."
+  }
+}
+
+variable "vpc_flow_log_retention_in_days" {
+  type    = number
+  default = 90
+}
+
+variable "vpc_flow_log_kms_key_arn" {
+  description = "Deprecated. The owned log_key output supplies Flow Log encryption; leave null."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.vpc_flow_log_kms_key_arn == null
+    error_message = "Flow logs must use this root's log_key; remove legacy external key input."
+  }
 }
 
 variable "enable_dns_hostnames" {

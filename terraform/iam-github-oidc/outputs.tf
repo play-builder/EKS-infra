@@ -8,6 +8,18 @@ output "infra_role_arn" {
   value       = aws_iam_role.infra.arn
 }
 
+output "billing_observer_handoff" {
+  description = "CI observer authorization metadata; external plan/apply role policies and billing role trust are operator-owned."
+  value = {
+    schemaVersion          = "platform.billing-observer-handoff/v1"
+    observerRoleArn        = var.billing_monitor_role_arn
+    managedWorkloadRoleArn = aws_iam_role.infra.arn
+    externalCiRoleSecrets  = ["TERRAFORM_PLAN_ROLE_ARN", "TERRAFORM_APPLY_ROLE_ARN"]
+    requiredAction         = "sts:AssumeRole"
+    managementProvisioning = false
+  }
+}
+
 output "sample_app_push_role_arn" {
   description = "cicd-course-sample-app ECR push role ARN"
   value       = aws_iam_role.sample_app_push.arn
@@ -42,3 +54,15 @@ output "oidc_ownership_mode" {
   description = "Persisted OIDC ownership mode"
   value       = var.oidc_provider_mode
 }
+output "sample_app_attest_verify_role_arn" { value = aws_iam_role.sample_app_attest_verify.arn }
+output "mini_commerce_ecr_repository_url" { value = aws_ecr_repository.mini_commerce.repository_url }
+output "mini_commerce_chart_ecr_repository_url" { value = aws_ecr_repository.mini_commerce_chart.repository_url }
+output "mini_commerce_repositories" {
+  value = {
+    migrationMode = "distinct-repositories"
+    legacyImage   = { name = aws_ecr_repository.sample_app.name, arn = aws_ecr_repository.sample_app.arn, url = aws_ecr_repository.sample_app.repository_url }
+    image         = { name = aws_ecr_repository.mini_commerce.name, arn = aws_ecr_repository.mini_commerce.arn, url = aws_ecr_repository.mini_commerce.repository_url }
+    chart         = { name = aws_ecr_repository.mini_commerce_chart.name, arn = aws_ecr_repository.mini_commerce_chart.arn, url = aws_ecr_repository.mini_commerce_chart.repository_url }
+  }
+}
+output "ecr_scanning" { value = module.ecr_registry_scanning.contract }

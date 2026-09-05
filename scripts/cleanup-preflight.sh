@@ -30,7 +30,7 @@ course_validate_account "$AWS_ACCOUNT_ID"
 cleanup_require_canonical_runtime_output "$inventory_output" "$REPO_ROOT" ownership-inventory.json
 cleanup_require_canonical_runtime_output "$retain_template" "$REPO_ROOT" retain-decisions.json
 cleanup_reject_runtime_output_from_fixture "$preflight_output" "$REPO_ROOT" preflight.json
-cleanup_validate_saved_plan_manifest "$saved_plan_manifest" "$REPO_ROOT"
+cleanup_validate_saved_plan_manifest "$saved_plan_manifest" "$REPO_ROOT" "$inventory_source"
 cleanup_validate_inventory "$inventory_source"
 
 while IFS=$'\t' read -r layer saved_plan _expected_sha; do
@@ -38,6 +38,7 @@ while IFS=$'\t' read -r layer saved_plan _expected_sha; do
   cleanup_validate_saved_destroy_plan "$layer" "$saved_plan" "$inventory_source" "$REPO_ROOT" \
     "$COURSE_ID" "$AWS_ACCOUNT_ID" "$AWS_REGION" "$COURSE_PROJECT"
 done < <(jq -r '.plans[] | [.layer,.path,.sha256] | @tsv' "$saved_plan_manifest")
+python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" guard-manifest "$saved_plan_manifest" "$inventory_source" "$REPO_ROOT" || course_fail ENTERPRISE_CLEANUP_GUARD_FAILED
 
 grade=CLOUD_RUNTIME
 [[ -z "${COURSE_CHECK_BIN_DIR:-}" ]] || grade=STATIC

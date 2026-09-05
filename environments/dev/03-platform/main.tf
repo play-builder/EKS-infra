@@ -91,6 +91,7 @@ locals {
 
   common_tags = merge(
     var.tags,
+    data.terraform_remote_state.network.outputs.logging_contract.platform_tags,
     {
       CourseId    = var.course_id
       Environment = var.environment
@@ -346,15 +347,24 @@ module "cluster_autoscaler" {
   oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
 
-  chart_version = var.cluster_autoscaler_chart_version
-  tags          = local.common_tags
+  chart_version       = var.cluster_autoscaler_chart_version
+  environment         = var.environment
+  autoscaling_mode    = var.autoscaling_mode
+  autoscaler_capacity = var.autoscaler_capacity
+  tags                = local.common_tags
 
   depends_on = [module.metrics_server]
 }
 
 module "container_insights" {
-  source = "../../../modules/addons/container-insights"
-  count  = var.enable_container_insights ? 1 : 0
+  environment                = var.environment
+  account_id                 = data.terraform_remote_state.network.outputs.logging_contract.account_id
+  kms_key_arn                = data.terraform_remote_state.network.outputs.logging_contract.kms_key_arn
+  application_retention_days = var.application_log_retention_in_days
+  performance_retention_days = var.performance_log_retention_in_days
+  depends_on                 = [terraform_data.logging_identity]
+  source                     = "../../../modules/addons/container-insights"
+  count                      = var.enable_container_insights ? 1 : 0
 
   eks_cluster_name = local.eks_cluster_name
   aws_region       = var.aws_region
@@ -392,6 +402,7 @@ module "adot_collector" {
   amp_workspace_endpoint = var.enable_amp ? module.amp[0].workspace_prometheus_endpoint : ""
   amp_workspace_arn      = var.enable_amp ? module.amp[0].workspace_arn : "*"
   enable_xray            = var.enable_adot_xray
+  environment            = "dev"
 
   tags = local.common_tags
 
@@ -399,7 +410,11 @@ module "adot_collector" {
 }
 
 module "amp_alerting" {
-  source = "../../../modules/addons/amp-alerting"
+  source      = "../../../modules/addons/amp-alerting"
+  environment = "dev"
+  slo         = var.slo
+  alert_owner = var.amp_alert_owner
+  runbook_url = var.amp_runbook_url
 
   enabled             = var.enable_amp && var.enable_amp_alerting
   workspace_id        = var.enable_amp ? module.amp[0].workspace_id : "disabled"
@@ -426,4 +441,25 @@ module "amg" {
   tags = local.common_tags
 
   depends_on = [module.amp]
+}
+module "sigstore_policy_controller" {
+  source             = "../../../modules/addons/sigstore-policy-controller"
+  name               = "${var.environment}-${var.project_name}"
+  environment        = var.environment
+  replicas           = var.sigstore_controller_replicas
+  oidc_provider      = data.terraform_remote_state.eks.outputs.oidc_provider
+  oidc_provider_arn  = data.terraform_remote_state.eks.outputs.oidc_provider_arn
+  repository_arns    = setunion(var.sigstore_ecr_repository_arns, ["arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.logging.account_id}:repository/${var.project_name}/platform/istio-proxyv2"])
+  api_server_cidrs   = var.sigstore_api_server_cidrs
+  https_egress_cidrs = var.sigstore_https_egress_cidrs
+  tags               = local.common_tags
+}
+module "mini_commerce_secrets" {
+  source            = "../../../modules/security/mini-commerce-secrets"
+  name              = "${var.environment}-${var.project_name}"
+  namespace         = "app-${var.environment}"
+  region            = var.aws_region
+  oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
+  oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
+  tags              = local.common_tags
 }

@@ -38,3 +38,5 @@ output "autoscaling_group_names" {
   description = "The names of the Auto Scaling Groups"
   value       = [for resource in aws_eks_node_group.this.resources[0].autoscaling_groups : resource.name]
 }
+output "node_release_version" { value = aws_eks_node_group.this.release_version }
+output "node_ami_type" { value = aws_eks_node_group.this.ami_type }

@@ -1,5 +1,5 @@
 variable "aws_region" {
-  description = "Course Region used to bind governance evidence"
+  description = "AWS Region used to bind governance evidence"
   type        = string
   default     = "ap-northeast-2"
 
@@ -10,7 +10,7 @@ variable "aws_region" {
 }
 
 variable "github_owner" {
-  description = "GitHub owner of the course repositories"
+  description = "GitHub owner of the managed repositories"
   type        = string
 }
 
@@ -26,7 +26,7 @@ variable "course_id" {
 }
 
 variable "account_id" {
-  description = "AWS account ID bound to the course governance evidence"
+  description = "AWS account ID bound to governance evidence"
   type        = string
 
   validation {

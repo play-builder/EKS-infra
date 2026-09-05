@@ -1,5 +1,5 @@
 output "enabled" {
-  description = "Whether the Ch16 k6 operator is installed"
+  description = "Whether the k6 operator is installed"
   value       = var.enable_k6_operator
 }
 

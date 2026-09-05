@@ -69,3 +69,8 @@ run "state_and_lock_objects_have_distinct_minimum_permissions" {
     error_message = "lock permissions must target only the matching .tflock objects"
   }
 }
+
+variables {
+  state_bucket_arns = ["arn:aws:s3:::course-state"]
+  tags              = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" }
+}

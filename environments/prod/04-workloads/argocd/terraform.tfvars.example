@@ -10,3 +10,20 @@ gitops_target_revision = "main"
 
 # Keep false until DEV_READY and the prod repository access check are complete.
 enable_bootstrap = false
+# Bootstrap source must be publicly readable. Fill OIDC values; secret values go
+# directly to Secrets Manager out of Terraform. Keep admin until live SSO proof.
+tags = { PlatformInstanceId = "replace-me", Owner = "platform-sre", CostCenter = "replace-me" }
+argocd_platform = {
+ server_replicas = 2
+ repo_server_replicas = 2
+ controller_replicas = 2
+ applicationset_replicas = 2
+ redis_ha = true
+ node_count = 3
+ az_count = 3
+ public_url = "https://argocd.example.com"
+ oidc_issuer_url = "https://id.example.com"
+ oidc_client_id = "argocd-prod"
+ admin_group = "platform-admin"
+ readonly_group = "platform-readonly"
+}

@@ -1,9 +1,27 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
 tests=(
+  enterprise-root-map-contract.sh
+  scheduled-drift-contract.sh
+  enterprise-ownership-boundary-contract.sh
+  eks-node-rollout-contract.sh
+  finops-readiness-contract.sh
+  finops-saved-plan-contract.sh
+  install-trivy-contract.sh
+  bootstrap-mini-commerce-db-contract.sh
+  rds-recovery-contract.sh
+  platform-rebuild-dr-contract.sh
+  amp-slo-drill-contract.sh
+  argocd-backup-contract.sh
+  ecr-enhanced-scanning-contract.sh
+  argocd-ha-contract.sh
+  access-entry-review-contract.sh
+  mng-autoscaler-drill-contract.sh
+  eks-upgrade-preflight-contract.sh
   state-backend-contract.sh
   cluster-identity-contract.sh
   saved-plan-cleanup-contract.sh
@@ -22,6 +40,8 @@ tests=(
   ecr-lifecycle-preview-contract.sh
   secret-json-contract.sh
   network-policy-runtime-contract.sh
+  prod-network-ha-contract.sh
+  prod-operator-access-contract.sh
   external-secrets-owner-handoff-contract.sh
   secret-freshness-contract.sh
   alerting-contract.sh
@@ -45,6 +65,13 @@ tests=(
   cleanup-preflight-contract.sh
   in-flight-zero-contract.sh
   checkpoint-teardown-contract.sh
+  mandatory-platform-tags-contract.sh
+  batch1-review-contract.sh
+  saved-plan-create-contract.sh
+  saved-plan-identity-contract.sh
+  saved-plan-apply-workflow-contract.sh
+  terraform-drift-contract.sh
+  terraform-drift-exit-code-contract.sh
   final-cleanup-contract.sh
 )
 
@@ -53,22 +80,12 @@ for test_file in "${tests[@]}"; do
   bash "$root/tests/$test_file"
 done
 
-terraform_tests=(
-  "terraform/iam-github-oidc|tests/state-lock-policy.tftest.hcl"
-  "terraform/iam-github-oidc|tests/ownership-and-ecr.tftest.hcl"
-  "modules/addons/adot-collector|tests/telemetry-contract.tftest.hcl"
-)
-
-initialized_roots='|'
-for test_case in "${terraform_tests[@]}"; do
-  IFS='|' read -r terraform_root test_filter <<<"$test_case"
-  if [[ "$initialized_roots" != *"|$terraform_root|"* ]]; then
-    echo "INIT: $terraform_root"
-    terraform -chdir="$root/$terraform_root" init -backend=false -input=false >/dev/null
-    initialized_roots+="$terraform_root|"
-  fi
-  echo "RUN: $terraform_root/$test_filter"
-  terraform -chdir="$root/$terraform_root" test -filter="$test_filter"
-done
+python3 "$root/tests/enterprise-cleanup-contract.py"
+python3 "$root/tests/enterprise-cleanup-resume-contract.py"
+python3 "$root/tests/project-terraform-inputs-contract.py"
+python3 "$root/tests/log-key-cleanup-contract.py"
+python3 "$root/tests/lua-installer-contract.py"
+python3 "$root/tests/platform-image-mirror-test.py"
 
 echo 'PASS: offline semantic contract suite'
+echo 'Tool-backed Terraform/Helm/PromQL/SDK gates: bash tests/run-enterprise-static-tests.sh (separate prerequisites; not implied by this PASS).'

@@ -27,6 +27,20 @@ enable_recovery_secret_reader   = false
 # recovery_secret_kms_key_arn   = "arn:aws:kms:<region>:<account>:key/<uuid>"
 enable_chaos_mesh               = false
 enable_amp_alerting             = false
+amp_alert_owner = "platform"
+amp_runbook_url = "https://github.com/play-builder/EKS-infra/blob/main/docs/runbooks/amp-slo.md"
+slo = {
+  success_target = 0.999
+  latency_ms_target = 500
+  short_window = "5m"
+  long_window = "1h"
+  short_burn_threshold = 14.4
+  long_burn_threshold = 14.4
+  traffic_floor_rps = 0.1
+  paging_severity = "warning"
+  escalation_route = "platform-sns"
+  alert_resolve_timeout_minutes = 15
+}
 enable_sns_alert_delivery       = false
 # sns_alert_email_endpoint      = "oncall@example.com"
 
@@ -41,3 +55,28 @@ course_application_namespace     = "app-dev"
 secret_recovery_window_in_days   = 7
 external_dns_domain_filters      = ["dev.example.com"]
 external_dns_exclude_domains     = []
+# Capacity must match 02-eks MNG limits and measured subnet IP availability.
+autoscaling_mode = "mng_cluster_autoscaler"
+autoscaler_capacity = {
+ min_nodes = 2
+ max_nodes = 6
+ max_pods_per_node = 20
+ hpa_max_replicas = 20
+ rollout_surge_replicas = 4
+ platform_reserve_pods = 15
+ stable_replicas = 3
+ canary_replicas = 3
+ usable_subnet_ips_by_az = { "az-a" = 64, "az-b" = 64, "az-c" = 64 }
+ required_headroom_percentage = 20
+}
+# Supply exact actual ECR outputs and reviewed live-resolved API/ECR/Sigstore/GitHub destinations.
+# sigstore_ecr_repository_arns = ["<actual-old-image-arn>", "<actual-new-image-arn>"]
+# sigstore_api_server_cidrs = ["<exact-cluster-endpoint/service-ip>/32"]
+# sigstore_https_egress_cidrs = ["<approved-egress-ip>/32"]
+sigstore_controller_replicas = 1
+
+# Key, names and platform ownership tags come from 01-network.
+application_log_retention_in_days = 30
+performance_log_retention_in_days = 30
+waf_log_retention_in_days = 30
+waf_rate_limit = 2000

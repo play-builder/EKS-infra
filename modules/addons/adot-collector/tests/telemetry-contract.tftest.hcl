@@ -38,7 +38,7 @@ run "bounded_metrics_and_active_xray_contract" {
     condition = toset([
       for relabel in kubernetes_manifest.otel_collector[0].manifest.spec.config.receivers.prometheus.config.scrape_configs[0].relabel_configs : relabel.target_label
       if contains(keys(relabel), "target_label")
-    ]) == toset(["__metrics_path__", "__address__", "namespace", "pod", "app", "rollouts_pod_template_hash"])
+    ]) == toset(["__address__", "namespace", "pod", "app", "rollouts_pod_template_hash", "environment"]) && kubernetes_manifest.otel_collector[0].manifest.spec.config.receivers.prometheus.config.scrape_configs[0].metrics_path == "/metrics"
     error_message = "pod metrics must retain only routing fields plus namespace, pod, app, and rollouts_pod_template_hash"
   }
 

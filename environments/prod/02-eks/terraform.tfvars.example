@@ -4,6 +4,9 @@ project_name = "playdevops"
 state_bucket_name = "replace-with-your-prod-state-bucket"
 course_id    = "replace-with-unique-course-id"
 environment  = "prod"
+platform_instance_id = "replace-with-platform-instance-id"
+owner                = "platform-sre"
+cost_center          = "replace-with-cost-center"
 
 # Resolve this value with aws eks describe-addon-versions for EKS 1.36 in the selected Region.
 vpc_cni_addon_version                 = "REPLACE_WITH_COMPATIBLE_EKS_ADDON_VERSION"
@@ -13,13 +16,10 @@ vpc_cni_network_policy_enforcing_mode = "standard"
 cluster_version                            = "1.36"
 authentication_mode                        = "API"
 bootstrap_cluster_creator_admin_permissions = false
-cluster_admin_principal_arns = [
-  "arn:aws:iam::123456789012:role/AWSReservedSSO_AdministratorAccess_REPLACE_ME",
-]
+cluster_admin_principal_arns = []
 
 cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
 
-enable_bastion            = false
 enable_public_node_group  = false
 enable_private_node_group = true
 
@@ -28,4 +28,22 @@ private_node_group_min_size      = 3
 private_node_group_max_size      = 6
 private_node_group_instance_types = ["m7i.large"]
 
-bastion_instance_keypair = ""
+operator_access = {
+  mode              = "ssm"
+  trusted_sso_principal_arn = "arn:aws:iam::123456789012:role/aws-reserved/sso.amazonaws.com/ap-northeast-2/AWSReservedSSO_PlatformOperator_REPLACE_ME"
+  subnet_id         = "subnet-0123456789abcdef0"
+  ami_id            = "ami-0123456789abcdef0"
+  instance_type     = "t3.micro"
+}
+# Required before plan: exact values from AWS in this account/Region, never copy fixture pins.
+# managed_addon_versions = { coredns = "<AWS-verified>", kube_proxy = "<AWS-verified>" }
+# node_release_version = "<AWS-verified MNG release>"
+# External principals only. Existing installations must follow access-entry-state-migration.md.
+access_entries = {
+ "platform-break-glass" = { principal_arn = "arn:aws:iam::123456789012:role/platform-break-glass", policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy", scope_type = "cluster", namespaces = [], break_glass = true }
+ "release-automation" = { principal_arn = "arn:aws:iam::123456789012:role/release-automation", policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy", scope_type = "namespace", namespaces = ["app-prod"], break_glass = false }
+ "developer-readonly" = { principal_arn = "arn:aws:iam::123456789012:role/developer-readonly", policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy", scope_type = "namespace", namespaces = ["app-prod"], break_glass = false }
+}
+
+# Must match the 01-network logging contract cluster name.
+cluster_log_retention_in_days = 90

@@ -54,6 +54,13 @@ output "nat_gateway_ids" {
   value       = aws_nat_gateway.this[*].id
 }
 
+output "nat_gateway_ids_by_az" {
+  description = "NAT Gateway IDs keyed by AZ when the per-AZ topology is enabled"
+  value = var.enable_nat_gateway && !var.single_nat_gateway && var.one_nat_gateway_per_az ? {
+    for index, availability_zone in var.availability_zones : availability_zone => aws_nat_gateway.this[index].id
+  } : {}
+}
+
 output "nat_gateway_public_ips" {
   description = "NAT Gateway public IPs"
   value       = aws_eip.nat[*].public_ip
@@ -67,4 +74,12 @@ output "internet_gateway_id" {
 output "availability_zones" {
   description = "List of availability zones"
   value       = var.availability_zones
+}
+
+output "audit_log_groups" {
+  value = tomap({ for group in aws_cloudwatch_log_group.vpc_flow : "vpc_flow" => {
+    arn            = trimsuffix(group.arn, ":*")
+    retention_days = group.retention_in_days
+    kms_key_arn    = group.kms_key_id
+  } })
 }

@@ -165,3 +165,11 @@ variable "common_tags" {
 locals {
   effective_tags = var.common_tags != null ? var.common_tags : var.tags
 }
+variable "node_release_version" {
+  type        = string
+  description = "Exact region-verified MNG AMI release; initial pin can replace nodes."
+  validation {
+    condition     = can(regex("^[0-9][0-9A-Za-z._-]+$", var.node_release_version))
+    error_message = "An exact non-empty node release is required."
+  }
+}

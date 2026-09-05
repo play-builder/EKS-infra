@@ -37,6 +37,36 @@ variable "course_id" {
   }
 }
 
+variable "platform_instance_id" {
+  description = "Stable identifier shared by all resources in this platform instance"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.platform_instance_id)) > 0
+    error_message = "platform_instance_id must not be blank."
+  }
+}
+
+variable "owner" {
+  description = "Team accountable for this production platform"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.owner)) > 0
+    error_message = "owner must not be blank."
+  }
+}
+
+variable "cost_center" {
+  description = "Cost allocation identifier for this production platform"
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.cost_center)) > 0
+    error_message = "cost_center must not be blank."
+  }
+}
+
 variable "division" {
   description = "Organizational or technical division responsible for this infrastructure"
   type        = string
@@ -65,6 +95,10 @@ variable "cluster_admin_principal_arns" {
   description = "Explicit IAM principals granted cluster-admin through Access Entries"
   type        = set(string)
   default     = []
+  validation {
+    condition     = length(var.cluster_admin_principal_arns) == 0
+    error_message = "Migrate existing state to typed access_entries before applying; legacy all-admin grants are disabled."
+  }
 }
 
 variable "cluster_service_ipv4_cidr" {
@@ -83,6 +117,27 @@ variable "cluster_endpoint_public_access" {
   description = "Enable public API server endpoint"
   type        = bool
   default     = false
+}
+
+variable "operator_access" {
+  description = "Private production EKS operator path"
+  type = object({
+    mode                      = string
+    trusted_sso_principal_arn = string
+    subnet_id                 = string
+    ami_id                    = string
+    instance_type             = string
+  })
+
+  validation {
+    condition = (
+      var.operator_access.mode == "ssm" &&
+      can(regex("^arn:aws(-[a-z]+)?:iam::[0-9]{12}:role/(aws-reserved/sso.amazonaws.com/[^/]+/)?AWSReservedSSO_.+", var.operator_access.trusted_sso_principal_arn)) &&
+      can(regex("^subnet-[0-9a-f]+$", var.operator_access.subnet_id)) &&
+      can(regex("^ami-[0-9a-f]+$", var.operator_access.ami_id))
+    )
+    error_message = "operator_access requires mode ssm, an IAM role ARN, a private subnet ID, and an AMI ID."
+  }
 }
 
 variable "cluster_endpoint_public_access_cidrs" {
@@ -166,29 +221,6 @@ variable "private_node_group_instance_types" {
   default     = ["m5.large"]
 }
 
-variable "enable_bastion" {
-  description = "Enable Bastion Host"
-  type        = bool
-  default     = true
-}
-
-variable "bastion_instance_type" {
-  description = "EC2 instance type for Bastion Host"
-  type        = string
-  default     = "t3.micro"
-}
-
-variable "bastion_instance_keypair" {
-  description = "EC2 Key Pair name for Bastion Host"
-  type        = string
-}
-
-variable "bastion_ssh_cidr_blocks" {
-  description = "CIDR blocks allowed to SSH to Bastion"
-  type        = list(string)
-  default     = []
-}
-
 variable "cluster_enabled_log_types" {
   description = "List of control plane logging types to enable"
   type        = list(string)
@@ -202,9 +234,8 @@ variable "cluster_enabled_log_types" {
 }
 
 variable "cluster_log_retention_in_days" {
-  description = "CloudWatch log retention in days"
-  type        = number
-  default     = 30
+  type    = number
+  default = 90
 }
 
 variable "vpc_cni_addon_version" {
@@ -213,7 +244,7 @@ variable "vpc_cni_addon_version" {
 }
 
 variable "vpc_cni_enable_network_policy" {
-  description = "False in Ch03; changed to true in Ch14"
+  description = "Enable VPC CNI network-policy enforcement after the approved policy rollout"
   type        = bool
   default     = false
 }
@@ -240,4 +271,12 @@ variable "tags" {
   description = "Additional tags"
   type        = map(string)
   default     = {}
+}
+variable "managed_addon_versions" {
+  type = object({ coredns = string, kube_proxy = string })
+}
+variable "node_release_version" { type = string }
+variable "access_entries" {
+  type    = map(object({ principal_arn = string, policy_arn = string, scope_type = string, namespaces = set(string), break_glass = bool }))
+  default = {}
 }

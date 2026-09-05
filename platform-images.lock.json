@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "platform.image-lock/v1",
+  "predicateType": "https://github.com/play-builder/EKS-infra/attestations/platform.image-mirror/v1",
+  "crane": {
+    "version": "0.22.1",
+    "linuxAmd64ArchiveSha256": "0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0"
+  },
+  "releases": {
+    "stable": {
+      "version": "1.30.4",
+      "upstreamReference": "registry.istio.io/release/proxyv2@sha256:43b6aeab7428470d3d0ea6b6f0bc217e5b36df2b279bba337643df48590226d9",
+      "indexDigest": "sha256:43b6aeab7428470d3d0ea6b6f0bc217e5b36df2b279bba337643df48590226d9",
+      "architectureDigests": {
+        "linux/amd64": "sha256:372b2de1c4e48797d54a8a129e4710a6c41496a387a95d717c8b16f009092bf8",
+        "linux/arm64": "sha256:27ca30f7e67a658e333d1f24b8fd9f90e922c42c05ac25f66f5e59f852a06f4b"
+      }
+    },
+    "candidate": {
+      "version": "1.31.0",
+      "upstreamReference": "docker.io/istio/proxyv2@sha256:e3b973cce2442c2883188d8cf839dff8a21075fab0e00e5079df6ef28c9caf17",
+      "indexDigest": "sha256:e3b973cce2442c2883188d8cf839dff8a21075fab0e00e5079df6ef28c9caf17",
+      "architectureDigests": {
+        "linux/amd64": "sha256:aef6565b50449e5c30b69c47574fbed14d85c1d1394c5c1150b6fd51ae5e91a3",
+        "linux/arm64": "sha256:43ed79d2a3c3c897e67e6b8309431377bdd9478aea56f29c5cf30d47d43577a5"
+      }
+    }
+  }
+}
