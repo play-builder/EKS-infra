@@ -430,3 +430,24 @@ module "amg" {
 
   depends_on = [module.amp]
 }
+module "sigstore_policy_controller" {
+  source             = "../../../modules/addons/sigstore-policy-controller"
+  name               = "${var.environment}-${var.project_name}"
+  environment        = var.environment
+  replicas           = var.sigstore_controller_replicas
+  oidc_provider      = data.terraform_remote_state.eks.outputs.oidc_provider
+  oidc_provider_arn  = data.terraform_remote_state.eks.outputs.oidc_provider_arn
+  repository_arns    = var.sigstore_ecr_repository_arns
+  api_server_cidrs   = var.sigstore_api_server_cidrs
+  https_egress_cidrs = var.sigstore_https_egress_cidrs
+  tags               = local.common_tags
+}
+module "mini_commerce_secrets" {
+  source            = "../../../modules/security/mini-commerce-secrets"
+  name              = "${var.environment}-${var.project_name}"
+  namespace         = "app-${var.environment}"
+  region            = var.aws_region
+  oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
+  oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
+  tags              = local.common_tags
+}

@@ -54,3 +54,8 @@ autoscaler_capacity = {
  usable_subnet_ips_by_az = { "az-a" = 64, "az-b" = 64, "az-c" = 64 }
  required_headroom_percentage = 20
 }
+# Supply exact actual ECR outputs and reviewed live-resolved API/ECR/Sigstore/GitHub destinations.
+# sigstore_ecr_repository_arns = ["<actual-old-image-arn>", "<actual-new-image-arn>"]
+# sigstore_api_server_cidrs = ["<exact-cluster-endpoint/service-ip>/32"]
+# sigstore_https_egress_cidrs = ["<approved-egress-ip>/32"]
+sigstore_controller_replicas = 2

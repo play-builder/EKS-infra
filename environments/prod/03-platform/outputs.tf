@@ -167,3 +167,6 @@ output "verification_commands" {
 output "autoscaler_capacity_contract" {
   value = var.enable_cluster_autoscaler ? module.cluster_autoscaler[0].capacity_contract : null
 }
+output "sigstore_controller" { value = module.sigstore_policy_controller.sigstore_controller }
+output "mini_commerce_secrets" { value = module.mini_commerce_secrets.secrets }
+output "application_credentials" { value = module.mini_commerce_secrets.application_credentials }

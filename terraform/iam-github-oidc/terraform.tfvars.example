@@ -15,9 +15,24 @@ infra_oidc_subjects = [
 
 sample_app_oidc_subjects = [
   "repo:play-builder@42942042/cicd-course-sample-app@1352247019:ref:refs/heads/main",
-  "repo:play-builder@42942042/cicd-course-sample-app@1352247019:ref:refs/heads/dev",
+  "repo:play-builder@42942042/mini-commerce@1352247019:ref:refs/heads/main",
 ]
 
 tags = {
+  PlatformInstanceId = "replace-me"
+  Owner = "platform-sre"
+  CostCenter = "replace-me"
   Course = "cicd-gitops"
+}
+sample_app_attest_verify_oidc_subjects = [
+  "repo:play-builder@42942042/cicd-course-sample-app@1352247019:ref:refs/heads/main",
+  "repo:play-builder@42942042/mini-commerce@1352247019:ref:refs/heads/main",
+]
+mini_commerce_ecr_repository = "playdevops/mini-commerce"
+mini_commerce_chart_ecr_repository = "playdevops/mini-commerce-chart"
+ecr_registry_scanning = {
+  ownership_mode = "external"
+  scan_type = "ENHANCED"
+  scan_frequency = "CONTINUOUS_SCAN"
+  repository_filters = ["playdevops/sample-app*","playdevops/mini-commerce*"]
 }

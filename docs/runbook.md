@@ -327,3 +327,31 @@ reference; successful deployment goes to Slack/platform-deployments. See
 checks production replica/node/AZ distribution, PDBs, projected-secret metadata
 hashes and RBAC. It never records Secret data. Static render and this read-only
 collector do not prove an interactive corporate OIDC login; record that separately.
+## Sigstore and ECR prerequisites
+
+03-platform installs policy-controller 0.10.5/0.13.1 with immutable controller and
+cleanup images, an exact ECR read-only IRSA role, fail-closed webhook and bounded
+HTTPS/API/DNS egress. Supply current destination CIDRs; changing public service IPs
+requires updating the reviewed egress list. This is not DNS-based egress enforcement.
+The vendored chart CRDs carry no policy instances. GitOps alone owns TrustRoot,
+ClusterImagePolicy and namespace opt-in; Dev warn/Prod enforce are GitOps inputs.
+
+Use sigstore-controller-check.sh for controller/CRD readiness. The admission
+preflight requires a pre-existing GitOps-owned dedicated drill namespace with
+opt-in, then submits two digest-pinned server-dry-run Pods. It verifies signed
+allow and Sigstore webhook unsigned deny. No Pods persist; scheduling/image-pull
+and application rollout are not tested by this admission check.
+
+ecr-scanning-status-check.sh validates actual regional registry rules and image
+scan identity/status; ACTIVE/COMPLETE does not mean vulnerability-free. Scanning
+never substitutes for attestation verification. ecr-scanning-owner-handoff.sh only
+checks a saved plan for destructive registry transitions; operators perform the
+reviewed import/state-rm procedure in the IAM root guide.
+
+03-platform owns new runtime/DML/DDL empty secret containers at
+ENV-PROJECT/mini-commerce/{runtime,database,migration}. Runtime reader can read
+runtime+database; the separate migration reader can read migration only. Output
+application_credentials supplies database/migration ARN/name to the future database
+root, avoiding duplicate secret ownership. Secret values, actual DB users and
+privileges are provisioned outside Terraform. Legacy consumers remain on their
+existing SecretStore until the explicit GitOps cutover.

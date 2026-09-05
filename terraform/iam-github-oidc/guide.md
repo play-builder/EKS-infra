@@ -73,3 +73,28 @@ workflow는 AWS role을 사용하지 않으며 build-and-push workflow만 OIDC t
 
 `terraform.tfvars`와 Terraform state에는 계정 식별 정보가 있으므로 원격 저장소에
 커밋하지 않습니다.
+## Mini Commerce migration and attestation role
+
+The legacy image/chart resources keep their state addresses. New immutable
+playdevops/mini-commerce and playdevops/mini-commerce-chart repositories are
+separate resources. Obtain actual URLs/ARNs from outputs after reviewed deployment.
+
+Map sample_app_push_role_arn to GitHub vars.AWS_ROLE_ARN,
+sample_app_attest_verify_role_arn to vars.AWS_ATTEST_VERIFY_ROLE_ARN and the new
+image repository name to vars.ECR_REPOSITORY. This code does not register GitHub
+variables. Only the user changes remote GitHub settings and pushes code.
+
+Both roles trust the approved numeric old/new main subjects. A main job can request
+either role: separate ARNs provide policy/audit separation, not enforced job isolation.
+The attestation job needs repository-scoped read and OCI upload, including PutImage.
+AWS authorizes ListImageReferrers through BatchGetImage, not an invented same-name
+IAM action. PutImage cannot be restricted here to attestation manifests alone.
+Sources: [ECR IAM actions](https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonelasticcontainerregistry.html),
+[ListImageReferrers](https://docs.aws.amazon.com/AmazonECR/latest/APIReference/API_ListImageReferrers.html).
+
+Registry scanning is a regional singleton. Default external ownership creates no
+Terraform scanning resource. For transfer into Terraform, first read live state,
+review/import the exact registry, and require a no-change saved plan. To transfer
+out, obtain external-owner acceptance, use reviewed state rm, and verify live state.
+Never apply a count-to-zero delete; prevent_destroy and the no-destroy validator
+block that route. Keep the approval/state backup as rollback evidence.

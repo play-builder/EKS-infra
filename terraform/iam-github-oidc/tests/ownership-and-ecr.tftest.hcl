@@ -48,3 +48,4 @@ run "external_mode_does_not_own_provider" {
     error_message = "external mode must not report course ownership"
   }
 }
+variables { tags = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" } }

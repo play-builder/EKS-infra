@@ -439,3 +439,10 @@ variable "autoscaler_capacity" {
     error_message = "Node/pod capacity and every AZ IP pool must cover workload, surge, reserve and headroom."
   }
 }
+variable "sigstore_controller_replicas" {
+  type    = number
+  default = 2
+}
+variable "sigstore_ecr_repository_arns" { type = set(string) }
+variable "sigstore_api_server_cidrs" { type = set(string) }
+variable "sigstore_https_egress_cidrs" { type = set(string) }

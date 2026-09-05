@@ -75,3 +75,15 @@ cluster_autoscaler_bridge:
   chartSha256: 90276dafe65cf5d4328ef8313baf6cfb9d130683e0c9f3c28a03b4d8a9ed8f6e
   image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.36.0@sha256:dc5d62770338c2902f31b01f95c9fc8c456fd88baa5364ca154d6e47069ec885
   status: OVERRIDE_REQUIRES_CLOUD_RUNTIME
+sigstore_prerequisites:
+  chartVersion: 0.10.5
+  appVersion: 0.13.1
+  chartOciDigest: sha256:bd825655f80a062a23e71725cb33118566ff6a90daf97a1ce17a52a4bc6e010d
+  chartArchiveSha256: d1c243d566ef11c7e206cc9f6a1187f9e4291325d011d8fc432f50632296336c
+  controllerImageDigest: sha256:0bcd60beb93f4427c29cf3a669743caf58490e98ded4380c33c09f092734a6ab
+  cleanupImageDigest: sha256:1e1ef597cf577885d2b1b5fa927efad03164292069bc67f20ee3c15db62e7f5d
+  cipServedVersions: [v1alpha1, v1beta1]
+  cipStorageVersion: v1alpha1
+  trustrootApiVersion: v1alpha1
+  policyOwner: argocd-gitops
+  runtime: LIVE_NOT_VERIFIED
