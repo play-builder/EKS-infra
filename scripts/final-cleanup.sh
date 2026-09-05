@@ -61,6 +61,7 @@ for name in plan saved_plan_dir inventory decisions preflight in_flight freeze r
 done
 [[ -d "$saved_plan_dir" ]] || course_fail 'FINAL_CLEANUP_SAVED_PLAN_REQUIRED' 64
 saved_plan_dir=$(cd -- "$saved_plan_dir" && pwd -P)
+export ENTERPRISE_CLEANUP_AGGREGATE_PLAN="$plan"
 [[ "$request_identity" =~ [^[:space:]] && "$request_identity" != pending ]] || \
   course_fail 'FINAL_CLEANUP_REQUEST_IDENTITY_INVALID' 64
 [[ "$approval_run_id" =~ ^[1-9][0-9]*$ ]] || course_fail 'FINAL_CLEANUP_APPROVAL_RUN_ID_INVALID' 64
@@ -140,14 +141,15 @@ print_dry_run() {
   [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] final cleanup plan validated without mutation.'
 }
 
+layer_output=$(python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" layers "$inventory") || course_fail 'ENTERPRISE_CLEANUP_ORDER_BLOCKED'
+layers=()
+while IFS= read -r layer; do layers+=("$layer"); done <<<"$layer_output"
+
 if [[ "$execute" != true ]]; then
   source_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
-  for layer in \
-    environments/prod/04-workloads/argocd environments/dev/04-workloads/argocd \
-    environments/prod/03-platform environments/dev/03-platform \
-    environments/prod/02-eks environments/dev/02-eks \
-    environments/prod/01-network environments/dev/01-network; do
+  for layer in "${layers[@]}"; do
     artifact_dir="$saved_plan_dir/${layer//\//_}"
+    python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" guard "$artifact_dir/tfplan.json" "$inventory" || course_fail "ENTERPRISE_ROOT_DELETE_GUARD_FAILED: $layer"
     expected_backend_key=$(terraform_plan_expected_backend_key_for_root "$layer")
     jq -e '
       (.resource_changes | type == "array") and
@@ -178,20 +180,11 @@ cleanup_require_canonical_runtime_output "$pre_destroy_output" "$REPO_ROOT" kube
 cleanup_require_canonical_runtime_output "$residual_output" "$REPO_ROOT" residual.json
 for command_name in aws kubectl terraform jq; do command -v "$command_name" >/dev/null || course_fail "required command not found: $command_name" 69; done
 
-layers=(
-  environments/prod/04-workloads/argocd
-  environments/dev/04-workloads/argocd
-  environments/prod/03-platform
-  environments/dev/03-platform
-  environments/prod/02-eks
-  environments/dev/02-eks
-  environments/prod/01-network
-  environments/dev/01-network
-)
 for layer in "${layers[@]}"; do [[ -d "$REPO_ROOT/$layer" ]] || course_fail "cleanup layer not found: $layer"; done
 source_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
 for layer in "${layers[@]}"; do
   artifact_dir="$saved_plan_dir/${layer//\//_}"
+  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" guard "$artifact_dir/tfplan.json" "$inventory" || course_fail "ENTERPRISE_ROOT_DELETE_GUARD_FAILED: $layer"
   expected_backend_key=$(terraform_plan_expected_backend_key_for_root "$layer")
   jq -e '
     (.resource_changes | type == "array") and
@@ -214,6 +207,7 @@ stage() {
   if [[ -n "${COURSE_CLEANUP_STAGE_LOG:-}" ]]; then echo "$number" >>"$COURSE_CLEANUP_STAGE_LOG"; fi
 }
 
+python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" discover "$inventory" || course_fail 'ENTERPRISE_DISCOVERY_INCOMPLETE'
 stage 1
 echo 'PHASE 1/6 scope: account identity verified.'
 stage 2
@@ -239,6 +233,8 @@ stage 12
 stage 13
 for layer in "${layers[@]}"; do
   artifact_dir="$saved_plan_dir/${layer//\//_}"
+  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" guard "$artifact_dir/tfplan.json" "$inventory" || course_fail "ENTERPRISE_ROOT_DELETE_GUARD_FAILED: $layer"
+  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" log-key-ready "$artifact_dir/tfplan.json" "$inventory" || course_fail "LOG_KEY_DELETE_READINESS_FAILED: $layer"
   terraform -chdir="$REPO_ROOT/$layer" apply "$artifact_dir/tfplan" || course_fail "TERRAFORM_APPLY_FAILED: $layer"
 done
 stage 14

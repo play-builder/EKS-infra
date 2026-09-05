@@ -79,13 +79,17 @@ resource_present() {
     SnsTopic) jq -e --arg id "$id" 'any(.Topics[]?; .TopicArn == $id)' "$tmp_dir/sns-topics.json" >/dev/null ;;
     EcrRepository) jq -e --arg id "$id" 'any(.repositories[]?; (.repositoryArn // .repositoryUri // .repositoryName) == $id)' "$tmp_dir/ecr-repositories.json" >/dev/null ;;
     SecretsManagerSecret)
-      aws_scan secretsmanager describe-secret --secret-id "$id" >/dev/null 2>&1
+      python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" present "$kind" "$id"
+      ;;
+    RdsInstance|RdsSnapshot|RdsAutomatedBackup|RdsSubnetGroup|RdsParameterGroup|KmsKey|LogGroup|WafWebAcl|S3BackupBucket|S3StateBucket|TerraformState|CourseEvidence|IamOidcProvider|Budget|CostAnomalyMonitor|CostAnomalySubscription|CostAllocationTag|BillingSnsTopic)
+      python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" present "$kind" "$id"
       ;;
     *) return 2 ;;
   esac
 }
 
 scan_once() {
+  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" discover "$inventory" || course_fail 'ENTERPRISE_DISCOVERY_INCOMPLETE'
   aws_scan elbv2 describe-load-balancers >"$tmp_dir/load-balancers.json"
   aws_scan ec2 describe-nat-gateways --filter Name=state,Values=pending,available,deleting >"$tmp_dir/nat-gateways.json"
   aws_scan eks list-clusters >"$tmp_dir/eks-clusters.json"
@@ -108,7 +112,9 @@ scan_once() {
   amp_workspaces=0
   sns_topics=0
   ecr_repositories=0
+  enterprise_resources=0
   missing_protected=0
+  scheduled_keys='[]'
 
   while IFS= read -r resource; do
     kind=$(jq -r '.kind' <<<"$resource")
@@ -117,6 +123,13 @@ scan_once() {
     present=false
     status=0
     case "$kind:$decision" in
+      KmsLogKey:DELETE)
+        scheduled=$(python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" scheduled-log-key "$id" "$inventory") || course_fail 'LOG_KEY_SCHEDULED_HANDLE_NOT_VERIFIED'
+        scheduled_keys=$(jq --argjson entry "$scheduled" '. + [$entry] | sort_by(.keyArn)' <<<"$scheduled_keys")
+        # PendingDeletion is immediately unusable, but still physically retained.
+        # This is recorded separately, never represented as physical absence.
+        continue
+        ;;
       PersistentVolumeClaim:RETAIN|VolumeSnapshot:RETAIN|VolumeSnapshotContent:RETAIN|Namespace:RETAIN)
         # These identities were observed before cluster deletion and are bound to
         # the accepted removal record by cleanup_validate_pre_destroy above.
@@ -127,7 +140,7 @@ scan_once() {
           present=true
         else
           status=$?
-          [[ "$status" -ne 2 ]] || course_fail "UNSUPPORTED_CLEANUP_RESOURCE_KIND: $kind"
+          [[ "$status" -le 1 ]] || course_fail "RESIDUAL_QUERY_FAILED_OR_UNSUPPORTED_KIND: $kind"
         fi
         ;;
     esac
@@ -141,6 +154,7 @@ scan_once() {
         AmpWorkspace) ((amp_workspaces+=1)) ;;
         SnsTopic) ((sns_topics+=1)) ;;
         EcrRepository) ((ecr_repositories+=1)) ;;
+        RdsInstance|RdsSnapshot|RdsSubnetGroup|RdsParameterGroup|LogGroup|WafWebAcl|SecretsManagerSecret) ((enterprise_resources+=1)) ;;
         *) course_fail "UNSUPPORTED_DELETE_KIND: $kind" ;;
       esac
     elif [[ "$decision" != DELETE && "$present" != true ]]; then
@@ -148,7 +162,7 @@ scan_once() {
     fi
   done < <(jq -c '.resources[]' "$inventory")
 
-  total=$((load_balancers + nat_gateways + eks_clusters + ebs_volumes + ebs_snapshots + amp_workspaces + sns_topics + ecr_repositories))
+  total=$((load_balancers + nat_gateways + eks_clusters + ebs_volumes + ebs_snapshots + amp_workspaces + sns_topics + ecr_repositories + enterprise_resources))
 }
 
 attempts=${RESIDUAL_SCAN_ATTEMPTS:-12}
@@ -183,11 +197,11 @@ payload=$(jq -n --arg grade "$grade" --arg course "$COURSE_ID" --arg account "$A
   --arg region "$AWS_REGION" --arg inventory_sha "$(course_raw_sha256_file "$inventory")" \
   --arg decisions_sha "$(course_raw_sha256_file "$decisions")" \
   --arg pre_sha "$(course_raw_sha256_file "$pre_destroy")" --arg removal_sha "$(course_raw_sha256_file "$removal")" \
-  --arg observed "$observed" --argjson external "$external" --argjson retained "$retained" \
+  --arg observed "$observed" --argjson external "$external" --argjson retained "$retained" --argjson scheduled_keys "$scheduled_keys" \
   --argjson load_balancers "$load_balancers" --argjson nat_gateways "$nat_gateways" \
   --argjson eks_clusters "$eks_clusters" --argjson ebs_volumes "$ebs_volumes" \
   --argjson ebs_snapshots "$ebs_snapshots" --argjson amp_workspaces "$amp_workspaces" \
-  --argjson sns_topics "$sns_topics" --argjson ecr_repositories "$ecr_repositories" '
+  --argjson sns_topics "$sns_topics" --argjson ecr_repositories "$ecr_repositories" --argjson enterprise_resources "$enterprise_resources" '
   {
     schemaVersion:"course.cleanup-residual/v1",evidenceGrade:$grade,status:"PASS",
     courseId:$course,accountId:$account,region:$region,
@@ -196,8 +210,9 @@ payload=$(jq -n --arg grade "$grade" --arg course "$COURSE_ID" --arg account "$A
     unapprovedCourseOwned:{loadBalancers:$load_balancers,natGateways:$nat_gateways,
       eksClusters:$eks_clusters,ebsVolumes:$ebs_volumes,ebsSnapshots:$ebs_snapshots,
       ampWorkspaces:$amp_workspaces,snsTopics:$sns_topics,ecrRepositories:$ecr_repositories,
-      total:($load_balancers+$nat_gateways+$eks_clusters+$ebs_volumes+$ebs_snapshots+$amp_workspaces+$sns_topics+$ecr_repositories)},
-    externalShared:$external,retained:$retained,observedAt:$observed
+      enterpriseResources:$enterprise_resources,
+      total:($load_balancers+$nat_gateways+$eks_clusters+$ebs_volumes+$ebs_snapshots+$amp_workspaces+$sns_topics+$ecr_repositories+$enterprise_resources)},
+    externalShared:$external,retained:$retained,scheduledKeyDeletions:$scheduled_keys,observedAt:$observed
   }
 ')
 course_write_json "$output" "$payload"

@@ -392,7 +392,7 @@ module "sigstore_policy_controller" {
   replicas           = var.sigstore_controller_replicas
   oidc_provider      = data.terraform_remote_state.eks.outputs.oidc_provider
   oidc_provider_arn  = data.terraform_remote_state.eks.outputs.oidc_provider_arn
-  repository_arns    = var.sigstore_ecr_repository_arns
+  repository_arns    = setunion(var.sigstore_ecr_repository_arns, ["arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.logging.account_id}:repository/${var.project_name}/platform/istio-proxyv2"])
   api_server_cidrs   = var.sigstore_api_server_cidrs
   https_egress_cidrs = var.sigstore_https_egress_cidrs
   tags               = local.common_tags

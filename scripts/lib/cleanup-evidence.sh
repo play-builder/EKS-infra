@@ -109,9 +109,9 @@ cleanup_validate_inventory() {
     ([.resources[] | [.kind,.id]] == ([.resources[] | [.kind,.id]] | sort)) and
     ([.resources[] | [.kind,.id]] | unique | length) == (.resources | length) and
     all(.resources[];
-      keys == ["billable","classification","decision","environment","followUpAction","id","kind","managedBy","owner","reason"] and
+      (keys - ["purpose","logGroupArns","kmsKeyArn","retentionReleaseApproval","deletionWindowInDays"]) == ["billable","classification","decision","environment","followUpAction","id","kind","managedBy","owner","reason"] and
       (.kind | nonblank) and (.id | nonblank) and
-      (.environment == "dev" or .environment == "prod" or .environment == "shared") and
+      (.environment == "dev" or .environment == "prod" or .environment == "recovery" or .environment == "shared") and
       (.classification | nonblank) and
       (.owner | nonblank) and .managedBy == "terraform" and
       (.billable | type == "boolean") and
@@ -283,9 +283,14 @@ cleanup_validate_residual() {
   cleanup_grade_is_valid "$residual" || course_fail 'invalid residual evidence grade'
   course_assert_json "$residual" '
     def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
-    keys == ["accountId","courseId","evidenceGrade","externalShared","gitopsRemovalSha256","inventorySha256","kubernetesPreDestroySha256","observedAt","region","retainDecisionsSha256","retained","schemaVersion","status","unapprovedCourseOwned"] and
+    (keys - ["scheduledKeyDeletions"]) == ["accountId","courseId","evidenceGrade","externalShared","gitopsRemovalSha256","inventorySha256","kubernetesPreDestroySha256","observedAt","region","retainDecisionsSha256","retained","schemaVersion","status","unapprovedCourseOwned"] and
+    ((.scheduledKeyDeletions // []) | type == "array") and
+    all((.scheduledKeyDeletions // [])[];
+      keys == ["deletionDate","keyArn","keyState"] and
+      (.keyArn | nonblank) and .keyState == "PendingDeletion" and
+      (.deletionDate | fromdateiso8601) > now) and
     .schemaVersion == "course.cleanup-residual/v1" and .status == "PASS" and
-    (.unapprovedCourseOwned | keys == ["ampWorkspaces","ebsSnapshots","ebsVolumes","ecrRepositories","eksClusters","loadBalancers","natGateways","snsTopics","total"]) and
+    (.unapprovedCourseOwned | (keys - ["enterpriseResources"]) == ["ampWorkspaces","ebsSnapshots","ebsVolumes","ecrRepositories","eksClusters","loadBalancers","natGateways","snsTopics","total"]) and
     ([.unapprovedCourseOwned[]] | all(type == "number" and floor == . and . == 0)) and
     (.courseId | nonblank) and
     (.externalShared | type == "array") and
@@ -308,6 +313,7 @@ cleanup_validate_residual() {
   [[ $(jq -r '.gitopsRemovalSha256' "$residual") == "$(course_raw_sha256_file "$removal")" ]] || course_fail 'RESIDUAL_GITOPS_DIGEST_MISMATCH'
   jq -en --argjson inventory "$(jq -c . "$inventory")" --argjson decisions "$(jq -c . "$decisions")" --argjson residual "$(jq -c . "$residual")" '
     $inventory.courseId == $residual.courseId and $inventory.accountId == $residual.accountId and $inventory.region == $residual.region and
+    ([$inventory.resources[] | select(.kind == "KmsLogKey" and .decision == "DELETE") | .id] | sort) == ([$residual.scheduledKeyDeletions[]? | .keyArn] | sort) and
     ([ $inventory.resources[] | select(.decision == "EXTERNAL_SHARED") | {kind,id,owner,deletePlanned:false,presentAfterCleanup:true} ] | sort_by(.kind,.id)) == $residual.externalShared and
     ([ $decisions.decisions[] | select(.decision == "RETAIN") as $d |
       ($inventory.resources[] | select(.kind == $d.kind and .id == $d.id)) as $i |

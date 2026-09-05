@@ -47,6 +47,6 @@ module "database" {
   deletion_protection       = var.deletion_protection
   final_snapshot_identifier = var.final_snapshot_identifier
   recovery_objectives       = var.recovery_objectives
-  tags                      = var.tags
+  tags                      = local.owned_tags
 
 }

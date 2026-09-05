@@ -6,7 +6,7 @@ chart="${SIGSTORE_CHART_ARCHIVE:-/tmp/gitops-policy-controller-0.10.5.tgz}"
 terraform -chdir="$root/modules/addons/sigstore-policy-controller" test -filter=tests/prerequisites.tftest.hcl -json -verbose |
  jq -r 'select(.type=="test_state") | .test_state.root_module.resources[] | select(.address=="helm_release.policy_controller") | .values.values[0]' |
  helm template policy-controller "$chart" --namespace cosign-system --include-crds -f - |
- /opt/homebrew/bin/python3 -c '
+ "${ENTERPRISE_PYTHON:-python3}" -c '
 import sys,yaml
 docs=[d for d in yaml.safe_load_all(sys.stdin) if d]
 assert not any(d["kind"] in ["ClusterImagePolicy","TrustRoot"] for d in docs)

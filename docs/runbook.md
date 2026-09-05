@@ -1,5 +1,10 @@
 # EKS 운영 Runbook
 
+Enterprise root/state/IAM wiring과 보존 리소스 정리는
+[enterprise integration runbook](runbooks/enterprise-integration.md)을 따릅니다.
+FinOps management와 protected backup은 별도 operator lane이며, native Istio Rollouts가
+기존 Gateway API traffic plugin을 대체합니다. 일반 AWS LBC ingress는 유지됩니다.
+
 ## 핵심 요약
 
 적용은 `01 → 02 → 03 → 04` 순서로 수행합니다. 제거는 raw `terraform destroy`나 개별

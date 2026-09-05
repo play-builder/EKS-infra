@@ -38,20 +38,23 @@ locals {
     hs = {}
     hs.status = "Progressing"
     hs.message = "waiting for ExternalSecret Ready condition"
+    if obj.metadata == nil or obj.metadata.deletionTimestamp ~= nil then return hs end
     if obj.status ~= nil and obj.status.conditions ~= nil then
       for _, condition in ipairs(obj.status.conditions) do
         if condition.type == "Ready" then
-          local observed = condition.observedGeneration
-          if observed == nil then observed = obj.status.observedGeneration end
-          if observed == nil or obj.metadata == nil then
+          local version = obj.status.syncedResourceVersion
+          local generation = type(version) == "string" and string.match(version, "^(%d+)%-.+$") or nil
+          if generation == nil or type(obj.status.refreshTime) ~= "string" or obj.status.refreshTime == "" then
             hs.status = "Progressing"
-            hs.message = "Ready condition has no observed generation"
-          elseif observed ~= obj.metadata.generation then
+            hs.message = "waiting for ESO synced resource version and refresh time"
+          elseif tonumber(generation) ~= obj.metadata.generation then
             hs.status = "Progressing"
             hs.message = "Ready condition is stale"
           elseif condition.status == "True" then
-            hs.status = "Healthy"
-            hs.message = condition.message or "ExternalSecret is Ready"
+            if condition.reason == "SecretSynced" and condition.message == "secret synced" then
+              hs.status = "Healthy"
+              hs.message = condition.message
+            end
           elseif condition.status == "False" then
             hs.status = "Degraded"
             hs.message = condition.message or "ExternalSecret is not Ready"
@@ -81,10 +84,6 @@ locals {
 
 resource "terraform_data" "course_ownership" {
   input = local.course_ownership
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 moved {
@@ -97,15 +96,14 @@ module "argocd" {
   environment       = var.environment
   region            = var.aws_region
   platform          = var.argocd_platform
-  tags              = merge(local.course_ownership, var.tags)
+  tags              = merge(var.tags, local.course_ownership)
   oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
   health_customizations = {
-    "course.health.external-secret.contract"                                        = "external-secret-ready-health/v1"
-    "resource.customizations.health.external-secrets.io_ExternalSecret"             = local.external_secret_health_lua
-    "course.health.volume-snapshot.contract"                                        = "volume-snapshot-ready-health/v1"
-    "resource.customizations.health.snapshot.storage.k8s.io_VolumeSnapshot"         = local.volume_snapshot_health_lua
-    "resource.customizations.ignoreDifferences.gateway.networking.k8s.io_HTTPRoute" = "jqPathExpressions:\n  - 'select(.metadata.labels[\"rollouts.argoproj.io/gatewayapi-canary\"] == \"in-progress\") | .spec.rules'\n"
+    "course.health.external-secret.contract"                                = "external-secret-ready-health/v1"
+    "resource.customizations.health.external-secrets.io_ExternalSecret"     = local.external_secret_health_lua
+    "course.health.volume-snapshot.contract"                                = "volume-snapshot-ready-health/v1"
+    "resource.customizations.health.snapshot.storage.k8s.io_VolumeSnapshot" = local.volume_snapshot_health_lua
   }
 }
 
@@ -127,92 +125,15 @@ resource "helm_release" "argo_rollouts" {
           name        = "argo-rollouts"
           annotations = local.rollouts_annotations
         }
-        initContainers = [
-          {
-            name    = "copy-gateway-api-plugin"
-            image   = "ghcr.io/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi:v${var.gateway_plugin_version}@${var.gateway_plugin_digest}"
-            command = ["/bin/sh", "-c"]
-            args    = ["cp /bin/rollouts-plugin-trafficrouter-gatewayapi /plugins/"]
-            volumeMounts = [
-              {
-                name      = "gateway-api-plugin"
-                mountPath = "/plugins"
-              }
-            ]
-          }
-        ]
-        trafficRouterPlugins = [
-          {
-            name     = "argoproj-labs/gatewayAPI"
-            location = "file:///plugins/rollouts-plugin-trafficrouter-gatewayapi"
-          }
-        ]
-        volumes = [
-          {
-            name     = "gateway-api-plugin"
-            emptyDir = {}
-          }
-        ]
-        volumeMounts = [
-          {
-            name      = "gateway-api-plugin"
-            mountPath = "/plugins"
-          }
-        ]
+      }
+      providerRBAC = {
+        enabled   = true
+        providers = { istio = true, smi = false, ambassador = false, awsLoadBalancerController = false, awsAppMesh = false, traefik = false, apisix = false, contour = false, glooPlatform = false, gatewayAPI = false }
       }
       dashboard = {
         enabled = true
       }
     })
-  ]
-}
-
-resource "kubectl_manifest" "gateway_plugin_cluster_role" {
-  yaml_body = yamlencode({
-    apiVersion = "rbac.authorization.k8s.io/v1"
-    kind       = "ClusterRole"
-    metadata = {
-      name = "argo-rollouts-gateway-api-plugin"
-    }
-    rules = [
-      {
-        apiGroups = [""]
-        resources = ["services"]
-        verbs     = ["get"]
-      },
-      {
-        apiGroups = ["gateway.networking.k8s.io"]
-        resources = ["httproutes"]
-        verbs     = ["get", "list", "patch", "update"]
-      },
-    ]
-  })
-}
-
-resource "kubectl_manifest" "gateway_plugin_cluster_role_binding" {
-  yaml_body = yamlencode({
-    apiVersion = "rbac.authorization.k8s.io/v1"
-    kind       = "ClusterRoleBinding"
-    metadata = {
-      name = "argo-rollouts-gateway-api-plugin"
-    }
-    roleRef = {
-      apiGroup = "rbac.authorization.k8s.io"
-      kind     = "ClusterRole"
-      name     = "argo-rollouts-gateway-api-plugin"
-    }
-    subjects = [
-      {
-        kind      = "ServiceAccount"
-        name      = "argo-rollouts"
-        namespace = "argo-rollouts"
-      },
-    ]
-  })
-
-  depends_on = [
-    helm_release.argo_rollouts,
-    kubectl_manifest.gateway_plugin_cluster_role,
   ]
 }
 
@@ -254,6 +175,5 @@ resource "kubectl_manifest" "bootstrap" {
   depends_on = [
     module.argocd,
     helm_release.argo_rollouts,
-    kubectl_manifest.gateway_plugin_cluster_role_binding,
   ]
 }

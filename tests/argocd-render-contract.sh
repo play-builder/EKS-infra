@@ -6,7 +6,7 @@ chart="${ARGOCD_CHART_ARCHIVE:-/tmp/gitops-argo-cd-10.4.3.tgz}"
 terraform -chdir="$root/modules/addons/argocd-ha" test -filter=tests/ha-sso.tftest.hcl -json -verbose |
  jq -r 'select(.type=="test_state") | .test_state.root_module.resources[] | select(.address=="helm_release.argocd") | .values.values[0]' |
  helm template argocd "$chart" --namespace argocd -f - |
- /opt/homebrew/bin/python3 -c '
+ "${ENTERPRISE_PYTHON:-python3}" -c '
 import sys,yaml
 docs=list(yaml.safe_load_all(sys.stdin))
 byname={d["metadata"]["name"]:d for d in docs if d and d["kind"] in ["Deployment","StatefulSet"]}

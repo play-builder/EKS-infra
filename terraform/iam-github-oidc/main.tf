@@ -168,7 +168,7 @@ resource "aws_iam_policy" "infra" {
       {
         Sid      = "CourseInfrastructure"
         Effect   = "Allow"
-        Action   = ["acm:*", "aps:*", "ec2:*", "eks:*", "elasticloadbalancing:*", "logs:*", "route53:*", "secretsmanager:*"]
+        Action   = ["acm:*", "aps:*", "ec2:*", "eks:*", "elasticloadbalancing:*", "logs:*", "route53:*"]
         Resource = "*"
       },
       {
@@ -185,6 +185,14 @@ resource "aws_iam_policy" "infra" {
           "iam:GetPolicy",
           "iam:GetPolicyVersion",
           "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:ListRolePolicies",
+          "iam:ListRoleTags",
+          "iam:UpdateAssumeRolePolicy",
+          "iam:UntagRole",
+          "iam:CreatePolicyVersion",
+          "iam:DeletePolicyVersion",
+          "iam:SetDefaultPolicyVersion",
           "iam:ListAttachedRolePolicies",
           "iam:ListInstanceProfilesForRole",
           "iam:ListPolicyVersions",
@@ -198,10 +206,23 @@ resource "aws_iam_policy" "infra" {
         Resource = "*"
       },
       {
-        Sid      = "TerraformStateBuckets"
+        Sid       = "TerraformStateBuckets"
+        Effect    = "Allow"
+        Action    = ["s3:ListBucket"]
+        Resource  = [for b in local.workload_state_buckets : "arn:aws:s3:::${b}"]
+        Condition = { StringEquals = { "s3:prefix" = concat(local.workload_state_keys, [for k in local.workload_state_keys : "${k}.tflock"]) } }
+      },
+      {
+        Sid      = "TerraformStateObjects"
         Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:ListBucket", "s3:PutObject"]
-        Resource = ["arn:aws:s3:::${var.project_name}-infra-tf-*", "arn:aws:s3:::${var.project_name}-infra-tf-*/*"]
+        Action   = ["s3:GetObject", "s3:PutObject"]
+        Resource = local.workload_state_objects
+      },
+      {
+        Sid      = "TerraformStateLocks"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Resource = [for a in local.workload_state_objects : "${a}.tflock"]
       }
     ]
   })
@@ -328,5 +349,5 @@ resource "aws_iam_role_policy_attachment" "sample_app_attest_verify" {
 module "ecr_registry_scanning" {
   source                = "../../modules/security/ecr-registry-scanning"
   configuration         = var.ecr_registry_scanning
-  required_repositories = [var.sample_app_ecr_repository, var.mini_commerce_ecr_repository]
+  required_repositories = [var.sample_app_ecr_repository, var.mini_commerce_ecr_repository, aws_ecr_repository.platform_istio_proxy.name]
 }

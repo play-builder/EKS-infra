@@ -34,5 +34,5 @@ ecr_registry_scanning = {
   ownership_mode = "external"
   scan_type = "ENHANCED"
   scan_frequency = "CONTINUOUS_SCAN"
-  repository_filters = ["playdevops/sample-app*","playdevops/mini-commerce*"]
+  repository_filters = ["playdevops/sample-app*","playdevops/mini-commerce*","playdevops/platform/istio-proxyv2*"]
 }

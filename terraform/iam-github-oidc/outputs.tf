@@ -8,6 +8,18 @@ output "infra_role_arn" {
   value       = aws_iam_role.infra.arn
 }
 
+output "billing_observer_handoff" {
+  description = "CI observer authorization metadata; external plan/apply role policies and billing role trust are operator-owned."
+  value = {
+    schemaVersion          = "platform.billing-observer-handoff/v1"
+    observerRoleArn        = var.billing_monitor_role_arn
+    managedWorkloadRoleArn = aws_iam_role.infra.arn
+    externalCiRoleSecrets  = ["TERRAFORM_PLAN_ROLE_ARN", "TERRAFORM_APPLY_ROLE_ARN"]
+    requiredAction         = "sts:AssumeRole"
+    managementProvisioning = false
+  }
+}
+
 output "sample_app_push_role_arn" {
   description = "cicd-course-sample-app ECR push role ARN"
   value       = aws_iam_role.sample_app_push.arn

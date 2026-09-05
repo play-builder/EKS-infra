@@ -1,0 +1,77 @@
+name: terraform-drift
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: terraform-drift-${{ matrix.root }}-${{ vars.AWS_REGION }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { root: environments/dev/01-network, backend: environments/dev/config/network.tfbackend }
+          - { root: environments/dev/02-eks, backend: environments/dev/config/eks.tfbackend }
+          - { root: environments/dev/03-platform, backend: environments/dev/config/platform.tfbackend }
+          - { root: environments/dev/04-workloads/argocd, backend: environments/dev/config/argocd.tfbackend }
+          - { root: environments/prod/01-network, backend: environments/prod/config/network.tfbackend }
+          - { root: environments/prod/02-eks, backend: environments/prod/config/eks.tfbackend }
+          - { root: environments/prod/03-platform, backend: environments/prod/config/platform.tfbackend }
+          - { root: environments/prod/04-workloads/argocd, backend: environments/prod/config/argocd.tfbackend }
+          - { root: environments/prod/03-database, backend: environments/prod/config/database.tfbackend }
+          - { root: environments/recovery/03-database, backend: environments/recovery/config/database.tfbackend }
+    env:
+      TF_ROOT: ${{ matrix.root }}
+      TF_BACKEND: ${{ matrix.backend }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      BACKEND_BUCKET: ${{ vars.STATE_BUCKET_NAME }}
+      TF_IN_AUTOMATION: "true"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.16.0"
+      - name: Require dedicated read-only identity and root inputs
+        env:
+          DRIFT_ROLE: ${{ secrets.TERRAFORM_DRIFT_ROLE_ARN }}
+          DRIFT_ROOT_INPUTS_JSON: ${{ secrets.TERRAFORM_DRIFT_INPUTS_JSON }}
+        run: |
+          set -euo pipefail
+          [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ && -n "$BACKEND_BUCKET" && -n "$DRIFT_ROLE" ]] || { echo DRIFT_INPUTS_REQUIRED >&2; exit 64; }
+          [[ "$AWS_REGION" == ap-northeast-2 || "$AWS_REGION" == us-east-1 ]] || exit 64
+          umask 077
+          printf '%s' "$DRIFT_ROOT_INPUTS_JSON" | jq -e --arg root "$TF_ROOT" '.[$root] | select(type == "object" and length > 0)' > "$TF_ROOT/terraform.tfvars.json" || { echo DRIFT_INPUTS_REQUIRED >&2; exit 64; }
+      - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
+        with:
+          role-to-assume: ${{ secrets.TERRAFORM_DRIFT_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Read-only drift plan
+        run: |
+          set -euo pipefail
+          [[ "$(aws sts get-caller-identity --query Account --output text --region "$AWS_REGION")" == "$AWS_ACCOUNT_ID" ]] || { echo DRIFT_ACCOUNT_MISMATCH >&2; exit 1; }
+          mkdir -p evidence/terraform-drift
+          bash scripts/terraform-drift-check.sh "$GITHUB_WORKSPACE/$TF_ROOT" "$GITHUB_WORKSPACE/$TF_BACKEND" "$GITHUB_WORKSPACE/evidence/terraform-drift/current"
+      - name: Upload redacted drift decision only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: terraform-drift-${{ strategy.job-index }}
+          path: evidence/terraform-drift/current/drift.json
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Remove ephemeral root inputs
+        if: always()
+        run: rm -f -- "$TF_ROOT/terraform.tfvars.json"

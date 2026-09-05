@@ -156,5 +156,5 @@ variable "sample_app_attest_verify_oidc_subjects" {
 }
 variable "ecr_registry_scanning" {
   type    = object({ ownership_mode = string, scan_type = string, scan_frequency = string, repository_filters = set(string) })
-  default = { ownership_mode = "external", scan_type = "ENHANCED", scan_frequency = "CONTINUOUS_SCAN", repository_filters = ["playdevops/sample-app*", "playdevops/mini-commerce*"] }
+  default = { ownership_mode = "external", scan_type = "ENHANCED", scan_frequency = "CONTINUOUS_SCAN", repository_filters = ["playdevops/sample-app*", "playdevops/mini-commerce*", "playdevops/platform/istio-proxyv2*"] }
 }

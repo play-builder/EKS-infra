@@ -35,9 +35,10 @@ cleanup_validate_inventory "$inventory_source"
 
 jq -e '.format_version | type == "string"' "$plan" >/dev/null || course_fail 'invalid Terraform JSON plan'
 jq -e '.resource_changes | type == "array"' "$plan" >/dev/null || course_fail 'Terraform plan has no resource_changes array'
+python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" guard "$plan" "$inventory_source" || course_fail 'ENTERPRISE_CLEANUP_GUARD_FAILED'
 
 while IFS= read -r change; do
-  id=$(jq -r '.change.before.id // empty' <<<"$change")
+  id=$(jq -r '.change.before.arn // .change.before.id // empty' <<<"$change")
   type=$(jq -r '.type' <<<"$change")
   [[ -n "$id" ]] || course_fail 'UNCLASSIFIED_DELETE_HANDLE'
   if [[ "$type" == aws_iam_openid_connect_provider ]] && \
@@ -55,7 +56,8 @@ while IFS= read -r change; do
     .change.before.tags.CourseId == $course and .change.before.tags.AccountId == $account and
     .change.before.tags.Region == $region and .change.before.tags.Project == $project and
     (.change.before.tags.Environment == "dev" or .change.before.tags.Environment == "prod" or .change.before.tags.Environment == "shared") and
-    (.change.before.tags.Layer | type == "string" and test("[^[:space:]\uFEFF]")) and .change.before.tags.ManagedBy == "terraform"
+    (.change.before.tags.Layer | type == "string" and test("[^[:space:]\uFEFF]")) and
+    (.change.before.tags.ManagedBy == "terraform" or .change.before.tags.ManagedBy == "Terraform")
   ' <<<"$change" >/dev/null || course_fail "OWNERSHIP_TAG_MISMATCH: $id"
 done < <(jq -c '.resource_changes[] | select(.change.actions | index("delete"))' "$plan")
 

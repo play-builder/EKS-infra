@@ -27,8 +27,6 @@ delivery:
   gatewayApi: "1.6.0"
   awsLoadBalancerControllerChart: "3.5.0"
   awsLoadBalancerController: "3.5.0"
-  gatewayApiTrafficRouterPlugin: "0.16.0"
-  gatewayApiTrafficRouterPluginDigest: "sha256:af5aaba7e34c2b8eb0d52128ac91cb913f065b710c7dea88db59d626a96c53c2"
   externalSecretsChart: "2.10.0"
   externalSecretsChartDigest: "sha256:b96e948fff3674638b5d3f9e43886f3796e04739c4b4127929aed2ddac7d1418"
   externalSecretsChartSource: "https://github.com/external-secrets/external-secrets/releases/download/helm-chart-2.10.0/external-secrets-2.10.0.tgz"

@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
 tests=(
+  enterprise-root-map-contract.sh
+  scheduled-drift-contract.sh
+  enterprise-ownership-boundary-contract.sh
+  eks-node-rollout-contract.sh
+  finops-readiness-contract.sh
+  finops-saved-plan-contract.sh
+  install-trivy-contract.sh
+  bootstrap-mini-commerce-db-contract.sh
+  rds-recovery-contract.sh
+  platform-rebuild-dr-contract.sh
+  amp-slo-drill-contract.sh
+  argocd-backup-contract.sh
   ecr-enhanced-scanning-contract.sh
   argocd-ha-contract.sh
   access-entry-review-contract.sh
@@ -58,4 +71,10 @@ for test_file in "${tests[@]}"; do
   bash "$root/tests/$test_file"
 done
 
+python3 "$root/tests/enterprise-cleanup-contract.py"
+python3 "$root/tests/log-key-cleanup-contract.py"
+python3 "$root/tests/lua-installer-contract.py"
+python3 "$root/tests/platform-image-mirror-test.py"
+
 echo 'PASS: offline semantic contract suite'
+echo 'Tool-backed Terraform/Helm/PromQL/SDK gates: bash tests/run-enterprise-static-tests.sh (separate prerequisites; not implied by this PASS).'

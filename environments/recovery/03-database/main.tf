@@ -30,7 +30,7 @@ module "recovery_secrets" {
   region            = var.aws_region
   oidc_provider     = local.recovery_oidc
   oidc_provider_arn = data.aws_iam_openid_connect_provider.recovery.arn
-  tags              = merge(var.tags, { ManagedBy = "Terraform", RecoveryTarget = var.identifier })
+  tags              = merge(local.owned_tags, { ManagedBy = "Terraform", RecoveryTarget = var.identifier })
 }
 resource "terraform_data" "identity" {
   lifecycle {
@@ -72,7 +72,7 @@ module "database" {
   deletion_protection               = var.deletion_protection
   final_snapshot_identifier         = var.final_snapshot_identifier
   recovery_objectives               = var.recovery_objectives
-  tags                              = var.tags
+  tags                              = local.owned_tags
   restore_to_point_in_time          = { source_db_instance_identifier = data.terraform_remote_state.source.outputs.database_contract.identifier, restore_time = var.restore_time }
   apply_restore_changes_immediately = var.apply_restore_changes_immediately
 }

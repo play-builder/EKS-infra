@@ -146,6 +146,7 @@ case "$1 $2" in
   'eks list-clusters') printf '{"clusters":[]}\n' ;;
   'ec2 describe-volumes') printf '{"Volumes":[]}\n' ;;
   'ec2 describe-snapshots') printf '{"Snapshots":[{"SnapshotId":"snap-retained-001"}]}\n' ;;
+  'resourcegroupstaggingapi get-resources') printf '{"ResourceTagMappingList":[]}\n' ;;
   'amp list-workspaces') printf '{"workspaces":[]}\n' ;;
   'sns list-topics') printf '{"Topics":[]}\n' ;;
   'ecr describe-repositories') printf '{"repositories":[{"repositoryArn":"arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app"}]}\n' ;;

@@ -43,6 +43,10 @@ terraform_plan_relative_to_repo() {
 
 terraform_plan_expected_backend_for_root() {
   case "$1" in
+    environments/prod/00-finops) printf 'environments/prod/config/finops.tfbackend\n' ;;
+    environments/prod/03-database) printf 'environments/prod/config/database.tfbackend\n' ;;
+    environments/recovery/03-database) printf 'environments/recovery/config/database.tfbackend\n' ;;
+    terraform/platform-backup) printf 'terraform/platform-backup/backend.tfbackend\n' ;;
     environments/dev/01-network) printf 'environments/dev/config/network.tfbackend\n' ;;
     environments/dev/02-eks) printf 'environments/dev/config/eks.tfbackend\n' ;;
     environments/dev/03-platform) printf 'environments/dev/config/platform.tfbackend\n' ;;
@@ -57,6 +61,10 @@ terraform_plan_expected_backend_for_root() {
 
 terraform_plan_expected_backend_key_for_root() {
   case "$1" in
+    environments/prod/00-finops) printf 'prod/00-finops/terraform.tfstate\n' ;;
+    environments/prod/03-database) printf 'prod/03-database/terraform.tfstate\n' ;;
+    environments/recovery/03-database) printf 'recovery/03-database/terraform.tfstate\n' ;;
+    terraform/platform-backup) printf 'shared/platform-backup/terraform.tfstate\n' ;;
     environments/dev/01-network) printf 'dev/01-network/terraform.tfstate\n' ;;
     environments/dev/02-eks) printf 'dev/02-eks/terraform.tfstate\n' ;;
     environments/dev/03-platform) printf 'dev/03-platform/terraform.tfstate\n' ;;
