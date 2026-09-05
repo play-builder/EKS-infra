@@ -12,6 +12,7 @@ if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
 fi
 
 plan=''
+saved_plan_dir=''
 inventory=''
 decisions=''
 preflight=''
@@ -29,6 +30,7 @@ confirm_course=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --plan) plan=${2:-}; shift 2 ;;
+    --saved-plan-dir) saved_plan_dir=${2:-}; shift 2 ;;
     --inventory) inventory=${2:-}; shift 2 ;;
     --retain-decisions) decisions=${2:-}; shift 2 ;;
     --preflight-evidence) preflight=${2:-}; shift 2 ;;
@@ -131,6 +133,7 @@ if [[ "$execute" != true ]]; then
 fi
 
 [[ -n "$confirm_account" && -n "$confirm_region" && -n "$confirm_course" ]] || course_fail 'FINAL_CLEANUP_CONFIRMATIONS_REQUIRED' 64
+[[ -n "$saved_plan_dir" && -d "$saved_plan_dir" ]] || course_fail 'FINAL_CLEANUP_SAVED_PLAN_REQUIRED' 64
 [[ "$confirm_account" == "$inventory_account" ]] || course_fail 'FINAL_CLEANUP_ACCOUNT_CONFIRMATION_MISMATCH'
 [[ "$confirm_region" == "$inventory_region" ]] || course_fail 'FINAL_CLEANUP_REGION_CONFIRMATION_MISMATCH'
 [[ "$confirm_course" == "$inventory_course" ]] || course_fail 'FINAL_CLEANUP_COURSE_CONFIRMATION_MISMATCH'
@@ -193,7 +196,16 @@ stage 11
 stage 12
 stage 13
 for layer in "${layers[@]}"; do
-  terraform -chdir="$REPO_ROOT/$layer" destroy -auto-approve || course_fail "TERRAFORM_DESTROY_FAILED: $layer"
+  plan_id=${layer//\//_}
+  artifact_dir="$saved_plan_dir/$plan_id"
+  manifest="$artifact_dir/plan-identity.json"
+  backend_bucket=$(jq -r '.backendBucket // empty' "$manifest" 2>/dev/null || true)
+  backend_key=$(jq -r '.backendKey // empty' "$manifest" 2>/dev/null || true)
+  lock_identity=$(jq -r '.lockIdentity // empty' "$manifest" 2>/dev/null || true)
+  [[ -n "$backend_bucket" && -n "$backend_key" && -n "$lock_identity" ]] || course_fail "FINAL_CLEANUP_PLAN_MANIFEST_INVALID: $layer"
+  bash "$SCRIPT_DIR/verify-saved-plan.sh" "$artifact_dir" "$layer" "$inventory_account" "$inventory_region" \
+    "$backend_bucket" "$backend_key" "$lock_identity" "$(git -C "$REPO_ROOT" rev-parse HEAD)" || course_fail "FINAL_CLEANUP_PLAN_VERIFICATION_FAILED: $layer"
+  terraform -chdir="$REPO_ROOT/$layer" apply "$artifact_dir/tfplan" || course_fail "TERRAFORM_APPLY_FAILED: $layer"
 done
 stage 14
 echo 'PHASE 6/6 completion proof: scanning AWS residuals without Kubernetes API calls.'

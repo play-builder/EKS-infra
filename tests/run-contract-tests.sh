@@ -36,6 +36,7 @@ tests=(
   cleanup-preflight-contract.sh
   in-flight-zero-contract.sh
   checkpoint-teardown-contract.sh
+  saved-plan-identity-contract.sh
   final-cleanup-contract.sh
 )
 

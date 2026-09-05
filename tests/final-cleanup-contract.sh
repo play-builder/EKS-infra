@@ -71,32 +71,57 @@ fi
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
-mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence"
+mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence" "$tmp_dir/saved-plan"
 prepare_cleanup_fixtures "$root" "$tmp_dir/evidence" ap-northeast-2
 
 plan="$root/tests/fixtures/cleanup-course-owned.json"
+cleanup_layers=(
+  environments/prod/04-workloads/argocd environments/dev/04-workloads/argocd
+  environments/prod/03-platform environments/dev/03-platform
+  environments/prod/02-eks environments/dev/02-eks
+  environments/prod/01-network environments/dev/01-network
+)
+for layer in "${cleanup_layers[@]}"; do
+  plan_dir="$tmp_dir/saved-plan/${layer//\//_}"
+  mkdir -p "$plan_dir"
+  cp "$plan" "$plan_dir/tfplan"
+  cp "$plan" "$plan_dir/tfplan.json"
+  saved_plan_sha=$(raw_sha256 "$plan_dir/tfplan")
+  saved_plan_json_sha=$(raw_sha256 "$plan_dir/tfplan.json")
+  jq -n --arg plan "$saved_plan_sha" --arg planJson "$saved_plan_json_sha" --arg source "$(git -C "$root" rev-parse HEAD)" --arg layer "$layer" '
+    {schemaVersion:"platform.saved-plan/v1",accountId:"123456789012",region:"ap-northeast-2",
+     terraformRoot:$layer,backendBucket:"cleanup-state",backendKey:("cleanup/" + ($layer | gsub("/";"_")) + ".tfstate"),
+     lockIdentity:"s3-native-lockfile",sourceSha:$source,terraformVersion:"1.16.0",
+     terraformBinarySha256:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     providerLockSha256:"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     planSha256:("sha256:" + $plan),planJsonSha256:("sha256:" + $planJson),
+     approvalIdentity:"platform-approver",createdAt:"2026-09-05T00:00:00Z"}
+  ' >"$plan_dir/plan-identity.json"
+done
 plan_sha=$(raw_sha256 "$plan")
 inventory_sha=$(raw_sha256 "$tmp_dir/evidence/inventory.json")
-jq -n --arg plan "$plan_sha" --arg inventory "$inventory_sha" '
+observed=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+expires=$(date -u -v+1H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ)
+jq -n --arg plan "$plan_sha" --arg inventory "$inventory_sha" --arg observed "$observed" --arg expires "$expires" '
   {schemaVersion:"course.cleanup-preflight/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
    courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",
-   planSha256:$plan,inventorySha256:$inventory,observedAt:"2026-09-03T00:05:00Z",expiresAt:"2099-09-03T01:00:00Z"}
+   planSha256:$plan,inventorySha256:$inventory,observedAt:$observed,expiresAt:$expires}
 ' >"$tmp_dir/evidence/preflight.json"
-jq -n '
+jq -n --arg observed "$observed" --arg expires "$expires" '
   {schemaVersion:"course.in-flight-zero/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
    courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",
    clusters:[
      {environment:"dev",context:"course-dev",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks"},
      {environment:"prod",context:"course-prod",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks"}],
    remainingWriters:{loadGenerators:0,chaosResources:0,recoveryJobs:0,migrationJobs:0},
-   observedAt:"2026-09-03T00:09:00Z",expiresAt:"2099-09-03T01:00:00Z"}
+   observedAt:$observed,expiresAt:$expires}
 ' >"$tmp_dir/evidence/in-flight.json"
 
 cat >"$tmp_dir/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
-if [[ "$*" == *"/02-eks destroy"* ]]; then : >"$COURSE_EKS_DELETED_SENTINEL"; fi
+if [[ "$*" == *"/02-eks apply"* ]]; then : >"$COURSE_EKS_DELETED_SENTINEL"; fi
 EOF
 cat >"$tmp_dir/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
@@ -130,6 +155,7 @@ chmod +x "$tmp_dir/bin/terraform" "$tmp_dir/bin/kubectl" "$tmp_dir/bin/aws"
 : >"$tmp_dir/aws.log"
 
 common=(
+  --saved-plan-dir "$tmp_dir/saved-plan"
   --plan "$plan"
   --inventory "$tmp_dir/evidence/inventory.json"
   --retain-decisions "$tmp_dir/evidence/decisions.json"
