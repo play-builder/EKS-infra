@@ -30,7 +30,7 @@ enable_amp_alerting             = false
 enable_sns_alert_delivery       = false
 # sns_alert_email_endpoint      = "oncall@example.com"
 
-enable_cluster_autoscaler = false
+enable_cluster_autoscaler = true
 enable_amg                = false
 
 enable_course_resources        = true
@@ -40,3 +40,17 @@ course_application_namespace   = "app-prod"
 secret_recovery_window_in_days = 7
 external_dns_domain_filters   = ["example.com"]
 external_dns_exclude_domains  = ["dev.example.com"]
+# Capacity must match 02-eks MNG limits and measured subnet IP availability.
+autoscaling_mode = "mng_cluster_autoscaler"
+autoscaler_capacity = {
+ min_nodes = 3
+ max_nodes = 6
+ max_pods_per_node = 20
+ hpa_max_replicas = 20
+ rollout_surge_replicas = 4
+ platform_reserve_pods = 15
+ stable_replicas = 3
+ canary_replicas = 3
+ usable_subnet_ips_by_az = { "az-a" = 64, "az-b" = 64, "az-c" = 64 }
+ required_headroom_percentage = 20
+}

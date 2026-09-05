@@ -289,8 +289,11 @@ module "cluster_autoscaler" {
   oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
 
-  chart_version = var.cluster_autoscaler_chart_version
-  tags          = local.common_tags
+  chart_version       = var.cluster_autoscaler_chart_version
+  environment         = var.environment
+  autoscaling_mode    = var.autoscaling_mode
+  autoscaler_capacity = var.autoscaler_capacity
+  tags                = local.common_tags
 
   depends_on = [module.metrics_server]
 }

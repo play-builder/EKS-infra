@@ -70,3 +70,8 @@ platform:
 regional_eks_lifecycle:
   ap-northeast-2: {status: LIVE_NOT_VERIFIED, source: OPERATOR_AWS_LOOKUP_REQUIRED}
   us-east-1: {status: LIVE_NOT_VERIFIED, source: OPERATOR_AWS_LOOKUP_REQUIRED}
+cluster_autoscaler_bridge:
+  chart: 9.59.0
+  chartSha256: 90276dafe65cf5d4328ef8313baf6cfb9d130683e0c9f3c28a03b4d8a9ed8f6e
+  image: registry.k8s.io/autoscaling/cluster-autoscaler:v1.36.0@sha256:dc5d62770338c2902f31b01f95c9fc8c456fd88baa5364ca154d6e47069ec885
+  status: OVERRIDE_REQUIRES_CLOUD_RUNTIME

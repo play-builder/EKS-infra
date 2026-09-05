@@ -288,3 +288,18 @@ upgrade insights with a bounded wait, reads every returned insight, nodes, PDBs,
 all five add-ons and six controller families, and rejects missing/unknown data.
 It performs no upgrade. PDBs with zero allowed disruption block this conservative
 gate. Fixture parsing is local verification only; AWS pins and rollout remain unverified.
+## Managed-node capacity and user-run drill
+
+Prod requires enabled Cluster Autoscaler. The 9.59.0 chart defaults to Kubernetes
+1.35; the exact 1.36 image override is conditionally compatible until cloud runtime
+verification. Capacity includes stable/canary, HPA maximum, surge, platform reserve
+and per-AZ IP headroom. Match it to actual MNG limits before deployment.
+
+`bash scripts/mng-autoscaler-drill.sh CLUSTER REGION NODEGROUP PAUSE_IMAGE_AT_DIGEST REPLICAS OUTPUT`
+creates up to 50 labelled pause replicas, waits at most 20 minutes for pending to
+new MNG node to Ready, deletes its unique namespace in cleanup, then waits at most
+40 minutes for natural scale-in. It never changes desiredSize or deletes nodes.
+Interrupt/failure cleanup removes only that unique namespace. Initial unhealthy
+PDBs, no observed pending state, no node growth, or no node removal fail the drill.
+Run on approved spare capacity: requests are 500m CPU and 64Mi per Pod and may
+temporarily incur node cost. Local observation tests do not prove actual scaling.

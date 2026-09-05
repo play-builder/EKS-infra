@@ -164,3 +164,6 @@ output "verification_commands" {
     kubectl -n opentelemetry-operator-system get pods
   EOT
 }
+output "autoscaler_capacity_contract" {
+  value = var.enable_cluster_autoscaler ? module.cluster_autoscaler[0].capacity_contract : null
+}
