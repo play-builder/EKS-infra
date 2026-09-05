@@ -142,13 +142,23 @@ def evaluate(source, target, incident_at, *, current=None):
     db.require('Terraform/' in event['userAgent'] and event.get('responseElements') and not event.get('errorCode'))
     parameters = event['requestParameters']
     db.require(parameters['sourceDBInstanceIdentifier']==s['identifier'])
-    db.require(parameters['dBInstanceIdentifier']==t['identifier'])
+    db.require('dBInstanceIdentifier' not in parameters)
+    db.require(parameters['targetDBInstanceIdentifier']==t['identifier'])
     db.require(timestamp(parameters['restoreTime'])==cutoff)
     db.require(incident <= timestamp(event['eventTime']) <= timestamp(target['startedAt']))
     current = current or dt.datetime.now(dt.timezone.utc)
     db.require(timestamp(source['completedAt']) <= cutoff <= incident <= timestamp(target['startedAt']) <= completed <= current)
-    db.require(timestamp(source['instance']['EarliestRestorableTime']) <= cutoff <= timestamp(target['sourceRestorable']['LatestRestorableTime']))
-    db.require(target['sourceRestorable']['DBInstanceArn'] == s['arn'])
+    source_instance=target['sourceRestorable']
+    db.require(source_instance['DBInstanceArn']==s['arn'] and source_instance['DbiResourceId']==s['resourceId'])
+    backups=target['sourceAutomatedBackups']['DBInstanceAutomatedBackups']
+    db.require(len(backups)==1)
+    backup=backups[0]
+    db.require(backup['DBInstanceArn']==s['arn'] and backup['DbiResourceId']==s['resourceId'])
+    db.require(backup['DBInstanceIdentifier']==s['identifier'] and backup['Region']==s['region'])
+    db.require(backup['Status']=='active' and backup['Encrypted'] is True)
+    window=backup['RestoreWindow']
+    db.require(timestamp(window['EarliestTime']) <= cutoff <= timestamp(window['LatestTime']))
+    db.require(cutoff <= timestamp(source_instance['LatestRestorableTime']))
     objectives = t['objectives']
     db.require(all(type(objectives[k]) is int and objectives[k] > 0 for k in ('rpoMinutes','rtoMinutes','drillMaxAgeDays')))
     db.require((current-completed).total_seconds() <= objectives['drillMaxAgeDays']*86400)
@@ -194,12 +204,15 @@ def main():
                 source_records = db.aws(target['contract']['region'], 'rds', 'describe-db-instances', '--db-instance-identifier', source['contract']['identifier'])['DBInstances']
                 db.require(len(source_records) == 1)
                 target['sourceRestorable'] = source_records[0]
+                target['sourceAutomatedBackups'] = db.aws(target['contract']['region'],'rds','describe-db-instance-automated-backups',
+                    '--dbi-resource-id',source['contract']['resourceId'])
                 events = db.aws(target['contract']['region'],'cloudtrail','lookup-events','--lookup-attributes',
                                 'AttributeKey=ResourceName,AttributeValue='+target['contract']['identifier'],
                                 '--start-time',args.incident_at)
                 candidates = [json.loads(e['CloudTrailEvent']) for e in events['Events'] if e['EventName']=='RestoreDBInstanceToPointInTime']
                 db.require(len(candidates)==1)
                 target['restoreEvent'] = candidates[0]
+                target['completedAt'] = now()
                 write(args.target, target)
             else:
                 target = json.loads(pathlib.Path(args.target).read_text())

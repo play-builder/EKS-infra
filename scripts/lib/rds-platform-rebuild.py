@@ -13,6 +13,35 @@ spec = importlib.util.spec_from_file_location('rds_recovery', pathlib.Path(__fil
 rds = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rds)
 db = rds.db
+traffic_spec=importlib.util.spec_from_file_location('rds_rebuild_traffic',pathlib.Path(__file__).with_name('rds-rebuild-traffic.py'))
+traffic=importlib.util.module_from_spec(traffic_spec);traffic_spec.loader.exec_module(traffic)
+
+APP_DATABASE_OBSERVATION = """
+import { config } from './src/config.js';
+import { createDatabasePool } from './src/database.js';
+let pool, client;
+try {
+  if (!config.databaseEnabled || !config.database.ssl) throw new Error('database TLS required');
+  pool = createDatabasePool(config.database);
+  client = await pool.connect();
+  await client.query('BEGIN READ ONLY');
+  const { rows } = await client.query(`SELECT json_build_object(
+    'database', current_database(), 'user', current_user,
+    'serverAddress', inet_server_addr(), 'serverAt', clock_timestamp(),
+    'tls', (SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()),
+    'order', (SELECT json_build_object('id',o.id,'totalCents',o.total_cents,
+      'itemCount',(SELECT count(*) FROM public.order_items i WHERE i.order_id=o.id))
+      FROM public.orders o ORDER BY o.id DESC LIMIT 1)) AS observation`);
+  await client.query('COMMIT');
+  process.stdout.write(JSON.stringify({host:config.database.host,port:config.database.port,...rows[0].observation}));
+} catch {
+  process.stderr.write('PENDING: application database observation unavailable\\n');
+  process.exitCode = 2;
+} finally {
+  client?.release();
+  await pool?.end();
+}
+"""
 
 
 def capture(expected):
@@ -37,12 +66,39 @@ def capture(expected):
             raw[key] = json.loads(kube('get',resource,'-n',namespace,'-o','json'))
         raw['kubernetesAuthorization'] = kube('auth','can-i','get','applications.argoproj.io','-n','argocd').strip()
         raw['argocdConfig'] = json.loads(kube('get','configmap','argocd-cm','-n','argocd','-o','json'))
+        t=expected['traffic']
+        for key,resource,namespace in [
+            ('httpRoutes','httproutes.gateway.networking.k8s.io','istio-system'),
+            ('targetBindings','targetgroupbindings.elbv2.k8s.aws','istio-system'),
+            ('ingressServices','services','istio-system'),('ingressPods','pods','istio-system'),
+            ('ingressEndpoints','endpointslices.discovery.k8s.io','istio-system'),
+            ('appServices','services','app-recovery'),('appEndpoints','endpointslices.discovery.k8s.io','app-recovery'),
+            ('appExternalSecrets','externalsecrets','app-recovery')]:
+            raw[key]=json.loads(kube('get',resource,'-n',namespace,'-o','json'))
+        raw['edgeGateway']=json.loads(kube('get','gateways.gateway.networking.k8s.io',t['gatewayName'],'-n','istio-system','-o','json'))
+        raw['istioGateway']=json.loads(kube('get','gateways.networking.istio.io',t['istioGatewayName'],'-n','istio-system','-o','json'))
+        raw['virtualServices']=json.loads(kube('get','virtualservices.networking.istio.io','--all-namespaces','-o','json'))
+        raw['appDatabaseConnections']={}
+        for pod in raw['appPods']['items']:
+            meta=pod['metadata']
+            if meta.get('labels',{}).get('app.kubernetes.io/name')!='mini-commerce': continue
+            db.require(meta['namespace']=='app-recovery')
+            observation=json.loads(kube('exec','-n','app-recovery',meta['name'],'-c','mini-commerce','--','node','--input-type=module','-e',APP_DATABASE_OBSERVATION))
+            after=json.loads(kube('get','pod',meta['name'],'-n','app-recovery','-o','json'))
+            db.require(after['metadata']['uid']==meta['uid'])
+            raw['appDatabaseConnections'][meta['uid']]={'podName':meta['name'],'podUid':meta['uid'],'observedAt':rds.now(),'observation':observation}
     raw['argoUser'] = json.loads(db.run(['argocd','--server',expected['argocdHost'],'account','get-user-info','-o','json']))
     raw['argoAuthorization'] = db.run(['argocd','--server',expected['argocdHost'],'account','can-i','get','applications','*/*']).strip()
     raw['waf'] = db.aws(region,'wafv2','get-web-acl-for-resource','--resource-arn',expected['loadBalancerArn'])
     raw['loadBalancer'] = db.aws(region,'elbv2','describe-load-balancers','--load-balancer-arns',expected['loadBalancerArn'])
     raw['targetGroup'] = db.aws(region,'elbv2','describe-target-groups','--target-group-arns',expected['targetGroupArn'])
     raw['targetHealth'] = db.aws(region,'elbv2','describe-target-health','--target-group-arn',expected['targetGroupArn'])
+    raw['lbTags']=db.aws(region,'elbv2','describe-tags','--resource-arns',expected['loadBalancerArn'])
+    raw['listeners']=db.aws(region,'elbv2','describe-listeners','--load-balancer-arn',expected['loadBalancerArn'])
+    listeners=[l for l in raw['listeners']['Listeners'] if l['LoadBalancerArn']==expected['loadBalancerArn'] and l['Port']==443 and l['Protocol']=='HTTPS']
+    db.require(len(listeners)==1)
+    raw['listenerRulesListenerArn']=listeners[0]['ListenerArn']
+    raw['listenerRules']=db.aws(region,'elbv2','describe-rules','--listener-arn',raw['listenerRulesListenerArn'])
     parsed = urlparse(expected['applicationUrl'])
     db.require(parsed.scheme == 'https' and parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment)
     db.require(re.fullmatch(r'/orders/[1-9][0-9]*',parsed.path) is not None)
@@ -131,6 +187,7 @@ def evaluate(raw, source_db, target_db, incident_at, *, current=None):
     health = raw['targetHealth']['TargetHealthDescriptions']
     db.require(len(health)>0 and all(h['TargetHealth']['State']=='healthy' for h in health))
     result = rds.evaluate(source_db,target_db,incident_at,current=current)
+    traffic.validate(raw,target_db,db.require,rds.timestamp)
     db.require(rds.timestamp(target_db['completedAt']) <= completed)
     db.require(e['accountId']==target_db['contract']['accountId'] and e['region']==target_db['contract']['region'])
     order = raw['readback']['order']

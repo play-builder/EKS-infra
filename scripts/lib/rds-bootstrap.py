@@ -136,6 +136,16 @@ def bootstrap(value, ca):
             passwords[kind] = current['DB_PASSWORD']
         else:
             passwords[kind] = secrets.token_urlsafe(36)
+    pg(value, ca, master, bootstrap_sql(value,passwords))
+    with tempfile.TemporaryDirectory(prefix='commerce-secret-') as directory:
+        for kind, role in [('database', 'commerce_runtime'), ('migration', 'commerce_migration')]:
+            path = pathlib.Path(directory) / kind
+            path.touch(mode=0o600)
+            path.write_text(json.dumps({'DB_HOST': value['endpoint'], 'DB_PORT': '5432', 'DB_NAME': value['databaseName'], 'DB_USER': role, 'DB_PASSWORD': passwords[kind]}))
+            aws(value['region'], 'secretsmanager', 'put-secret-value', '--secret-id', value['applicationCredentials'][kind]['arn'], '--secret-string', 'file://' + str(path))
+
+
+def bootstrap_sql(value,passwords):
     literal = lambda s: "'" + s.replace("'", "''") + "'"
     query = """BEGIN;
 SET LOCAL log_statement = 'none';
@@ -149,14 +159,26 @@ SET LOCAL standard_conforming_strings = on;
 IF EXISTS (SELECT 1 FROM pg_auth_members WHERE member = (SELECT oid FROM pg_roles WHERE rolname = '{role}')) THEN
 RAISE EXCEPTION 'Existing role membership requires explicit remediation'; END IF;
 IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN CREATE ROLE {role}; END IF;
+IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}' AND
+  (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls)) THEN
+RAISE EXCEPTION 'Privileged application role requires explicit remediation'; END IF;
 END $bootstrap$;
-ALTER ROLE {role} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD {literal(passwords[kind])};
+GRANT {role} TO "{value['masterUsername']}" WITH ADMIN TRUE;
+GRANT {role} TO "{value['masterUsername']}" WITH INHERIT FALSE;
+ALTER ROLE {role} LOGIN NOINHERIT PASSWORD {literal(passwords[kind])};
 """
     query += f"""REVOKE ALL ON DATABASE "{value['databaseName']}" FROM PUBLIC;
 GRANT CONNECT ON DATABASE "{value['databaseName']}" TO commerce_runtime, commerce_migration;
-REVOKE ALL ON SCHEMA public FROM PUBLIC, commerce_runtime;
+GRANT CREATE ON DATABASE "{value['databaseName']}" TO commerce_migration;
+GRANT commerce_migration TO "{value['masterUsername']}" WITH SET TRUE;
+DO $owner$ BEGIN
+IF (SELECT nspowner FROM pg_namespace WHERE nspname='public') <> 'commerce_migration'::regrole THEN
 ALTER SCHEMA public OWNER TO commerce_migration;
+END IF; END $owner$;
+SET LOCAL ROLE commerce_migration;
+REVOKE ALL ON SCHEMA public FROM PUBLIC, commerce_runtime;
 GRANT USAGE ON SCHEMA public TO commerce_runtime;
+GRANT USAGE ON SCHEMA public TO "{value['masterUsername']}";
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM commerce_runtime;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM commerce_runtime;
 ALTER DEFAULT PRIVILEGES FOR ROLE commerce_migration IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC, commerce_runtime;
@@ -166,20 +188,19 @@ FOREACH t IN ARRAY ARRAY['products','inventory','orders','order_items'] LOOP
 IF to_regclass('public.' || t) IS NOT NULL THEN
 EXECUTE format('GRANT %s ON TABLE public.%I TO commerce_runtime',
 CASE t WHEN 'products' THEN 'SELECT' WHEN 'inventory' THEN 'SELECT, UPDATE' ELSE 'SELECT, INSERT' END, t);
+EXECUTE format('GRANT SELECT ON TABLE public.%I TO %I', t, '{value['masterUsername']}');
 END IF; END LOOP;
 FOREACH t IN ARRAY ARRAY['orders_id_seq','order_items_id_seq'] LOOP
 IF to_regclass('public.' || t) IS NOT NULL THEN
 EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE public.%I TO commerce_runtime', t);
 END IF; END LOOP; END $grants$;
+RESET ROLE;
+REVOKE CREATE ON DATABASE "{value['databaseName']}" FROM commerce_migration;
+GRANT commerce_migration TO "{value['masterUsername']}" WITH SET FALSE;
+GRANT commerce_runtime TO "{value['masterUsername']}" WITH SET FALSE;
 COMMIT;
 """
-    pg(value, ca, master, query)
-    with tempfile.TemporaryDirectory(prefix='commerce-secret-') as directory:
-        for kind, role in [('database', 'commerce_runtime'), ('migration', 'commerce_migration')]:
-            path = pathlib.Path(directory) / kind
-            path.touch(mode=0o600)
-            path.write_text(json.dumps({'DB_HOST': value['endpoint'], 'DB_PORT': '5432', 'DB_NAME': value['databaseName'], 'DB_USER': role, 'DB_PASSWORD': passwords[kind]}))
-            aws(value['region'], 'secretsmanager', 'put-secret-value', '--secret-id', value['applicationCredentials'][kind]['arn'], '--secret-string', 'file://' + str(path))
+    return query
 
 
 def main():

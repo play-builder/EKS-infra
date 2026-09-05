@@ -91,6 +91,22 @@ creation, replication or bypass-RLS privileges. Existing membership in other rol
 Default privileges deny automatic runtime access to arbitrary future tables, including migration ledgers.
 Rerun after supported migrations; review any new table separately rather than grant all future tables.
 
+For PostgreSQL 17's NOSUPERUSER master, the transfer temporarily grants database CREATE to migration and
+SET membership to the master before changing the schema owner. Grants run under the migration owner;
+CREATE and the master's SET option are removed before commit. The master retains ADMIN-only membership
+(INHERIT=false, SET=false) to manage these two roles on reruns, plus schema USAGE and SELECT on the four
+app tables for integrity capture. Existing elevated app attributes/memberships fail closed instead of
+attempting SUPERUSER/REPLICATION/BYPASSRLS changes as a non-superuser. See
+[ALTER SCHEMA prerequisites](https://www.postgresql.org/docs/17/sql-alterschema.html) and
+[PostgreSQL role administration](https://www.postgresql.org/docs/17/sql-alterrole.html).
+
+`tests/rds-bootstrap-postgres-regression.py --execute-postgres-regression` is an optional **unrun** SQL
+regression for an explicitly disposable PostgreSQL 17 database named `bootstrap_regression_*`. Supply
+PGDATABASE/PGUSER for its NOSUPERUSER CREATEROLE CREATEDB owner, with absent commerce roles and permission
+to set the logging parameters used by bootstrap. It runs the production SQL twice, checks final grants,
+and rolls back the single transaction. It is not part of local/static tests and requires separate approval
+for actual PostgreSQL execution. Statement-order fixtures alone do not verify server permission semantics.
+
 Application and migration shells contain only `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`.
 The application must additionally use its existing `DB_SSL=true` and trusted CA configuration. The master
 secret is never copied into either shell. The recovery contract only permits the isolated recovery prefix.
@@ -131,17 +147,28 @@ bash scripts/rds-recovery-check.sh --capture --contract target-database.json \
 
 The capture reads the actual isolated DB through verify-full TLS and a read-only repeatable-read SQL
 transaction. It records the RDS instances, caller, raw integrity query, last contiguous marker and hashes.
+The source's `DescribeDBInstanceAutomatedBackups` response must contain exactly one active encrypted
+backup for its ARN, identifier, DbiResourceId and Region; cutoff must lie inside its
+`RestoreWindow.EarliestTime/LatestTime` and the current source DBInstance `LatestRestorableTime`.
+DBInstance has no `EarliestRestorableTime`; retention days are not a substitute for this observation.
+See the [automated backup API shape](https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_DBInstanceAutomatedBackup.html).
 It also looks up the target's CloudTrail `RestoreDBInstanceToPointInTime` event. That event must match the
 account, Region, source, target, explicit restoreTime, successful response, Terraform user agent and
 incident interval, with request/event IDs. If CloudTrail is delayed, denied or has no unique correlated
 event, the result remains PENDING; wait and retry with new artifact names. Unknown service field shapes
 remain PENDING until checked against actual CloudTrail output; do not manufacture a matching record.
-The canonical `dBInstanceIdentifier` spelling follows the
-[AWS RDS CloudTrail event example](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/logging-using-cloudtrail.html).
+The parser requires operation-specific `requestParameters.targetDBInstanceIdentifier`,
+`sourceDBInstanceIdentifier` and `restoreTime`. This target key spelling is a provisional serialization
+contract inferred from the [Restore API input](https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_RestoreDBInstanceToPointInTime.html),
+not a verified raw Restore CloudTrail event. The AWS CloudTrail guide's CreateDBInstance example cannot
+establish restore spelling. `dBInstanceIdentifier` in requestParameters is rejected; unknown/missing keys
+remain PENDING until a trusted restore-specific raw event is available and reviewed. SDK Stubber validates
+the API envelope but cannot validate CloudTrailEvent's opaque JSON string. Do not claim this gap closed by
+the synthetic fixture or manufacture a matching event.
 
 RPO is the conservative interval `incidentAt - marker.commitNotBefore`; the true commit happened between
 the two recorded server times. The report exposes that uncertainty interval. RTO is
-`target SQL integrity completion - incidentAt`. Backup retention does not establish either metric.
+`target capture completion (including backup/API/event collection) - incidentAt`. Backup retention does not establish either metric.
 Orders, totals, item count, inventory checksum, marker sequence and selected read-back order must match
 the frozen source. Totals/item arithmetic, orphan rows, duplicate idempotency and negative stock must pass.
 
@@ -168,6 +195,11 @@ and positive `rtoMinutes`. `externalSecrets` must contain exactly `oidc`, `notif
 `repositoryCredentials`; each has actual `name`, `targetName`, `sourceName`, `roleArn`, `serviceAccount`.
 Use the separately emitted recovery/Argo contracts; never include credentials or claimed achieved values.
 
+Also supply `traffic` with actual `gatewayName`, `httpRouteName`, `ingressServiceName`, `istioGatewayName`,
+`virtualServiceName` and `appServiceName`. This collector supports the repository's Gateway API HTTPS443
+→ HTTPRoute → Istio ingress Service → Istio Gateway/VirtualService → recovery stable Service path,
+with IP-type TargetGroupBinding and one 100% stable route. Unsupported routing shapes remain PENDING.
+
 The read-back order ID is `target-observation.json.sql.readbackOrder.id`. The Argo CLI must already have a
 short-lived corporate OIDC session for the target server; the collector does not log in or mutate RBAC.
 It creates a temporary kubeconfig bound to the target EKS endpoint/CA and AWS exec authentication, so
@@ -176,6 +208,20 @@ The Argo public URL is checked against the target cluster's `argocd-cm`. The HTT
 the observed target ALB DNS name through curl `--connect-to`, retaining certificate/hostname verification;
 it cannot silently read the source application's public DNS target. HA includes ApplicationSet and
 three ready Redis HA members. The actual injector status annotation supplies the Istio revision.
+
+ALB ownership tag `elbv2.k8s.aws/cluster`, Gateway address, HTTPS listener's selected rule and target group
+must bind the new cluster. Healthy target IPs/ports must equal the ingress Service's ready EndpointSlices
+and Pod UIDs. Istio routing must terminate at the recovery namespace stable Service, whose EndpointSlices
+bind ready application Pod UIDs. Application DB env secret references and ready ExternalSecret mappings
+must use the isolated recovery database shell, never a source shell.
+
+For each recovery app Pod, read-only `kubectl exec` runs a short Node query with the image's existing
+`config.js` and `createDatabasePool`, including its CA verification. It emits only configured host/port,
+SQL database/user/server address/TLS/time and selected order summary, not passwords or a full environment.
+The observation must match restored DB identity and SQL read-back, and a second Pod read confirms its UID
+did not change. Denied exec or unavailable image modules stays PENDING. This proves an observed connection
+using that Pod's shipped configuration, not a packet trace of the long-running app's pool; trusted runner
+and immutable-image assumptions remain necessary. Keep the bounded write quiesce through collection.
 
 ```bash
 bash scripts/platform-rebuild-dr-check.sh --capture --spec rebuild-spec.json \
@@ -186,7 +232,9 @@ bash scripts/platform-rebuild-dr-check.sh --capture --spec rebuild-spec.json \
 Recheck the raw observations using `--validate` with the same `--raw`, `--source`, `--target`,
 `--incident-at` and a new `--output`. Platform RTO extends through the final application read-back and
 must meet its own objective. Requires read-only EKS/IAM/WAF/ELB APIs, Kubernetes resource reads,
-Argo account reads and HTTPS access. No Kubernetes Secret value read occurs.
+Argo account reads, explicitly authorized read-only app `pods/exec`, and HTTPS access. No Kubernetes Secret
+value read occurs. The Kubernetes exec API is operationally powerful even when this fixed command is
+read-only; restrict its authorization to the isolated recovery namespace and collector identity.
 
 ## Evidence and failure semantics
 

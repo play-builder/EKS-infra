@@ -35,7 +35,7 @@ def instance(c):
             'StorageEncrypted':True,'PubliclyAccessible':False,'CACertificateIdentifier':'rds-ca-rsa2048-g1',
             'BackupRetentionPeriod':35,'PreferredBackupWindow':'01:00-01:30','PreferredMaintenanceWindow':'sun:04:00-sun:05:00',
             'DBParameterGroups':[{'DBParameterGroupName':c['identifier']+'-params','ParameterApplyStatus':'in-sync'}],
-            'EarliestRestorableTime':'2026-09-01T00:00:00Z','LatestRestorableTime':'2026-09-05T00:10:00Z'}
+            'LatestRestorableTime':'2026-09-05T00:10:00Z'}
 
 
 def pair(module):
@@ -58,9 +58,12 @@ def pair(module):
     target['completedAt'] = '2026-09-05T00:30:00Z'
     target['sql']['serverAt'] = '2026-09-05T00:25:00Z'
     target['sourceRestorable'] = instance(c)
+    target['sourceAutomatedBackups']={'DBInstanceAutomatedBackups':[{'DBInstanceArn':c['arn'],'DbiResourceId':c['resourceId'],
+        'DBInstanceIdentifier':c['identifier'],'Region':c['region'],'Status':'active','Encrypted':True,
+        'RestoreWindow':{'EarliestTime':'2026-09-01T00:00:00Z','LatestTime':'2026-09-05T00:10:00Z'}}]}
     target['restoreEvent'] = {'eventName':'RestoreDBInstanceToPointInTime','eventSource':'rds.amazonaws.com','eventTime':'2026-09-05T00:16:00Z',
                               'awsRegion':'us-east-1','recipientAccountId':'123456789012','requestID':'request-123','eventID':'event-123',
                               'userAgent':'HashiCorp Terraform/1.16 terraform-provider-aws/5.87',
-                              'requestParameters':{'sourceDBInstanceIdentifier':'commerce-source','dBInstanceIdentifier':'commerce-target','restoreTime':'2026-09-05T00:10:00Z'},
+                              'requestParameters':{'sourceDBInstanceIdentifier':'commerce-source','targetDBInstanceIdentifier':'commerce-target','restoreTime':'2026-09-05T00:10:00Z'},
                               'responseElements':{'dBInstanceIdentifier':'commerce-target'}}
     return source,target

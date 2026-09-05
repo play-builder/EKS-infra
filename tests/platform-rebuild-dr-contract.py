@@ -45,12 +45,87 @@ def observations():
     raw['argocdConfig']={'data':{'url':'https://argo.example.com'}}
     raw['argoUser']['loggedIn']=True
     raw['loadBalancer']['LoadBalancers'][0]['DNSName']='recovery-alb.elb.amazonaws.com'
+    traffic_fixture(raw)
     return raw
+
+
+def traffic_fixture(raw):
+    e=raw['expected']; host='shop.example.com'; db=support.contract(True)
+    e['traffic']={'gatewayName':'commerce-edge','httpRouteName':'commerce-edge','ingressServiceName':'istio-ingress-stable',
+                  'istioGatewayName':'mini-commerce-internal','virtualServiceName':'mini-commerce','appServiceName':'mini-commerce-stable'}
+    raw['lbTags']={'TagDescriptions':[{'ResourceArn':e['loadBalancerArn'],'Tags':[{'Key':'elbv2.k8s.aws/cluster','Value':'new'}]}]}
+    raw['edgeGateway']={'metadata':{'name':'commerce-edge','namespace':'istio-system','generation':1},'spec':{'listeners':[{'name':'https','port':443,'protocol':'HTTPS','hostname':host}]},
+                        'status':{'addresses':[{'type':'Hostname','value':'recovery-alb.elb.amazonaws.com'}],'conditions':[{'type':'Accepted','status':'True','observedGeneration':1},{'type':'Programmed','status':'True','observedGeneration':1}]}}
+    raw['httpRoutes']={'items':[{'metadata':{'name':'commerce-edge','namespace':'istio-system'},'spec':{'hostnames':[host],'parentRefs':[{'name':'commerce-edge','sectionName':'https'}],
+       'rules':[{'matches':[{'path':{'type':'PathPrefix','value':'/'}}],'backendRefs':[{'name':'istio-ingress-stable','port':80,'weight':1}]}]}}]}
+    raw['targetBindings']={'items':[{'metadata':{'name':'binding','namespace':'istio-system'},'spec':{'targetGroupARN':e['targetGroupArn'],'targetType':'ip','serviceRef':{'name':'istio-ingress-stable','port':80}}}]}
+    gateway_pod={'metadata':{'name':'ingress-1','namespace':'istio-system','uid':'gateway-uid','labels':{'istio':'ingressgateway-stable'}},
+                 'spec':{'containers':[{'name':'istio-proxy','ports':[{'name':'http2','containerPort':8080}]}]},
+                 'status':{'podIP':'10.0.50.2','phase':'Running','conditions':[{'type':'Ready','status':'True'}]}}
+    raw['ingressPods']={'items':[gateway_pod]}
+    raw['ingressServices']={'items':[{'metadata':{'name':'istio-ingress-stable','namespace':'istio-system','uid':'gateway-service'},
+        'spec':{'selector':{'istio':'ingressgateway-stable'},'ports':[{'name':'http2','port':80,'targetPort':'http2'}]}}]}
+    pod=raw['appPods']['items'][0]
+    pod['metadata'].update(name='commerce-1',namespace='app-recovery',uid='app-uid')
+    pod['spec']={'containers':[{'name':'mini-commerce','ports':[{'name':'public','containerPort':3000}],
+        'env':[{'name':k,'valueFrom':{'secretKeyRef':{'name':'mini-commerce-database','key':k}}} for k in ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD']]}]}
+    pod['status'].update(podIP='10.0.50.10',phase='Running',conditions=[{'type':'Ready','status':'True'}])
+    raw['appServices']={'items':[{'metadata':{'name':'mini-commerce-stable','namespace':'app-recovery','uid':'app-service'},
+        'spec':{'selector':{'app.kubernetes.io/name':'mini-commerce'},'ports':[{'name':'http','port':80,'targetPort':'public'}]}}]}
+    def slices(namespace,service,uid,podname,poduid,ip,portname,port):
+        return {'items':[{'metadata':{'namespace':namespace,'labels':{'kubernetes.io/service-name':service},'ownerReferences':[{'kind':'Service','name':service,'uid':uid}]},
+            'ports':[{'name':portname,'port':port,'protocol':'TCP'}],'endpoints':[{'addresses':[ip],'conditions':{'ready':True,'terminating':False},
+            'targetRef':{'kind':'Pod','namespace':namespace,'name':podname,'uid':poduid}}]}]}
+    raw['ingressEndpoints']=slices('istio-system','istio-ingress-stable','gateway-service','ingress-1','gateway-uid','10.0.50.2','http2',8080)
+    raw['appEndpoints']=slices('app-recovery','mini-commerce-stable','app-service','commerce-1','app-uid','10.0.50.10','http',3000)
+    raw['istioGateway']={'metadata':{'name':'mini-commerce-internal','namespace':'istio-system'},'spec':{'selector':{'istio':'ingressgateway-stable'},
+        'servers':[{'port':{'number':80,'protocol':'HTTP'},'hosts':[host]}]}}
+    raw['virtualServices']={'items':[{'metadata':{'name':'mini-commerce','namespace':'app-recovery'},'spec':{'hosts':[host],
+        'gateways':['istio-system/mini-commerce-internal'],'http':[{'name':'primary','match':[{'uri':{'prefix':'/'}}],
+        'route':[{'destination':{'host':'mini-commerce-stable','port':{'number':80}},'weight':100}]}]}}]}
+    raw['appExternalSecrets']={'items':[{'metadata':{'name':'mini-commerce-database','namespace':'app-recovery'},'spec':{'target':{'name':'mini-commerce-database'},
+        'data':[{'secretKey':k,'remoteRef':{'key':db['applicationCredentials']['database']['name'],'property':k}} for k in ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD']]},
+        'status':{'conditions':[{'type':'Ready','status':'True'}],'refreshTime':'2026-09-05T00:32:00Z'}}]}
+    raw['appDatabaseConnections']={'app-uid':{'podName':'commerce-1','podUid':'app-uid','observedAt':'2026-09-05T00:35:00Z',
+        'observation':{'host':db['endpoint'],'port':5432,'database':'commerce','user':'commerce_runtime','serverAddress':'10.0.1.4','tls':True,'serverAt':'2026-09-05T00:35:00Z',
+                       'order':{'id':2,'totalCents':300,'itemCount':2}}}}
+    raw['targetHealth']['TargetHealthDescriptions'][0]['Target']={'Id':'10.0.50.2','Port':8080}
+    raw['targetGroup']['TargetGroups'][0]['TargetType']='ip'
+    listener='arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/rebuilt/123/456'
+    raw['listeners']={'Listeners':[{'ListenerArn':listener,'LoadBalancerArn':e['loadBalancerArn'],'Protocol':'HTTPS','Port':443}]}
+    raw['listenerRulesListenerArn']=listener
+    raw['listenerRules']={'Rules':[{'Priority':'1','Conditions':[{'Field':'host-header','Values':[host]},{'Field':'path-pattern','Values':['/*']}],
+        'Actions':[{'Type':'forward','TargetGroupArn':e['targetGroupArn']}]}]}
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class Rebuild(unittest.TestCase):
+    def test_rejects_broken_traffic_graph_and_stale_pod_observation(self):
+        changes=[lambda r:r.update(listenerRulesListenerArn='foreign-listener'),
+                 lambda r:r['listenerRules']['Rules'][0]['Actions'][0].update(TargetGroupArn='foreign-target'),
+                 lambda r:r['httpRoutes']['items'][0]['spec']['rules'][0]['backendRefs'][0].update(name='source-ingress'),
+                 lambda r:r['targetBindings']['items'][0]['spec']['serviceRef'].update(name='source-ingress'),
+                 lambda r:r['ingressEndpoints']['items'][0]['endpoints'][0]['targetRef'].update(uid='foreign-pod'),
+                 lambda r:r['virtualServices']['items'][0]['spec']['http'][0]['route'][0]['destination'].update(host='source-app'),
+                 lambda r:r['appEndpoints']['items'][0]['endpoints'][0]['targetRef'].update(uid='foreign-pod'),
+                 lambda r:r['appDatabaseConnections']['app-uid'].update(podUid='old-pod'),
+                 lambda r:r['appDatabaseConnections']['app-uid']['observation'].update(serverAddress='10.0.99.9'),
+                 lambda r:r['appDatabaseConnections']['app-uid']['observation'].update(tls=False)]
+        for index,change in enumerate(changes):
+            with self.subTest(case=index):
+                raw=observations();change(raw)
+                with self.assertRaises(rebuild.db.Denied): self.check(raw)
+
+    def test_rejects_source_alb_foreign_healthy_target_and_source_database(self):
+        changes=[lambda r:r['lbTags']['TagDescriptions'][0]['Tags'][0].update(Value='old'),
+                 lambda r:r['targetHealth']['TargetHealthDescriptions'][0]['Target'].update(Id='10.0.99.99'),
+                 lambda r:r['appDatabaseConnections']['app-uid']['observation'].update(host='commerce-source.example.invalid'),
+                 lambda r:r['appExternalSecrets']['items'][0]['spec']['data'][0]['remoteRef'].update(key='prod/mini-commerce/database')]
+        for i,change in enumerate(changes):
+            with self.subTest(case=i):
+                raw=observations();change(raw)
+                with self.assertRaises(rebuild.db.Denied): self.check(raw)
     def test_requires_redis_ha_and_target_argo_server_binding(self):
         for kind in ('redis','argo'):
             raw=observations()
@@ -77,6 +152,11 @@ class Rebuild(unittest.TestCase):
                 elif 'describe-load-balancers' in args: result=raw['loadBalancer']
                 elif 'describe-target-groups' in args: result=raw['targetGroup']
                 elif 'describe-target-health' in args: result=raw['targetHealth']
+                elif 'describe-tags' in args: result=raw['lbTags']
+                elif 'describe-listeners' in args: result=raw['listeners']
+                elif 'describe-rules' in args:
+                    self.assertEqual(args[args.index('--listener-arn')+1],raw['listenerRulesListenerArn'])
+                    result=raw['listenerRules']
                 else: self.fail('unexpected AWS command')
             elif args[0]=='kubectl':
                 config=json.loads(pathlib.Path(args[2]).read_text())
@@ -84,8 +164,23 @@ class Rebuild(unittest.TestCase):
                 self.assertEqual(config['users'][0]['user']['exec']['args'][-1],'new')
                 self.assertEqual(pathlib.Path(args[2]).stat().st_mode & 0o777,0o600)
                 if 'can-i' in args: return subprocess.CompletedProcess(args,0,'yes\n','')
-                mapping={'externalsecrets':'externalSecrets','secretstores':'stores','serviceaccounts':'serviceAccounts','applications':'applications','deployments,statefulsets':'controllers','pods':'appPods','configmap':'argocdConfig'}
-                result=raw[mapping[args[4]]]
+                if args[3]=='exec':
+                    self.assertEqual(args[4:12],['-n','app-recovery','commerce-1','-c','mini-commerce','--','node','--input-type=module'])
+                    self.assertIn("import { createDatabasePool }",args[-1])
+                    self.assertIn('BEGIN READ ONLY',args[-1])
+                    result=raw['appDatabaseConnections']['app-uid']['observation']
+                elif args[4]=='pod': result=raw['appPods']['items'][0]
+                else:
+                    namespace=args[args.index('-n')+1] if '-n' in args else ''
+                    mapping={'externalsecrets':'externalSecrets' if namespace=='argocd' else 'appExternalSecrets','secretstores':'stores',
+                             'serviceaccounts':'serviceAccounts','applications':'applications','deployments,statefulsets':'controllers',
+                             'pods':'appPods' if namespace=='app-recovery' else 'ingressPods','configmap':'argocdConfig',
+                             'services':'appServices' if namespace=='app-recovery' else 'ingressServices',
+                             'endpointslices.discovery.k8s.io':'appEndpoints' if namespace=='app-recovery' else 'ingressEndpoints',
+                             'httproutes.gateway.networking.k8s.io':'httpRoutes','targetgroupbindings.elbv2.k8s.aws':'targetBindings',
+                             'gateways.gateway.networking.k8s.io':'edgeGateway','gateways.networking.istio.io':'istioGateway',
+                             'virtualservices.networking.istio.io':'virtualServices'}
+                    result=raw[mapping[args[4]]]
             elif args[0]=='argocd':
                 self.assertEqual(args[2],'argo.example.com')
                 if 'can-i' in args: return subprocess.CompletedProcess(args,0,'Yes\n','')
@@ -97,8 +192,10 @@ class Rebuild(unittest.TestCase):
             else: self.fail('unexpected executable')
             return subprocess.CompletedProcess(args,0,json.dumps(result),'')
         with patch.object(rebuild.db.subprocess,'run',side_effect=external): result=rebuild.capture(raw['expected'])
-        self.assertEqual(len(calls),21)
+        self.assertEqual(len(calls),37)
         self.assertEqual(result['readback']['order']['id'],2)
+        self.assertEqual(result['appDatabaseConnections']['app-uid']['observation']['host'],'commerce-target.example.invalid')
+        self.assertEqual(result['lbTags'],raw['lbTags'])
 
     def test_reads_actual_injector_revision_annotation(self):
         raw=observations()

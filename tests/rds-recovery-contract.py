@@ -61,6 +61,34 @@ class Recovery(unittest.TestCase):
         target.pop('restoreEvent',None)
         with self.assertRaises((rds.db.Denied,KeyError)): self.check(source,target)
 
+    def test_real_dbinstance_shape_uses_source_automated_backup_window(self):
+        source,target=support.pair(rds)
+        source['instance'].pop('EarliestRestorableTime',None)
+        try:
+            result=self.check(source,target)
+        except KeyError as error:
+            self.fail('Real DBInstance response must not require '+str(error))
+        self.assertEqual(result['achieved']['rpoMinutes'],15)
+
+    def test_foreign_automated_backup_cannot_supply_restore_window(self):
+        source,target=support.pair(rds)
+        target['sourceAutomatedBackups']['DBInstanceAutomatedBackups'][0]['DbiResourceId']='db-foreign'
+        with self.assertRaises(rds.db.Denied): self.check(source,target)
+
+    def test_restore_target_uses_operation_specific_field_not_create_field(self):
+        source,target=support.pair(rds)
+        params=target['restoreEvent']['requestParameters']
+        self.assertIn('targetDBInstanceIdentifier',params)
+        try: result=self.check(source,target)
+        except KeyError as error: self.fail('Restore-specific target field was rejected: '+str(error))
+        self.assertEqual(result['targetArn'],target['contract']['arn'])
+
+    def test_create_db_target_field_is_not_restore_event_evidence(self):
+        source,target=support.pair(rds)
+        params=target['restoreEvent']['requestParameters']
+        params['dBInstanceIdentifier']=params.pop('targetDBInstanceIdentifier')
+        with self.assertRaises((rds.db.Denied,KeyError)): self.check(source,target)
+
     def test_rejects_identity_time_integrity_and_convergence_changes(self):
         changes = [
             lambda s,t: t['contract'].update(identifier='commerce-source'),
