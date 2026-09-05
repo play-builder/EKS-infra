@@ -83,3 +83,5 @@ variable "enable_bootstrap" {
   type        = bool
   default     = false
 }
+variable "tags" { type = map(string) }
+variable "argocd_platform" { type = object({ server_replicas = number, repo_server_replicas = number, controller_replicas = number, applicationset_replicas = number, redis_ha = bool, node_count = number, az_count = number, public_url = string, oidc_issuer_url = string, oidc_client_id = string, admin_group = string, readonly_group = string }) }

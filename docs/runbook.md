@@ -303,3 +303,27 @@ Interrupt/failure cleanup removes only that unique namespace. Initial unhealthy
 PDBs, no observed pending state, no node growth, or no node removal fail the drill.
 Run on approved spare capacity: requests are 500m CPU and 64Mi per Pod and may
 temporarily incur node cost. Local observation tests do not prove actual scaling.
+## Argo HA, SSO and secret bootstrap
+
+The 04-workloads/argocd roots move the existing Helm address to module.argocd with
+a static moved block, retain ExternalSecret/VolumeSnapshot Lua health checks and
+leave the Rollouts Gateway plugin until the coordinated GitOps native Istio cutover.
+Prod requires 3 nodes/AZs, four controller replica counts >=2, Redis HA and PDBs.
+Dev accepts one replica/non-HA. Configure the HTTPS public URL and its IdP callback.
+
+Terraform creates three empty Secrets Manager shells and an exact IRSA reader,
+ServiceAccount and namespace SecretStore. GitOps owns their ExternalSecrets and
+subscriptions. Set source JSON properties out of Terraform using the argocd output.
+Bootstrap uses the public GitOps repository. Private bootstrap needs a pre-existing
+credential and is not supported by this path. Built-in admin remains enabled until
+actual SSO login and admin/readonly authorization are verified.
+
+Notifications use on-sync-failed, on-health-degraded, on-sync-status-unknown and
+on-deployed. PagerDuty v2 maps platform-prod through serviceKeys to the secret
+reference; successful deployment goes to Slack/platform-deployments. See
+[official service format](https://argo-cd.readthedocs.io/en/stable/operator-manual/notifications/services/pagerduty_v2/).
+
+`bash scripts/argocd-ha-check.sh CLUSTER REGION READONLY_GROUP ADMIN_GROUP OUTPUT`
+checks production replica/node/AZ distribution, PDBs, projected-secret metadata
+hashes and RBAC. It never records Secret data. Static render and this read-only
+collector do not prove an interactive corporate OIDC login; record that separately.

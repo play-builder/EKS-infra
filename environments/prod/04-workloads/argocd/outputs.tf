@@ -1,6 +1,6 @@
 output "argocd_release" {
   description = "Argo CD Helm release name"
-  value       = helm_release.argocd.name
+  value       = module.argocd.release_name
 }
 
 output "course_ownership" {
@@ -27,3 +27,4 @@ output "verification_commands" {
     kubectl -n argocd get application course-${var.environment}-bootstrap
   EOT
 }
+output "argocd" { value = module.argocd.argocd }
