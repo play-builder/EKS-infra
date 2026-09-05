@@ -29,7 +29,23 @@ jq -n --arg deployment "$deployment_sha" --arg slo "$slo_sha" --arg ready "$read
 ' >"$tmp_dir/design.json"
 design_sha=$(sha256_file "$tmp_dir/design.json")
 jq --arg previous "$design_sha" '.stage="estimate" | .evidenceGrade="STATIC" | .bindings.previousDecisionSha256=$previous' \
-  "$tmp_dir/design.json" >"$tmp_dir/estimate.json"
+  "$tmp_dir/design.json" >"$tmp_dir/legacy-estimate.json"
+
+if COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+  bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
+    "$tmp_dir/slo.json" "$ready" "$tmp_dir/design.json" "$tmp_dir/legacy-estimate.json" >/dev/null 2>&1; then
+  echo 'FAIL: legacy estimate bypassed FinOps bootstrap gate' >&2
+  exit 1
+fi
+
+python3 "$root/tests/finops_readiness_test.py" --export-fixture "$tmp_dir/finops.json" "$tmp_dir/observations.json"
+export FINOPS_CONTRACT_JSON="$tmp_dir/finops.json" PLATFORM_INSTANCE_ID=commerce-123
+bash "$root/scripts/finops-readiness-check.sh" fixture --contract "$FINOPS_CONTRACT_JSON" \
+  --observations "$tmp_dir/observations.json" --account 123456789012 --region ap-northeast-2 \
+  --platform-id "$PLATFORM_INSTANCE_ID" --gate-policy configuration-only --output "$tmp_dir/readiness.json" >/dev/null
+jq --slurpfile finops "$tmp_dir/readiness.json" '.schemaVersion="course.prod-preflight/v2" |
+  .finops=$finops[0] | .bindings.finopsContractSha256=$finops[0].bindings.contractSha256' \
+  "$tmp_dir/legacy-estimate.json" >"$tmp_dir/estimate.json"
 
 COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
   bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
@@ -72,6 +88,18 @@ expect_decision_timestamp_rejected design-issued-invalid-calendar design issuedA
 expect_decision_timestamp_rejected design-expires-invalid-calendar design expiresAt '2099-02-31T00:00:00Z'
 expect_decision_timestamp_rejected estimate-issued-invalid-calendar estimate issuedAt '2020-02-30T00:00:00Z'
 expect_decision_timestamp_rejected estimate-expires-invalid-calendar estimate expiresAt '2099-02-31T00:00:00Z'
+
+for mutation in '.finops.observedAt="2020-01-01T00:00:00Z"' '.finops.region="us-east-1"' \
+  '.finops.configurationStatus="PENDING"' '.finops.evidenceGrade="CLOUD_RUNTIME"' \
+  '.bindings.finopsContractSha256="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'; do
+  jq "$mutation" "$tmp_dir/estimate.json" >"$tmp_dir/bad-finops-estimate.json"
+  if COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+    bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
+      "$tmp_dir/slo.json" "$ready" "$tmp_dir/design.json" "$tmp_dir/bad-finops-estimate.json" >/dev/null 2>&1; then
+    echo 'invalid FinOps binding must reject bootstrap' >&2
+    exit 1
+  fi
+done
 
 jq '.expiresAt="2026-01-01T00:00:00Z"' "$tmp_dir/estimate.json" >"$tmp_dir/stale-estimate.json"
 set +e

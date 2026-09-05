@@ -33,11 +33,17 @@ course_assert_json "$application" '
 validate_decision() {
   local file=$1 stage=$2 expected_grade=$3
   PREFLIGHT_STAGE="$stage" PREFLIGHT_GRADE="$expected_grade" course_assert_json "$file" '
-    keys == ["accountId","bindings","courseId","decision","evidenceGrade","expiresAt","issuedAt","region","schemaVersion","stage"] and
-    .schemaVersion == "course.prod-preflight/v1" and .evidenceGrade == $ENV.PREFLIGHT_GRADE and
+    (if $ENV.PREFLIGHT_STAGE == "design" then
+      keys == ["accountId","bindings","courseId","decision","evidenceGrade","expiresAt","issuedAt","region","schemaVersion","stage"] and
+      .schemaVersion == "course.prod-preflight/v1" and
+      (.bindings | keys == ["capacityInputSha256","devDeploymentSha256","devReadySha256","devSloSha256","previousDecisionSha256","savedPlanSha256"])
+    else
+      keys == ["accountId","bindings","courseId","decision","evidenceGrade","expiresAt","finops","issuedAt","region","schemaVersion","stage"] and
+      .schemaVersion == "course.prod-preflight/v2" and
+      (.bindings | keys == ["capacityInputSha256","devDeploymentSha256","devReadySha256","devSloSha256","finopsContractSha256","previousDecisionSha256","savedPlanSha256"])
+    end) and .evidenceGrade == $ENV.PREFLIGHT_GRADE and
     .stage == $ENV.PREFLIGHT_STAGE and .decision == "GO" and
     .courseId == $ENV.COURSE_ID and .accountId == $ENV.AWS_ACCOUNT_ID and .region == $ENV.AWS_REGION and
-    (.bindings | keys == ["capacityInputSha256","devDeploymentSha256","devReadySha256","devSloSha256","previousDecisionSha256","savedPlanSha256"]) and
     (.bindings.devDeploymentSha256 | test("^sha256:[0-9a-f]{64}$")) and
     (.bindings.devSloSha256 | test("^sha256:[0-9a-f]{64}$")) and
     (.bindings.devReadySha256 | test("^sha256:[0-9a-f]{64}$")) and
@@ -51,6 +57,26 @@ validate_decision "$design" design STATIC
 estimate_grade=CLOUD_RUNTIME
 [[ -z "${COURSE_CHECK_BIN_DIR:-}" ]] || estimate_grade=STATIC
 validate_decision "$estimate" estimate "$estimate_grade"
+
+for name in FINOPS_CONTRACT_JSON PLATFORM_INSTANCE_ID; do [[ -n "${!name:-}" ]] || course_fail "$name is required" 64; done
+course_require_file "$FINOPS_CONTRACT_JSON"
+course_assert_canonical_utc_seconds "$estimate" 'FinOps observation timestamps' '["finops","observedAt"]' '["finops","expiresAt"]'
+finops_grade=CLOUD_RUNTIME
+[[ "$estimate_grade" != STATIC ]] || finops_grade=LOCAL_VERIFIED
+jq -e --arg grade "$finops_grade" --arg sha "$(course_sha256_file "$FINOPS_CONTRACT_JSON")" \
+  --arg account "$AWS_ACCOUNT_ID" --arg region "$AWS_REGION" --arg platform "$PLATFORM_INSTANCE_ID" '
+  .bindings.finopsContractSha256 == $sha and
+  (.finops |
+    .schemaVersion == "platform.finops-readiness/v1" and .evidenceGrade == $grade and
+    .source == (if $grade == "LOCAL_VERIFIED" then "fixture" else "collect" end) and
+    .configurationStatus == "CONFIGURED" and .gatePolicy == "configuration-only" and
+    (.dataStatus == "DATA_PENDING" or .dataStatus == "DATA_OBSERVED") and .deliveryStatus == "NOT_VERIFIED" and
+    .accountId == $account and .region == $region and .platformInstanceId == $platform and
+    .billingApiRegion == "us-east-1" and .bindings.contractSha256 == $sha and
+    (.bindings.observationsSha256 | test("^sha256:[a-f0-9]{64}$")) and
+    (.observedAt | fromdateiso8601) <= now and now - (.observedAt | fromdateiso8601) <= 900 and
+    now < (.expiresAt | fromdateiso8601))
+' "$estimate" >/dev/null || course_fail 'FINOPS_CONFIGURATION_EVIDENCE_BINDING_MISMATCH'
 
 deployment_sha=$(course_sha256_file "$deployment")
 slo_sha=$(course_sha256_file "$slo")
