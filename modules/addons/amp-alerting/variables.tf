@@ -1,5 +1,5 @@
 variable "enabled" {
-  description = "Enable Ch16 AMP recording rules and Alertmanager"
+  description = "Enable AMP recording rules and Alertmanager"
   type        = bool
   default     = false
 }
@@ -81,7 +81,7 @@ variable "workspace_arn" {
 }
 
 variable "aws_region" {
-  description = "Selected course Region used by Alertmanager SigV4"
+  description = "Selected AWS Region used by Alertmanager SigV4"
   type        = string
 
   validation {

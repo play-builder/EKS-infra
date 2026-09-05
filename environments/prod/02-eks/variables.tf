@@ -244,7 +244,7 @@ variable "vpc_cni_addon_version" {
 }
 
 variable "vpc_cni_enable_network_policy" {
-  description = "False in Ch03; changed to true in Ch14"
+  description = "Enable VPC CNI network-policy enforcement after the approved policy rollout"
   type        = bool
   default     = false
 }

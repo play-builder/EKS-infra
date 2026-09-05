@@ -53,7 +53,7 @@ output "external_secrets_release" {
 }
 
 output "reloader_enabled" {
-  description = "Whether the Ch12 Reloader controller is installed"
+  description = "Whether the Reloader controller is installed"
   value       = var.enable_reloader
 }
 
@@ -88,7 +88,7 @@ output "otlp_http_traces_path" {
 }
 
 output "amp_alerting_enabled" {
-  description = "Whether Ch16 AMP rules and Alertmanager are enabled"
+  description = "Whether AMP rules and Alertmanager are enabled"
   value       = module.amp_alerting.enabled
 }
 
@@ -127,7 +127,7 @@ output "k6_operator_chart_version" {
 }
 
 output "snapshot_controller_enabled" {
-  description = "Whether the Ch23 EKS managed snapshot-controller add-on is enabled"
+  description = "Whether the EKS managed snapshot-controller add-on is enabled"
   value       = var.enable_snapshot_controller
 }
 
@@ -137,7 +137,7 @@ output "snapshot_controller_addon_version" {
 }
 
 output "volume_snapshot_class_name" {
-  description = "Course VolumeSnapshotClass name"
+  description = "Platform VolumeSnapshotClass name"
   value       = var.enable_snapshot_controller ? var.volume_snapshot_class_name : null
 }
 
@@ -162,12 +162,12 @@ output "recovery_db_secret_reader_role_arn" {
 }
 
 output "chaos_mesh_enabled" {
-  description = "Whether the Ch25 Dev-only Chaos Mesh controller is installed"
+  description = "Whether the Dev-only Chaos Mesh controller is installed"
   value       = var.enable_chaos_mesh
 }
 
 output "chaos_mesh_contract" {
-  description = "Bounded Ch25 fault admission settings"
+  description = "Bounded fault admission settings"
   value       = var.enable_chaos_mesh ? module.chaos_mesh[0].game_day_contract : null
 }
 

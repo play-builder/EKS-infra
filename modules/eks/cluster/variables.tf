@@ -21,7 +21,7 @@ variable "cluster_version" {
 }
 
 variable "authentication_mode" {
-  description = "EKS authentication mode. This course uses Access Entry API instead of aws-auth."
+  description = "EKS authentication mode; use Access Entry API instead of aws-auth."
   type        = string
   default     = "API"
 
@@ -138,7 +138,7 @@ variable "cluster_log_retention_in_days" {
 }
 
 variable "vpc_cni_addon_version" {
-  description = "EKS-compatible VPC CNI add-on version verified in both course Regions"
+  description = "EKS-compatible VPC CNI add-on version selected for the supported AWS Regions"
   type        = string
 
   validation {

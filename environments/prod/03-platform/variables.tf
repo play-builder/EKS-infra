@@ -77,7 +77,7 @@ variable "ebs_csi_driver_use_aws_managed_policy" {
 }
 
 variable "enable_course_storage_class" {
-  description = "Create the non-default encrypted gp3 StorageClass used by the Stateful course lab"
+  description = "Create the non-default encrypted gp3 StorageClass for stateful workloads"
   type        = bool
   default     = true
 }
@@ -221,7 +221,7 @@ variable "amg_authentication_providers" {
 }
 
 variable "enable_external_secrets" {
-  description = "Install the Terraform-owned External Secrets controller from the Ch03 baseline"
+  description = "Install the Terraform-owned External Secrets controller"
   type        = bool
   default     = true
 }
@@ -251,7 +251,7 @@ variable "external_secrets_adoption_evidence_path" {
 }
 
 variable "enable_reloader" {
-  description = "Enable Reloader at the first Ch12 platform apply"
+  description = "Enable Reloader for application secret rotation"
   type        = bool
   default     = false
 }
@@ -342,7 +342,7 @@ variable "sns_alert_email_endpoint" {
 }
 
 variable "enable_k6_operator" {
-  description = "Course load generation is Dev-only and must stay disabled in Prod"
+  description = "Load generation is Dev-only and must stay disabled in Prod"
   type        = bool
   default     = false
 
@@ -353,7 +353,7 @@ variable "enable_k6_operator" {
 }
 
 variable "enable_chaos_mesh" {
-  description = "Enable the Ch25 Dev-only Chaos Mesh controller"
+  description = "Enable the Dev-only Chaos Mesh controller"
   type        = bool
   default     = false
 
@@ -376,19 +376,19 @@ variable "chaos_mesh_namespace" {
 }
 
 variable "chaos_mesh_allowed_namespaces" {
-  description = "Application namespaces eligible for Ch25 faults"
+  description = "Application namespaces eligible for fault injection"
   type        = list(string)
   default     = ["app-dev"]
 }
 
 variable "chaos_mesh_max_fault_duration_seconds" {
-  description = "Maximum duration for one Ch25 fault"
+  description = "Maximum duration for one injected fault"
   type        = number
   default     = 60
 }
 
 variable "chaos_mesh_max_faults" {
-  description = "Maximum number of simultaneous Ch25 faults"
+  description = "Maximum number of simultaneous injected faults"
   type        = number
   default     = 1
 
@@ -417,7 +417,7 @@ variable "k6_operator_namespace" {
 }
 
 variable "enable_snapshot_controller" {
-  description = "Enable the EKS managed snapshot-controller add-on at Ch23"
+  description = "Enable the EKS managed snapshot-controller add-on"
   type        = bool
   default     = false
 }
@@ -434,13 +434,13 @@ variable "snapshot_controller_addon_version" {
 }
 
 variable "volume_snapshot_class_name" {
-  description = "Course-owned VolumeSnapshotClass name"
+  description = "Platform-owned VolumeSnapshotClass name"
   type        = string
   default     = "course-ebs-snapshots"
 }
 
 variable "snapshot_driver" {
-  description = "CSI driver used by the course VolumeSnapshotClass"
+  description = "CSI driver used by the platform VolumeSnapshotClass"
   type        = string
   default     = "ebs.csi.aws.com"
 

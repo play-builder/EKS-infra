@@ -1,5 +1,5 @@
 variable "enable_k6_operator" {
-  description = "Enable the Ch16-only k6 operator"
+  description = "Enable the k6 operator for bounded load generation"
   type        = bool
   default     = false
 
@@ -10,7 +10,7 @@ variable "enable_k6_operator" {
 }
 
 variable "environment" {
-  description = "Course environment"
+  description = "Deployment environment"
   type        = string
   default     = "dev"
 
