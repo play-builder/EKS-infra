@@ -39,7 +39,7 @@ run "ssm_operator_is_private_and_has_no_ssh_key" {
     condition = alltrue([
       for key in ["PlatformInstanceId", "Owner", "CostCenter", "Environment"] :
       try(length(trimspace(aws_iam_instance_profile.instance.tags[key])) > 0, false) &&
-      try(length(trimspace(aws_eks_access_entry.operator.tags[key])) > 0, false)
+      try(length(trimspace(aws_iam_role.operator.tags[key])) > 0, false)
     ])
     error_message = "Operator identity and EKS access resources must carry the mandatory platform ownership tags."
   }

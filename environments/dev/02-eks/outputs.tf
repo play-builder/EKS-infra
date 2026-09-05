@@ -122,3 +122,5 @@ output "eks_upgrade_contract" {
     managed_addon_owner_hash = module.managed_addons.owner_hash
   }
 }
+output "access_entries" { value = module.access_entries.access_entries }
+output "workload_identity" { value = module.access_entries.workload_identity }

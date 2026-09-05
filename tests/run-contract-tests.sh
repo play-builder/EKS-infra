@@ -4,6 +4,7 @@ set -Eeuo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
 tests=(
+  access-entry-review-contract.sh
   mng-autoscaler-drill-contract.sh
   eks-upgrade-preflight-contract.sh
   course-check-contract.sh

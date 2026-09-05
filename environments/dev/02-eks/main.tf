@@ -46,7 +46,6 @@ module "eks_cluster" {
 
   authentication_mode                         = var.authentication_mode
   bootstrap_cluster_creator_admin_permissions = var.bootstrap_cluster_creator_admin_permissions
-  cluster_admin_principal_arns                = var.cluster_admin_principal_arns
 
   cluster_enabled_log_types     = var.cluster_enabled_log_types
   cluster_log_retention_in_days = var.cluster_log_retention_in_days
@@ -162,4 +161,10 @@ module "managed_addons" {
   managed_addon_versions = var.managed_addon_versions
   tags                   = local.common_tags
   depends_on             = [module.node_group_private, module.node_group_public]
+}
+module "access_entries" {
+  source         = "../../../modules/eks/access-entries"
+  cluster_name   = module.eks_cluster.cluster_name
+  tags           = local.common_tags
+  access_entries = var.access_entries
 }

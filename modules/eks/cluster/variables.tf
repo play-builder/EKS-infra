@@ -35,6 +35,10 @@ variable "bootstrap_cluster_creator_admin_permissions" {
   description = "Grant the creating principal automatic cluster-admin permissions"
   type        = bool
   default     = false
+  validation {
+    condition     = !var.bootstrap_cluster_creator_admin_permissions
+    error_message = "Use the named typed break-glass Access Entry; automatic creator admin is disabled."
+  }
 }
 
 variable "cluster_admin_principal_arns" {
@@ -43,8 +47,8 @@ variable "cluster_admin_principal_arns" {
   default     = []
 
   validation {
-    condition     = alltrue([for arn in var.cluster_admin_principal_arns : can(regex("^arn:aws(-[a-z]+)?:iam::[0-9]{12}:(role|user)/", arn))])
-    error_message = "Every cluster admin principal must be an IAM role or user ARN."
+    condition     = length(var.cluster_admin_principal_arns) == 0
+    error_message = "Migrate legacy principal state to the access-entries module."
   }
 }
 
@@ -177,6 +181,10 @@ variable "enable_cluster_creator_access" {
   description = "Enable Access Entry for cluster creator (for initial kubectl access)"
   type        = bool
   default     = false
+  validation {
+    condition     = !var.enable_cluster_creator_access
+    error_message = "Use the typed access-entries module."
+  }
 }
 
 variable "cluster_creator_arn" {

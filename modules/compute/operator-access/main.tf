@@ -106,21 +106,3 @@ resource "aws_iam_role_policy" "operator_eks" {
     }]
   })
 }
-
-resource "aws_eks_access_entry" "operator" {
-  cluster_name  = var.cluster_name
-  principal_arn = aws_iam_role.operator.arn
-  type          = "STANDARD"
-  tags          = var.tags
-}
-
-resource "aws_eks_access_policy_association" "operator" {
-  cluster_name  = var.cluster_name
-  principal_arn = aws_iam_role.operator.arn
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
-  access_scope {
-    type       = "namespace"
-    namespaces = [var.authorization_namespace]
-  }
-  depends_on = [aws_eks_access_entry.operator]
-}
