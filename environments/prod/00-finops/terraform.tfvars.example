@@ -1,4 +1,5 @@
 aws_region = "ap-northeast-2"
+course_id = "course-2026"
 project_name = "mini-commerce"
 platform_instance_id = "replace-with-organization-unique-platform-id"
 owner = "platform-sre"

@@ -5,9 +5,9 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 
-terraform_root=environments/prod/03-platform
+terraform_root=environments/dev/03-platform
 backend_bucket=platform-state-123456789012
-backend_key=prod/03-platform/terraform.tfstate
+backend_key=dev/03-platform/terraform.tfstate
 account_id=123456789012
 region=ap-northeast-2
 source_sha=$(git -C "$root" rev-parse HEAD)

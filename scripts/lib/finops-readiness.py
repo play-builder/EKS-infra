@@ -264,7 +264,9 @@ def main():
         result = dict(schemaVersion="platform.finops-readiness/v1", evidenceGrade="LOCAL_VERIFIED" if args.mode == "fixture" else "CLOUD_RUNTIME",
             source=args.mode, gatePolicy=args.gate_policy, **states, accountId=c["workloadAccountId"], region=c["workloadRegion"],
             billingAccountId=c["billingAccountId"], billingApiRegion="us-east-1", platformInstanceId=args.platform_id,
-            observedAt=o["observedAt"], expiresAt=(now+dt.timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            monitoringIdentity={"accountId": o["identity"]["Account"], "principalArn": o["identity"]["Arn"],
+                "organizationId": o["organization"]["Organization"]["Id"], "managementAccountId": o["organization"]["Organization"]["MasterAccountId"]},
+            observedAt=o["observedAt"], expiresAt=(dt.datetime.strptime(o["observedAt"], "%Y-%m-%dT%H:%M:%SZ")+dt.timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             bindings={"contractSha256": digest(source), "observationsSha256": digest(canonical(o)), "collectorSha256": digest(Path(__file__).read_bytes())},
             queryWindow=o.get("queryWindow"),
             verificationLimit="Configuration only; no SNS receipt, cost monitor operational verification, universal/future tag uniqueness or zero-spend claim. Runtime evidence is unsigned; retain trusted execution provenance.")

@@ -43,6 +43,9 @@ backend_key=$(terraform_plan_expected_backend_key_for_root "$relative_root")
 staging_dir=$(mktemp -d "$artifact_parent/.${artifact_dir##*/}.staging.XXXXXX")
 trap 'rm -rf -- "$staging_dir"' EXIT
 
+finops_binding=$(python3 -I "$script_dir/lib/finops-plan.py" capture --artifact "$staging_dir" \
+  --root "$relative_root" --operation "$operation" --account "$account_id" --region "$AWS_REGION")
+
 terraform -chdir="$terraform_root" init -input=false \
   -lockfile=readonly \
   -backend-config="$backend_config" -backend-config="bucket=$BACKEND_BUCKET" \
@@ -65,13 +68,13 @@ jq -n --arg account "$account_id" --arg region "$AWS_REGION" --arg root "$relati
   --arg bucket "$BACKEND_BUCKET" --arg key "$backend_key" --arg source "$source_sha" \
   --arg version "$terraform_version" --arg binary "$terraform_sha" --arg lock "$lock_sha" \
   --arg plan "$plan_sha" --arg plan_json "$plan_json_sha" --arg operation "$operation" \
-  --arg request "$PLAN_REQUEST_IDENTITY" '
+  --arg request "$PLAN_REQUEST_IDENTITY" --argjson finops "$finops_binding" '
   {schemaVersion:"platform.saved-plan/v1",accountId:$account,region:$region,terraformRoot:$root,
    backendBucket:$bucket,backendKey:$key,lockIdentity:"s3-native-lockfile",sourceSha:$source,
    terraformVersion:$version,terraformBinarySha256:("sha256:"+$binary),providerLockSha256:("sha256:"+$lock),
    planSha256:("sha256:"+$plan),planJsonSha256:("sha256:"+$plan_json),operation:$operation,
    requestIdentity:$request,approvalIdentity:null,approvalRunId:null,approvalEvidenceSha256:null,
-   createdAt:(now|todateiso8601)}' >"$staging_dir/plan-identity.json"
+   createdAt:(now|todateiso8601)} + (if $finops == null then {} else {finops:$finops} end)' >"$staging_dir/plan-identity.json"
 printf '%s  tfplan\n' "$plan_sha" >"$staging_dir/tfplan.sha256"
 printf '%s  tfplan.json\n' "$plan_json_sha" >"$staging_dir/tfplan.json.sha256"
 

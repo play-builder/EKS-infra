@@ -33,6 +33,10 @@ run "separates_workload_region_and_account_from_billing" {
     condition     = output.finops.requiredTags.PlatformInstanceId == "platform-fixture" && output.finops.requiredTags.ManagedBy == "Terraform" && output.finops.notificationOwnership == "EXTERNAL_SHARED"
     error_message = "Cost ownership tags must propagate without claiming external billing SNS ownership."
   }
+  assert {
+    condition     = try(output.finops.requiredTags.CourseId == "course-2026" && output.finops.requiredTags.AccountId == "123456789012" && output.finops.requiredTags.Region == "us-east-1" && output.finops.requiredTags.Project == "platform-fixture" && output.finops.requiredTags.Layer == "finops", false)
+    error_message = "Inventory tags must identify the owning billing account/Region, not the workload."
+  }
 }
 run "rejects_blank_owner" {
   command = plan

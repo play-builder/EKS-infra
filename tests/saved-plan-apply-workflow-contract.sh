@@ -10,6 +10,7 @@ require 'json'
 require 'tmpdir'
 require 'fileutils'
 require 'open3'
+require 'digest'
 
 source = ARGV.fetch(0)
 workflow = YAML.load_file(File.join(source, '.github/workflows/terraform-validate.yml'))
@@ -35,7 +36,6 @@ Dir.mktmpdir('saved-plan-workflow-') do |repo|
     #!/usr/bin/env bash
     set -Eeuo pipefail
     if [[ "$*" == 'version -json' ]]; then
-      [[ -f "$GITHUB_WORKSPACE/environments/prod/01-network/.initialized" ]] || { echo 'provider not initialized' >&2; exit 81; }
       printf 'version\n' >>"$GITHUB_WORKSPACE/calls"
       printf '{"terraform_version":"1.16.0"}\n'
       exit
@@ -98,17 +98,38 @@ Dir.mktmpdir('saved-plan-workflow-') do |repo|
     'AWS_REGION' => 'ap-northeast-2', 'BACKEND_BUCKET' => 'platform-state-123456789012',
     'PLAN_REQUEST_IDENTITY' => 'release-requester', 'PLAN_RUN_ID' => '987654321'
   }
+  # Real FinOps collector/evaluator with fixture observations; never cloud credentials.
+  run.call(env, 'python3', '-B', '-c', <<~'PY', source, repo)
+    import importlib.util,json,pathlib,sys
+    s=importlib.util.spec_from_file_location('fixtures',pathlib.Path(sys.argv[1])/'tests/finops_readiness_test.py')
+    m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+    c,o=m.fixture(); root=pathlib.Path(sys.argv[2])
+    (root/'contract.json').write_text(json.dumps(c));(root/'observations.json').write_text(json.dumps(o))
+  PY
+  env.merge!('COURSE_CHECK_BIN_DIR'=>File.join(repo,'bin'), 'FINOPS_FIXTURE_JSON'=>File.join(repo,'observations.json'),
+             'FINOPS_CONTRACT_JSON'=>File.join(repo,'contract.json'), 'PLATFORM_INSTANCE_ID'=>'commerce-123',
+             'FINOPS_GATE_POLICY'=>'configuration-only', 'FINOPS_CONTRACT_SHA256'=>'sha256:'+Digest::SHA256.file(File.join(repo,'contract.json')).hexdigest,
+             'GITHUB_ACTIONS'=>'false', 'FINOPS_BILLING_PROFILE'=>nil, 'FINOPS_BILLING_ROLE_ARN'=>nil)
   run.call(env, 'bash', File.join(repo, 'scripts/create-saved-plan.sh'), File.join(repo, tfroot),
            File.join(repo, backend), File.join(repo, 'plan-artifact'), 'apply')
-  %w[success init-failure identity-failure].each do |scenario|
+  saved_readiness=File.read(File.join(repo,'plan-artifact/finops-readiness.json'))
+  saved_observations=File.read(File.join(repo,'observations.json'))
+  %w[success init-failure identity-failure finops-changed finops-missing].each do |scenario|
+    File.write(File.join(repo,'plan-artifact/finops-readiness.json'),saved_readiness)
+    File.write(File.join(repo,'observations.json'),saved_observations)
     FileUtils.rm_f(File.join(repo, tfroot, '.initialized'))
     File.write(File.join(repo, 'calls'), '')
     scenario_env = env.merge('FAIL_INIT' => (scenario == 'init-failure').to_s)
     if scenario == 'identity-failure'
       scenario_env['GITHUB_TRIGGERING_ACTOR'] = 'different-requester'
     end
+    if scenario == 'finops-changed'
+      o=JSON.parse(saved_observations);o.fetch('costTags')[0]['Status']='Inactive'
+      File.write(File.join(repo,'observations.json'),JSON.generate(o))
+    end
+    FileUtils.rm_f(File.join(repo,'plan-artifact/finops-readiness.json')) if scenario=='finops-missing'
     failure = nil
-    steps.select { |step| step.key?('run') }.each do |step|
+    steps.select { |step| step.key?('run') && step['name'] != 'Install pinned FinOps collector dependencies' }.each do |step|
       step_env = scenario_env.merge((step['env'] || {}).transform_values { |v| expand.call(v) })
       output, status = Open3.capture2e(step_env, 'bash', '-e', '-o', 'pipefail', '-c', expand.call(step['run']), chdir: repo)
       unless status.success?
@@ -119,14 +140,17 @@ Dir.mktmpdir('saved-plan-workflow-') do |repo|
     calls = File.readlines(File.join(repo, 'calls'), chomp: true)
     if scenario == 'success'
       raise "fresh apply failed: #{failure}; calls=#{calls}" if failure
-      raise "init must precede verification and saved binary apply: #{calls}" unless calls == %w[init version apply]
+      raise "verification must precede init and saved binary apply: #{calls}" unless calls == %w[version init apply]
     else
       raise "#{scenario} continued to apply: #{calls}" unless failure && !calls.include?('apply')
       if scenario == 'identity-failure'
         raise "mismatch was not rejected by binding: #{failure}" unless failure.include?('SAVED_PLAN_REQUEST_IDENTITY_MISMATCH')
       end
+      if scenario.start_with?('finops-')
+        raise "FinOps failure reached Terraform: #{calls}; #{failure}" unless calls.empty? && failure.include?('FINOPS')
+      end
     end
   end
 end
-puts 'PASS: fresh apply initializes the reviewed backend and readonly providers before verification, and fails closed.'
+puts 'PASS: fresh apply verifies FinOps and approval before Terraform init/apply, and fails closed.'
 RUBY

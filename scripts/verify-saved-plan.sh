@@ -70,6 +70,11 @@ jq -e --arg approver "$approval_identity" --arg requester "$request_identity" --
   ((.approvalIdentity | ascii_downcase) != (.requestIdentity | ascii_downcase))
 ' "$approval_evidence" >/dev/null || fail APPROVAL_EVIDENCE_INVALID
 
+# Reject stale/tampered FinOps evidence and re-read actual configuration before
+# any Terraform invocation (including provider initialization in the workflow).
+python3 -I "$script_dir/lib/finops-plan.py" verify --artifact "$artifact_dir" \
+  --root "$terraform_root" --operation "$expected_operation" --account "$account_id" --region "$region" >/dev/null
+
 terraform_binary=$(terraform_plan_binary_path)
 current_version=$("$terraform_binary" version -json | jq -er '.terraform_version | select(type == "string" and length > 0)') || \
   fail TERRAFORM_VERSION_UNAVAILABLE

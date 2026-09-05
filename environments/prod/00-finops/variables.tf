@@ -1,3 +1,11 @@
+variable "course_id" {
+  type    = string
+  default = "course-2026"
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "Use the explicit CourseId from the platform inventory."
+  }
+}
 variable "billing_access" {
   description = "Local billing profile or existing management-account role; null fields use the current credentials, whose account is still validated."
   type        = object({ profile = optional(string), role_arn = optional(string) })

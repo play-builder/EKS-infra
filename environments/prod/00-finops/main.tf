@@ -1,5 +1,10 @@
 locals {
   required_tags = {
+    CourseId           = var.course_id
+    AccountId          = var.billing_account_id
+    Region             = "us-east-1"
+    Project            = var.project_name
+    Layer              = "finops"
     PlatformInstanceId = var.platform_instance_id
     Owner              = var.owner
     CostCenter         = var.cost_center

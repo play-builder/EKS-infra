@@ -15,6 +15,8 @@ on:
           - environments/prod/02-eks
           - environments/prod/03-platform
           - environments/prod/04-workloads/argocd
+          - environments/prod/03-database
+          - environments/recovery/03-database
       backend_config:
         required: true
         type: choice
@@ -27,6 +29,8 @@ on:
           - environments/prod/config/eks.tfbackend
           - environments/prod/config/platform.tfbackend
           - environments/prod/config/argocd.tfbackend
+          - environments/prod/config/database.tfbackend
+          - environments/recovery/config/database.tfbackend
   pull_request:
     paths:
       - "**/*.tf"
@@ -56,8 +60,14 @@ permissions:
 
 jobs:
   reviewed-plan:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    env:
+      FINOPS_CONTRACT_JSON: ${{ vars.FINOPS_CONTRACT_PATH }}
+      FINOPS_CONTRACT_SHA256: ${{ vars.FINOPS_CONTRACT_SHA256 }}
+      PLATFORM_INSTANCE_ID: ${{ vars.PLATFORM_INSTANCE_ID }}
+      FINOPS_GATE_POLICY: configuration-only
+      FINOPS_BILLING_ROLE_ARN: ${{ vars.FINOPS_BILLING_MONITOR_ROLE_ARN }}
     permissions:
       contents: read
       id-token: write
@@ -66,6 +76,15 @@ jobs:
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
         with:
           terraform_version: "1.16.0"
+          terraform_wrapper: false
+      - name: Install pinned FinOps collector dependencies
+        if: ${{ !startsWith(inputs.terraform_root, 'environments/dev/') }}
+        run: |
+          python3 -c 'import sys; assert sys.version_info >= (3, 10)'
+          python3 -m venv "$RUNNER_TEMP/finops-python"
+          "$RUNNER_TEMP/finops-python/bin/pip" install -r scripts/requirements-amp-slo.txt
+          "$RUNNER_TEMP/finops-python/bin/python3" -I -c 'import boto3,botocore; assert boto3.__version__ == botocore.__version__ == "1.42.59"'
+          echo "$RUNNER_TEMP/finops-python/bin" >> "$GITHUB_PATH"
       - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
         with:
           role-to-assume: ${{ secrets.TERRAFORM_PLAN_ROLE_ARN }}
@@ -84,10 +103,15 @@ jobs:
           retention-days: 1
 
   reviewed-plan-apply:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: reviewed-plan
     runs-on: ubuntu-latest
     environment: production
+    env:
+      FINOPS_CONTRACT_SHA256: ${{ vars.FINOPS_CONTRACT_SHA256 }}
+      PLATFORM_INSTANCE_ID: ${{ vars.PLATFORM_INSTANCE_ID }}
+      FINOPS_GATE_POLICY: configuration-only
+      FINOPS_BILLING_ROLE_ARN: ${{ vars.FINOPS_BILLING_MONITOR_ROLE_ARN }}
     concurrency:
       group: terraform-apply-${{ vars.AWS_REGION }}-${{ inputs.terraform_root }}
       cancel-in-progress: false
@@ -105,6 +129,15 @@ jobs:
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
         with:
           terraform_version: "1.16.0"
+          terraform_wrapper: false
+      - name: Install pinned FinOps collector dependencies
+        if: ${{ !startsWith(inputs.terraform_root, 'environments/dev/') }}
+        run: |
+          python3 -c 'import sys; assert sys.version_info >= (3, 10)'
+          python3 -m venv "$RUNNER_TEMP/finops-python"
+          "$RUNNER_TEMP/finops-python/bin/pip" install -r scripts/requirements-amp-slo.txt
+          "$RUNNER_TEMP/finops-python/bin/python3" -I -c 'import boto3,botocore; assert boto3.__version__ == botocore.__version__ == "1.42.59"'
+          echo "$RUNNER_TEMP/finops-python/bin" >> "$GITHUB_PATH"
       - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
         with:
           role-to-assume: ${{ secrets.TERRAFORM_APPLY_ROLE_ARN }}
@@ -115,6 +148,11 @@ jobs:
         run: |
           gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" > "$RUNNER_TEMP/approval-history.json"
           bash "$GITHUB_WORKSPACE/scripts/bind-saved-plan-approval.sh" "$GITHUB_WORKSPACE/plan-artifact" "$RUNNER_TEMP/approval-history.json" production "$GITHUB_TRIGGERING_ACTOR" "$GITHUB_RUN_ID"
+      - name: Verify reviewed saved plan before apply
+        run: |
+          LIVE_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BACKEND_KEY=$(jq -r '.backendKey' "$GITHUB_WORKSPACE/plan-artifact/plan-identity.json")
+          bash "$GITHUB_WORKSPACE/scripts/verify-saved-plan.sh" "$GITHUB_WORKSPACE/plan-artifact" "${{ inputs.terraform_root }}" "$LIVE_ACCOUNT_ID" "${{ vars.AWS_REGION }}" "${{ vars.STATE_BUCKET_NAME }}" "$BACKEND_KEY" s3-native-lockfile "$GITHUB_SHA" "$GITHUB_TRIGGERING_ACTOR" "$GITHUB_RUN_ID" apply
       - name: Initialize reviewed backend and locked providers
         run: |
           terraform -chdir="$GITHUB_WORKSPACE/${{ inputs.terraform_root }}" init -input=false \
@@ -122,11 +160,6 @@ jobs:
             -backend-config="$GITHUB_WORKSPACE/${{ inputs.backend_config }}" \
             -backend-config="bucket=${{ vars.STATE_BUCKET_NAME }}" \
             -backend-config="region=${{ vars.AWS_REGION }}"
-      - name: Verify reviewed saved plan before apply
-        run: |
-          LIVE_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          BACKEND_KEY=$(jq -r '.backendKey' "$GITHUB_WORKSPACE/plan-artifact/plan-identity.json")
-          bash "$GITHUB_WORKSPACE/scripts/verify-saved-plan.sh" "$GITHUB_WORKSPACE/plan-artifact" "${{ inputs.terraform_root }}" "$LIVE_ACCOUNT_ID" "${{ vars.AWS_REGION }}" "${{ vars.STATE_BUCKET_NAME }}" "$BACKEND_KEY" s3-native-lockfile "$GITHUB_SHA" "$GITHUB_TRIGGERING_ACTOR" "$GITHUB_RUN_ID" apply
       - name: Apply the verified binary plan
         run: terraform -chdir="$GITHUB_WORKSPACE/${{ inputs.terraform_root }}" apply "$GITHUB_WORKSPACE/plan-artifact/tfplan"
 
@@ -135,6 +168,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up exact Terraform for saved-plan contracts
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
 
       - name: Verify course repository contracts
         run: bash tests/run-contract-tests.sh
@@ -173,10 +212,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
+      - name: Install checksum-verified Trivy
+        env:
+          TRIVY_VERSION: "0.74.0"
+          TRIVY_ARCHIVE_SHA256: "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a"
+        run: bash scripts/install-trivy.sh
+
       - name: Scan Terraform with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: v0.74.0
+          skip-setup-trivy: true
           scan-type: config
           scan-ref: .
           skip-dirs: vendor
@@ -199,6 +245,53 @@ jobs:
       - name: Verify the lightweight Conftest policy
         run: conftest verify --policy policy/terraform
 
+  enterprise-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      RUN_SDK_CONTRACTS: "true"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.16.0"
+          terraform_wrapper: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
+        with:
+          version: v4.2.4
+      - name: Install pinned static test prerequisites
+        run: |
+          for tool in jq ruby rg go; do command -v "$tool" >/dev/null; done
+          python3 -c 'import sys; assert sys.version_info >= (3, 10)'
+          python3 -m venv "$RUNNER_TEMP/enterprise-python"
+          "$RUNNER_TEMP/enterprise-python/bin/pip" install -r scripts/requirements-argocd-backup.txt
+          echo "ENTERPRISE_PYTHON=$RUNNER_TEMP/enterprise-python/bin/python3" >> "$GITHUB_ENV"
+          GOBIN="$RUNNER_TEMP/enterprise-bin" go install github.com/mikefarah/yq/v4@v4.53.6
+          curl -fsSL https://github.com/prometheus/prometheus/releases/download/v3.14.0/prometheus-3.14.0.linux-amd64.tar.gz -o "$RUNNER_TEMP/prometheus.tgz"
+          printf '%s  %s\n' f665c6da19eb7ba399c915d30c7d9793c9b417bf8a749b504bc470678631478d "$RUNNER_TEMP/prometheus.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/prometheus.tgz" -C "$RUNNER_TEMP/enterprise-bin" --strip-components=1 prometheus-3.14.0.linux-amd64/promtool
+          "$RUNNER_TEMP/enterprise-bin/promtool" --version | grep -F 'version 3.14.0'
+          "$RUNNER_TEMP/enterprise-bin/yq" --version | grep -F 'v4.53.6'
+          helm version --short | grep -F 'v4.2.4'
+          echo "$RUNNER_TEMP/enterprise-bin" >> "$GITHUB_PATH"
+      - name: Fetch locked render inputs
+        run: |
+          mkdir -p "$RUNNER_TEMP/enterprise-charts"
+          curl -fsSL https://github.com/argoproj/argo-helm/releases/download/argo-cd-10.4.3/argo-cd-10.4.3.tgz -o "$RUNNER_TEMP/enterprise-charts/argo-cd.tgz"
+          curl -fsSL https://github.com/argoproj/argo-helm/releases/download/argo-rollouts-2.42.0/argo-rollouts-2.42.0.tgz -o "$RUNNER_TEMP/enterprise-charts/argo-rollouts.tgz"
+          curl -fsSL https://github.com/kubernetes/autoscaler/releases/download/cluster-autoscaler-chart-9.59.0/cluster-autoscaler-9.59.0.tgz -o "$RUNNER_TEMP/enterprise-charts/autoscaler.tgz"
+          helm pull oci://ghcr.io/sigstore/helm-charts/policy-controller@sha256:bd825655f80a062a23e71725cb33118566ff6a90daf97a1ce17a52a4bc6e010d --destination "$RUNNER_TEMP/enterprise-charts"
+          printf '%s  %s\n' a2cf167748f21a5a456d7070fcd6ab786c4f924b36a3aa497878e0c9b960bbab "$RUNNER_TEMP/enterprise-charts/argo-cd.tgz" | sha256sum -c -
+          printf '%s  %s\n' d3a4ff76978290eca71f95125281c7c90b1f058a809574d39502a26143865bda "$RUNNER_TEMP/enterprise-charts/argo-rollouts.tgz" | sha256sum -c -
+          printf '%s  %s\n' 90276dafe65cf5d4328ef8313baf6cfb9d130683e0c9f3c28a03b4d8a9ed8f6e "$RUNNER_TEMP/enterprise-charts/autoscaler.tgz" | sha256sum -c -
+          printf '%s  %s\n' d1c243d566ef11c7e206cc9f6a1187f9e4291325d011d8fc432f50632296336c "$RUNNER_TEMP/enterprise-charts/policy-controller-0.10.5.tgz" | sha256sum -c -
+          echo "ARGOCD_CHART_ARCHIVE=$RUNNER_TEMP/enterprise-charts/argo-cd.tgz" >> "$GITHUB_ENV"
+          echo "ROLLOUTS_CHART_ARCHIVE=$RUNNER_TEMP/enterprise-charts/argo-rollouts.tgz" >> "$GITHUB_ENV"
+          echo "AUTOSCALER_CHART_ARCHIVE=$RUNNER_TEMP/enterprise-charts/autoscaler.tgz" >> "$GITHUB_ENV"
+          echo "SIGSTORE_CHART_ARCHIVE=$RUNNER_TEMP/enterprise-charts/policy-controller-0.10.5.tgz" >> "$GITHUB_ENV"
+      - name: Run aggregate static mock render PromQL and SDK gates
+        run: bash tests/run-enterprise-static-tests.sh
+
   validate:
     runs-on: ubuntu-latest
     strategy:
@@ -208,6 +301,10 @@ jobs:
           - terraform/state-backend
           - terraform/iam-github-oidc
           - terraform/github-governance
+          - terraform/platform-backup
+          - environments/prod/00-finops
+          - environments/prod/03-database
+          - environments/recovery/03-database
           - environments/dev/01-network
           - environments/dev/02-eks
           - environments/dev/03-platform

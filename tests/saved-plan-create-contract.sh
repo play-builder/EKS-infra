@@ -5,14 +5,15 @@ source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 repo="$tmp_dir/repo"
-mkdir -p "$repo/scripts/lib" "$repo/environments/prod/01-network" "$repo/environments/prod/config" "$repo/bin"
+mkdir -p "$repo/scripts/lib" "$repo/environments/dev/01-network" "$repo/environments/dev/config" "$repo/bin"
 cp "$source_root/scripts/create-saved-plan.sh" "$repo/scripts/create-saved-plan.sh"
 cp "$source_root/scripts/lib/terraform-plan-contract.sh" "$repo/scripts/lib/terraform-plan-contract.sh"
 cp "$source_root/scripts/lib/evidence-common.sh" "$repo/scripts/lib/evidence-common.sh"
-printf 'terraform { required_version = "= 1.16.0" }\n' >"$repo/environments/prod/01-network/main.tf"
-printf 'provider-lock\n' >"$repo/environments/prod/01-network/.terraform.lock.hcl"
-cat >"$repo/environments/prod/config/network.tfbackend" <<'EOF'
-key          = "prod/01-network/terraform.tfstate"
+cp "$source_root/scripts/lib/finops-plan.py" "$source_root/scripts/lib/finops-readiness.py" "$repo/scripts/lib/"
+printf 'terraform { required_version = "= 1.16.0" }\n' >"$repo/environments/dev/01-network/main.tf"
+printf 'provider-lock\n' >"$repo/environments/dev/01-network/.terraform.lock.hcl"
+cat >"$repo/environments/dev/config/network.tfbackend" <<'EOF'
+key          = "dev/01-network/terraform.tfstate"
 encrypt      = true
 use_lockfile = true
 EOF
@@ -51,7 +52,7 @@ common_env=(
 )
 
 env "${common_env[@]}" bash "$repo/scripts/create-saved-plan.sh" \
-  "$repo/environments/prod/01-network" "$repo/environments/prod/config/network.tfbackend" \
+  "$repo/environments/dev/01-network" "$repo/environments/dev/config/network.tfbackend" \
   "$repo/plan-artifact" apply
 jq -e '.operation == "apply" and .approvalIdentity == null and .requestIdentity == "release-requester"' \
   "$repo/plan-artifact/plan-identity.json" >/dev/null
@@ -60,17 +61,17 @@ jq -e '.operation == "apply" and .approvalIdentity == null and .requestIdentity 
 printf 'preserve-old-artifact\n' >"$repo/plan-artifact/sentinel"
 set +e
 env "${common_env[@]}" FAKE_PLAN_FAIL=true bash "$repo/scripts/create-saved-plan.sh" \
-  "$repo/environments/prod/01-network" "$repo/environments/prod/config/network.tfbackend" \
+  "$repo/environments/dev/01-network" "$repo/environments/dev/config/network.tfbackend" \
   "$repo/plan-artifact" apply >/dev/null 2>&1
 status=$?
 set -e
 [[ "$status" -ne 0 && -f "$repo/plan-artifact/sentinel" ]]
 [[ -z $(find "$repo" -maxdepth 1 -name '.plan-artifact.staging.*' -print -quit) ]]
 
-ln -s "$repo/environments/prod/01-network" "$repo/network-link"
+ln -s "$repo/environments/dev/01-network" "$repo/network-link"
 set +e
 output=$(env "${common_env[@]}" bash "$repo/scripts/create-saved-plan.sh" \
-  "$repo/network-link" "$repo/environments/prod/config/network.tfbackend" "$repo/plan-artifact" apply 2>&1)
+  "$repo/network-link" "$repo/environments/dev/config/network.tfbackend" "$repo/plan-artifact" apply 2>&1)
 status=$?
 set -e
 [[ "$status" -ne 0 && "$output" == *SAVED_PLAN_PATH_NOT_CANONICAL* ]]
@@ -78,7 +79,7 @@ set -e
 mkdir -p "$repo/not-allowed"
 set +e
 output=$(env "${common_env[@]}" bash "$repo/scripts/create-saved-plan.sh" \
-  "$repo/environments/prod/01-network" "$repo/environments/prod/config/network.tfbackend" \
+  "$repo/environments/dev/01-network" "$repo/environments/dev/config/network.tfbackend" \
   "$repo/not-allowed/plan" apply 2>&1)
 status=$?
 set -e
