@@ -83,8 +83,8 @@ module "node_group_private" {
 
   max_unavailable_percentage = var.node_group_max_unavailable
 
-  ssh_key_name                  = var.bastion_instance_keypair
-  ssh_source_security_group_ids = var.enable_bastion ? [module.bastion[0].security_group_id] : []
+  ssh_key_name                  = ""
+  ssh_source_security_group_ids = []
 
   enable_ssm        = true
   enable_cloudwatch = true
@@ -100,21 +100,18 @@ module "node_group_private" {
 }
 
 
-module "bastion" {
-  source = "../../../modules/compute/bastion"
-  count  = var.enable_bastion ? 1 : 0
+module "operator_access" {
+  source = "../../../modules/compute/operator-access"
 
-  name = "${local.name}-bastion"
+  name              = local.name
+  vpc_id            = local.vpc_id
+  subnet_id         = var.operator_access.subnet_id
+  cluster_arn       = module.eks_cluster.cluster_arn
+  operator_role_arn = var.operator_access.operator_role_arn
+  ami_id            = var.operator_access.ami_id
+  instance_type     = var.operator_access.instance_type
+  mode              = var.operator_access.mode
+  tags              = local.common_tags
 
-  vpc_id           = local.vpc_id
-  public_subnet_id = local.public_subnet_ids[0]
-
-  instance_type    = var.bastion_instance_type
-  instance_keypair = var.bastion_instance_keypair
-
-  ssh_cidr_blocks = var.bastion_ssh_cidr_blocks
-
-  private_key_path = "private-key/${var.bastion_instance_keypair}.pem"
-
-  tags = local.common_tags
+  depends_on = [module.eks_cluster]
 }

@@ -19,7 +19,6 @@ cluster_admin_principal_arns = [
 
 cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
 
-enable_bastion            = false
 enable_public_node_group  = false
 enable_private_node_group = true
 
@@ -28,4 +27,10 @@ private_node_group_min_size      = 3
 private_node_group_max_size      = 6
 private_node_group_instance_types = ["m7i.large"]
 
-bastion_instance_keypair = ""
+operator_access = {
+  mode              = "ssm"
+  operator_role_arn = "arn:aws:iam::123456789012:role/AWSReservedSSO_PlatformOperator"
+  subnet_id         = "subnet-0123456789abcdef0"
+  ami_id            = "ami-0123456789abcdef0"
+  instance_type     = "t3.micro"
+}

@@ -64,19 +64,9 @@ output "private_node_role_arn" {
   value       = var.enable_private_node_group ? module.node_group_private[0].node_role_arn : null
 }
 
-output "bastion_instance_id" {
-  description = "Bastion Host instance ID"
-  value       = var.enable_bastion ? module.bastion[0].instance_id : null
-}
-
-output "bastion_public_ip" {
-  description = "Bastion Host Elastic IP"
-  value       = var.enable_bastion ? module.bastion[0].public_ip : null
-}
-
-output "bastion_security_group_id" {
-  description = "Bastion Host security group ID"
-  value       = var.enable_bastion ? module.bastion[0].security_group_id : null
+output "operator_access_status" {
+  description = "Private SSM operator access identity and instance"
+  value       = module.operator_access.operator_access_status
 }
 
 output "vpc_cni_addon_version" {

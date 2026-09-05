@@ -85,6 +85,27 @@ variable "cluster_endpoint_public_access" {
   default     = false
 }
 
+variable "operator_access" {
+  description = "Private production EKS operator path"
+  type = object({
+    mode              = string
+    operator_role_arn = string
+    subnet_id         = string
+    ami_id            = string
+    instance_type     = string
+  })
+
+  validation {
+    condition = (
+      var.operator_access.mode == "ssm" &&
+      can(regex("^arn:aws:iam::[0-9]{12}:role/.+", var.operator_access.operator_role_arn)) &&
+      can(regex("^subnet-[0-9a-f]+$", var.operator_access.subnet_id)) &&
+      can(regex("^ami-[0-9a-f]+$", var.operator_access.ami_id))
+    )
+    error_message = "operator_access requires mode ssm, an IAM role ARN, a private subnet ID, and an AMI ID."
+  }
+}
+
 variable "cluster_endpoint_public_access_cidrs" {
   description = "List of CIDR blocks for public access"
   type        = list(string)
@@ -164,29 +185,6 @@ variable "private_node_group_instance_types" {
   description = "Private node group instance types"
   type        = list(string)
   default     = ["m5.large"]
-}
-
-variable "enable_bastion" {
-  description = "Enable Bastion Host"
-  type        = bool
-  default     = true
-}
-
-variable "bastion_instance_type" {
-  description = "EC2 instance type for Bastion Host"
-  type        = string
-  default     = "t3.micro"
-}
-
-variable "bastion_instance_keypair" {
-  description = "EC2 Key Pair name for Bastion Host"
-  type        = string
-}
-
-variable "bastion_ssh_cidr_blocks" {
-  description = "CIDR blocks allowed to SSH to Bastion"
-  type        = list(string)
-  default     = []
 }
 
 variable "cluster_enabled_log_types" {

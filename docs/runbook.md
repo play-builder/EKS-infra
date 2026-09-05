@@ -53,6 +53,12 @@ own NAT Gateway and private route table. The module also delivers `ALL` VPC Flow
 `/aws/vpc/<name>/flow-logs`; retain the log group and delivery role during incident investigation. The
 optional log-group KMS key is supplied only after the central log-key layer is available.
 
+## Private EKS operator access
+
+Production API access is private-only. Use the `operator_access` SSM instance in a private subnet and the
+scoped federated role; the production node group and operator instance have no SSH key or public IP. Retain
+an evidence record from an SSM session and `kubectl auth can-i --list` before making a production change.
+
 ```bash
 kubectl --context course-dev -n kube-system get pods
 kubectl --context course-dev -n argocd get application
