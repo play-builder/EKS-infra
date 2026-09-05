@@ -79,3 +79,11 @@ output "vpc_cni_network_policy_enforcing_mode" {
   description = "Configured VPC CNI NetworkPolicy enforcement mode"
   value       = var.vpc_cni_network_policy_enforcing_mode
 }
+
+output "audit_log_groups" {
+  value = tomap({ control_plane = {
+    arn            = trimsuffix(aws_cloudwatch_log_group.cluster.arn, ":*")
+    retention_days = aws_cloudwatch_log_group.cluster.retention_in_days
+    kms_key_arn    = aws_cloudwatch_log_group.cluster.kms_key_id
+  } })
+}

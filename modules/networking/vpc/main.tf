@@ -185,7 +185,8 @@ resource "aws_cloudwatch_log_group" "vpc_flow" {
   tags = merge(
     var.tags,
     {
-      Name = "${var.name}-vpc-flow-logs"
+      Name      = "${var.name}-vpc-flow-logs"
+      ManagedBy = "Terraform"
     }
   )
 }
@@ -203,7 +204,7 @@ resource "aws_iam_role" "vpc_flow" {
     }]
   })
 
-  tags = var.tags
+  tags = merge(var.tags, { ManagedBy = "Terraform" })
 }
 
 resource "aws_iam_role_policy" "vpc_flow_delivery" {
@@ -213,15 +214,23 @@ resource "aws_iam_role_policy" "vpc_flow_delivery" {
   role = aws_iam_role.vpc_flow[0].id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
+    Statement = concat([{
       Effect   = "Allow"
       Action   = ["logs:DescribeLogStreams"]
-      Resource = aws_cloudwatch_log_group.vpc_flow[0].arn
+      Resource = "${trimsuffix(aws_cloudwatch_log_group.vpc_flow[0].arn, ":*")}:*"
       }, {
       Effect   = "Allow"
       Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-      Resource = "${aws_cloudwatch_log_group.vpc_flow[0].arn}:*"
-    }]
+      Resource = "${trimsuffix(aws_cloudwatch_log_group.vpc_flow[0].arn, ":*")}:log-stream:*"
+      }], var.vpc_flow_log_kms_key_arn == null ? [] : [{
+      Effect   = "Allow"
+      Action   = ["kms:Encrypt", "kms:Decrypt", "kms:ReEncryptFrom", "kms:ReEncryptTo", "kms:GenerateDataKey", "kms:GenerateDataKeyWithoutPlaintext", "kms:DescribeKey"]
+      Resource = var.vpc_flow_log_kms_key_arn
+      Condition = {
+        StringEquals = { "kms:ViaService" = "logs.${split(":", var.vpc_flow_log_kms_key_arn)[3]}.amazonaws.com" }
+        ArnEquals    = { "kms:EncryptionContext:aws:logs:arn" = trimsuffix(aws_cloudwatch_log_group.vpc_flow[0].arn, ":*") }
+      }
+    }])
   })
 }
 
@@ -233,5 +242,5 @@ resource "aws_flow_log" "vpc" {
   log_destination_type = "cloud-watch-logs"
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.this.id
-  tags                 = var.tags
+  tags                 = merge(var.tags, { ManagedBy = "Terraform" })
 }

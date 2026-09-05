@@ -27,7 +27,7 @@ locals {
   )
 
 
-  eks_cluster_name = "${local.name}-eks"
+  eks_cluster_name = coalesce(var.cluster_name, "${local.name}-eks")
 }
 
 module "vpc" {
@@ -49,7 +49,7 @@ module "vpc" {
 
   enable_vpc_flow_logs           = var.enable_vpc_flow_logs
   vpc_flow_log_retention_in_days = var.vpc_flow_log_retention_in_days
-  vpc_flow_log_kms_key_arn       = var.vpc_flow_log_kms_key_arn
+  vpc_flow_log_kms_key_arn       = module.log_key.kms_key_arn
 
   enable_dns_hostnames = var.enable_dns_hostnames
   enable_dns_support   = var.enable_dns_support

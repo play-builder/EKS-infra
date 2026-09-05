@@ -234,9 +234,8 @@ variable "cluster_enabled_log_types" {
 }
 
 variable "cluster_log_retention_in_days" {
-  description = "CloudWatch log retention in days"
-  type        = number
-  default     = 30
+  type    = number
+  default = 90
 }
 
 variable "vpc_cni_addon_version" {

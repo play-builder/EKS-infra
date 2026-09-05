@@ -16,3 +16,11 @@ database_subnet_cidrs = ["10.0.21.0/24", "10.0.22.0/24", "10.0.23.0/24"]
 enable_nat_gateway     = true
 single_nat_gateway     = true
 one_nat_gateway_per_az = false
+
+# Select EXISTING same-account roles with key policy and alias administration permissions.
+log_key_administrator_role_arns = ["arn:aws:iam::123456789012:role/REPLACE_WITH_EXISTING_TERRAFORM_ROLE"]
+platform_instance_id = "replace-with-platform-instance-id"
+owner = "platform-sre"
+cost_center = "replace-with-cost-center"
+enable_vpc_flow_logs = true
+vpc_flow_log_retention_in_days = 30

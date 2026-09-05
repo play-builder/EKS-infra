@@ -38,3 +38,6 @@ access_entries = {
  "release-automation" = { principal_arn = "arn:aws:iam::123456789012:role/release-automation", policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy", scope_type = "namespace", namespaces = ["app-dev"], break_glass = false }
  "developer-readonly" = { principal_arn = "arn:aws:iam::123456789012:role/developer-readonly", policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy", scope_type = "namespace", namespaces = ["app-dev"], break_glass = false }
 }
+
+# Must match the 01-network logging contract cluster name.
+cluster_log_retention_in_days = 30

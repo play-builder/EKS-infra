@@ -75,3 +75,11 @@ output "availability_zones" {
   description = "List of availability zones"
   value       = var.availability_zones
 }
+
+output "audit_log_groups" {
+  value = tomap({ for group in aws_cloudwatch_log_group.vpc_flow : "vpc_flow" => {
+    arn            = trimsuffix(group.arn, ":*")
+    retention_days = group.retention_in_days
+    kms_key_arn    = group.kms_key_id
+  } })
+}

@@ -13,6 +13,7 @@ locals {
 
   common_tags = merge(
     var.tags,
+    data.terraform_remote_state.network.outputs.logging_contract.platform_tags,
     {
       CourseId    = var.course_id
       Environment = var.environment
@@ -49,6 +50,9 @@ module "eks_cluster" {
 
   cluster_enabled_log_types     = var.cluster_enabled_log_types
   cluster_log_retention_in_days = var.cluster_log_retention_in_days
+  cluster_log_kms_key_arn       = data.terraform_remote_state.network.outputs.logging_contract.kms_key_arn
+  environment                   = var.environment
+  depends_on                    = [terraform_data.logging_identity]
 
   vpc_cni_addon_version                 = var.vpc_cni_addon_version
   vpc_cni_enable_network_policy         = var.vpc_cni_enable_network_policy

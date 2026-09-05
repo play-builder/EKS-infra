@@ -87,16 +87,20 @@ variable "vpc_flow_log_retention_in_days" {
   default     = 30
 
   validation {
-    condition     = var.vpc_flow_log_retention_in_days >= 1
-    error_message = "vpc_flow_log_retention_in_days must be at least one day."
+    condition     = !var.enable_vpc_flow_logs || (contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.vpc_flow_log_retention_in_days) && (var.environment != "prod" || var.vpc_flow_log_retention_in_days >= 90))
+    error_message = "Enabled Flow Logs require valid finite retention; prod requires at least 90 days."
   }
 }
 
 variable "vpc_flow_log_kms_key_arn" {
-  description = "Optional KMS key ARN for the VPC Flow Log group"
+  description = "Customer-managed KMS key ARN for the VPC Flow Log group"
   type        = string
   default     = null
   nullable    = true
+  validation {
+    condition     = !var.enable_vpc_flow_logs || var.environment != "prod" || can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[0-9a-f-]{36}$", var.vpc_flow_log_kms_key_arn))
+    error_message = "Production Flow Logs require an exact customer-managed KMS key ARN."
+  }
 }
 
 variable "enable_dns_hostnames" {

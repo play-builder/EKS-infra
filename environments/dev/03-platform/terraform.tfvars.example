@@ -59,3 +59,9 @@ autoscaler_capacity = {
 # sigstore_api_server_cidrs = ["<exact-cluster-endpoint/service-ip>/32"]
 # sigstore_https_egress_cidrs = ["<approved-egress-ip>/32"]
 sigstore_controller_replicas = 1
+
+# Key, names and platform ownership tags come from 01-network.
+application_log_retention_in_days = 30
+performance_log_retention_in_days = 30
+waf_log_retention_in_days = 30
+waf_rate_limit = 2000

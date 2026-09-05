@@ -129,22 +129,27 @@ variable "production_nat_topology" {
 }
 
 variable "enable_vpc_flow_logs" {
-  description = "Deliver all production VPC Flow Logs to CloudWatch Logs"
-  type        = bool
-  default     = true
+  type    = bool
+  default = true
+  validation {
+    condition     = var.enable_vpc_flow_logs
+    error_message = "Production requires VPC Flow Logs."
+  }
 }
 
 variable "vpc_flow_log_retention_in_days" {
-  description = "Retention for production VPC Flow Logs"
-  type        = number
-  default     = 30
+  type    = number
+  default = 90
 }
 
 variable "vpc_flow_log_kms_key_arn" {
-  description = "Optional customer-managed KMS key ARN for VPC Flow Logs"
+  description = "Deprecated. The owned log_key output supplies Flow Log encryption; leave null."
   type        = string
   default     = null
-  nullable    = true
+  validation {
+    condition     = var.vpc_flow_log_kms_key_arn == null
+    error_message = "Flow logs must use this root's log_key; remove legacy external key input."
+  }
 }
 
 variable "enable_dns_hostnames" {

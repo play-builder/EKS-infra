@@ -132,7 +132,7 @@ variable "cluster_log_retention_in_days" {
   default     = 7
 
   validation {
-    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653], var.cluster_log_retention_in_days)
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.cluster_log_retention_in_days) && (var.environment != "prod" || var.cluster_log_retention_in_days >= 90)
     error_message = "cluster_log_retention_in_days must be a valid CloudWatch Logs retention period."
   }
 }
@@ -191,4 +191,16 @@ variable "cluster_creator_arn" {
   description = "IAM ARN of the cluster creator (user or role) for Access Entry"
   type        = string
   default     = ""
+}
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+variable "cluster_log_kms_key_arn" {
+  type    = string
+  default = null
+  validation {
+    condition     = var.environment != "prod" || try(can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[0-9a-f-]{36}$", var.cluster_log_kms_key_arn)), false)
+    error_message = "Production audit logs require a customer-managed KMS key ARN."
+  }
 }

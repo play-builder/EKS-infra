@@ -70,5 +70,5 @@ output "availability_zones" {
 
 output "eks_cluster_name" {
   description = "EKS Cluster name (for reference)"
-  value       = "${var.environment}-${var.project_name}-eks"
+  value       = local.eks_cluster_name
 }

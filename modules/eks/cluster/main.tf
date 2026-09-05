@@ -7,11 +7,13 @@ data "aws_partition" "current" {}
 resource "aws_cloudwatch_log_group" "cluster" {
   name              = "/aws/eks/${var.cluster_name}/cluster"
   retention_in_days = var.cluster_log_retention_in_days
+  kms_key_id        = var.cluster_log_kms_key_arn
 
   tags = merge(
     var.tags,
     {
-      Name = "${var.cluster_name}-logs"
+      Name      = "${var.cluster_name}-logs"
+      ManagedBy = "Terraform"
     }
   )
 }

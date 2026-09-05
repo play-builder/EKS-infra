@@ -91,6 +91,7 @@ locals {
 
   common_tags = merge(
     var.tags,
+    data.terraform_remote_state.network.outputs.logging_contract.platform_tags,
     {
       CourseId    = var.course_id
       Environment = var.environment
@@ -356,8 +357,14 @@ module "cluster_autoscaler" {
 }
 
 module "container_insights" {
-  source = "../../../modules/addons/container-insights"
-  count  = var.enable_container_insights ? 1 : 0
+  environment                = var.environment
+  account_id                 = data.terraform_remote_state.network.outputs.logging_contract.account_id
+  kms_key_arn                = data.terraform_remote_state.network.outputs.logging_contract.kms_key_arn
+  application_retention_days = var.application_log_retention_in_days
+  performance_retention_days = var.performance_log_retention_in_days
+  depends_on                 = [terraform_data.logging_identity]
+  source                     = "../../../modules/addons/container-insights"
+  count                      = var.enable_container_insights ? 1 : 0
 
   eks_cluster_name = local.eks_cluster_name
   aws_region       = var.aws_region

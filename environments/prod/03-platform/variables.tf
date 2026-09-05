@@ -156,9 +156,12 @@ variable "cluster_autoscaler_chart_version" {
 }
 
 variable "enable_container_insights" {
-  description = "Enable CloudWatch Container Insights"
-  type        = bool
-  default     = false
+  type    = bool
+  default = true
+  validation {
+    condition     = var.enable_container_insights
+    error_message = "Production requires the protected application and performance log collectors."
+  }
 }
 
 variable "cloudwatch_agent_chart_version" {
