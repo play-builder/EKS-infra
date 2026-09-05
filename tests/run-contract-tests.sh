@@ -5,6 +5,7 @@ export PYTHONDONTWRITEBYTECODE=1
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
 tests=(
+  ci-runner-prerequisites-contract.sh
   enterprise-root-map-contract.sh
   scheduled-drift-contract.sh
   enterprise-ownership-boundary-contract.sh
