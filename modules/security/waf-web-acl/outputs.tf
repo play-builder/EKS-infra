@@ -10,4 +10,3 @@ output "audit_log_groups" {
     kms_key_arn    = aws_cloudwatch_log_group.waf.kms_key_id
   } })
 }
-

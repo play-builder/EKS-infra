@@ -4,4 +4,3 @@ output "log_group_arns" {
   description = "Exact permitted CloudWatch encryption-context ARNs; no stream suffix."
   value       = local.log_group_arns
 }
-
