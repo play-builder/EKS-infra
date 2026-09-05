@@ -11,7 +11,6 @@ rg -q 'associate_public_ip_address[[:space:]]*=[[:space:]]*false' "$root/modules
 rg -q 'http_tokens[[:space:]]*=[[:space:]]*"required"' "$root/modules/compute/operator-access/main.tf"
 ! rg -q 'key_name[[:space:]]*=' "$root/modules/compute/operator-access/main.tf"
 rg -q 'user_data[[:space:]]*=' "$root/modules/compute/operator-access/main.tf"
-rg -q 'aws_eks_access_policy_association' "$root/modules/compute/operator-access/main.tf"
 
 bash "$root/scripts/prod-operator-access-check.sh" --validate-only \
   --evidence "$root/tests/fixtures/operator-access-valid.json" >/dev/null

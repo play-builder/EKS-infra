@@ -10,13 +10,16 @@ def validate(x):
  age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(x["observedAt"].replace("Z","+00:00"))).total_seconds()
  require(0 <= age <= 900, "UPGRADE_OBSERVATIONS_STALE")
  require(x["refresh"]["status"]=="COMPLETED","INSIGHTS_REFRESH_INCOMPLETE")
+ refresh_end=datetime.datetime.fromisoformat(x["refresh"]["endedAt"].replace("Z","+00:00"))
+ refresh_start=datetime.datetime.fromisoformat(x["refresh"]["startedAt"].replace("Z","+00:00"))
+ require(refresh_start<=refresh_end and 0 <= (datetime.datetime.now(datetime.timezone.utc)-refresh_end).total_seconds() <= 900,"INSIGHTS_REFRESH_STALE")
  require(x["insights"] and len(x["details"])==len(x["insights"]),"INSIGHTS_MISSING")
  for i in x["insights"]:
-  require(i["kubernetesVersion"]==x["toVersion"] and i["insightStatus"]["status"]=="PASS","INSIGHT_NOT_PASS")
+  require(i["kubernetesVersion"]==x["toVersion"] and i["insightStatus"]["status"]=="PASSING","INSIGHT_NOT_PASS")
  for d in x["details"]:
   i=d["insight"]
-  require(i["insightStatus"]["status"]=="PASS","INSIGHT_DETAIL_NOT_PASS")
-  require(all(r.get("insightStatus",{}).get("status")=="PASS" for r in i.get("resources",[])),"UNSUPPORTED_API")
+  require(i["insightStatus"]["status"]=="PASSING","INSIGHT_DETAIL_NOT_PASS")
+  require(all(r.get("insightStatus",{}).get("status")=="PASSING" for r in i.get("resources",[])),"UNSUPPORTED_API")
  require(x["nodes"]["items"],"NO_NODES")
  require(all(any(c["type"]=="Ready" and c["status"]=="True" for c in n["status"]["conditions"]) for n in x["nodes"]["items"]),"NODE_NOT_READY")
  require(all(p["status"].get("disruptionsAllowed",0)>0 for p in x["pdbs"]["items"]),"PDB_BLOCKS_DISRUPTION")

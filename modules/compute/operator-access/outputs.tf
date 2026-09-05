@@ -18,3 +18,4 @@ output "operator_role_arn" {
   description = "Customer-managed IAM role authorized by the EKS Access Entry"
   value       = aws_iam_role.operator.arn
 }
+output "authorization_namespace" { value = var.authorization_namespace }

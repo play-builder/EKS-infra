@@ -136,7 +136,7 @@ module "access_entries" {
       principal_arn = module.operator_access.operator_role_arn
       policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
       scope_type    = "namespace"
-      namespaces    = ["app-prod"]
+      namespaces    = [module.operator_access.authorization_namespace, "app-prod"]
       break_glass   = false
     }
   })
