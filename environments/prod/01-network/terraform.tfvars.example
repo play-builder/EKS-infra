@@ -13,7 +13,11 @@ public_subnet_cidrs   = ["10.1.1.0/24", "10.1.2.0/24", "10.1.3.0/24"]
 private_subnet_cidrs  = ["10.1.11.0/24", "10.1.12.0/24", "10.1.13.0/24"]
 database_subnet_cidrs = ["10.1.21.0/24", "10.1.22.0/24", "10.1.23.0/24"]
 
-# Set single_nat_gateway=false and one_nat_gateway_per_az=true for HA production.
+production_nat_topology = "per_az"
 enable_nat_gateway     = true
-single_nat_gateway     = true
-one_nat_gateway_per_az = false
+single_nat_gateway     = false
+one_nat_gateway_per_az = true
+
+enable_vpc_flow_logs           = true
+vpc_flow_log_retention_in_days = 30
+vpc_flow_log_kms_key_arn       = null

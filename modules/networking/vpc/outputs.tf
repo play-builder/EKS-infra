@@ -54,6 +54,13 @@ output "nat_gateway_ids" {
   value       = aws_nat_gateway.this[*].id
 }
 
+output "nat_gateway_ids_by_az" {
+  description = "NAT Gateway IDs keyed by AZ when the per-AZ topology is enabled"
+  value = var.enable_nat_gateway && !var.single_nat_gateway && var.one_nat_gateway_per_az ? {
+    for index, availability_zone in var.availability_zones : availability_zone => aws_nat_gateway.this[index].id
+  } : {}
+}
+
 output "nat_gateway_public_ips" {
   description = "NAT Gateway public IPs"
   value       = aws_eip.nat[*].public_ip

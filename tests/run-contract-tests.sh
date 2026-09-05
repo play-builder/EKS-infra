@@ -13,6 +13,7 @@ tests=(
   ecr-lifecycle-preview-contract.sh
   secret-json-contract.sh
   network-policy-runtime-contract.sh
+  prod-network-ha-contract.sh
   external-secrets-owner-handoff-contract.sh
   secret-freshness-contract.sh
   alerting-contract.sh

@@ -46,6 +46,13 @@ terraform -chdir=environments/dev/03-platform output
 terraform -chdir=environments/dev/04-workloads/argocd output
 ```
 
+## Production network egress
+
+`environments/prod/01-network` requires `production_nat_topology = "per_az"`: each selected AZ has its
+own NAT Gateway and private route table. The module also delivers `ALL` VPC Flow Logs to
+`/aws/vpc/<name>/flow-logs`; retain the log group and delivery role during incident investigation. The
+optional log-group KMS key is supplied only after the central log-key layer is available.
+
 ```bash
 kubectl --context course-dev -n kube-system get pods
 kubectl --context course-dev -n argocd get application

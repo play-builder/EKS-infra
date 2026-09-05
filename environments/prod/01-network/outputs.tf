@@ -54,6 +54,11 @@ output "nat_gateway_ids" {
   value       = module.vpc.nat_gateway_ids
 }
 
+output "nat_gateway_ids_by_az" {
+  description = "Production NAT Gateway IDs keyed by AZ"
+  value       = module.vpc.nat_gateway_ids_by_az
+}
+
 output "nat_gateway_public_ips" {
   description = "NAT Gateway public IPs"
   value       = module.vpc.nat_gateway_public_ips

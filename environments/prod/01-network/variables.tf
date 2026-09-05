@@ -87,6 +87,36 @@ variable "one_nat_gateway_per_az" {
   default     = true
 }
 
+variable "production_nat_topology" {
+  description = "Production NAT topology; resilient production egress requires per_az"
+  type        = string
+  default     = "per_az"
+
+  validation {
+    condition     = var.production_nat_topology == "per_az"
+    error_message = "Production network must use production_nat_topology = per_az."
+  }
+}
+
+variable "enable_vpc_flow_logs" {
+  description = "Deliver all production VPC Flow Logs to CloudWatch Logs"
+  type        = bool
+  default     = true
+}
+
+variable "vpc_flow_log_retention_in_days" {
+  description = "Retention for production VPC Flow Logs"
+  type        = number
+  default     = 30
+}
+
+variable "vpc_flow_log_kms_key_arn" {
+  description = "Optional KMS key ARN for VPC Flow Logs; supplied after the Task 9 log key exists"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "enable_dns_hostnames" {
   description = "Enable DNS hostnames in VPC"
   type        = bool
