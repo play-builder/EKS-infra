@@ -35,6 +35,10 @@ resource "aws_kms_key" "backup" {
       condition     = alltrue([for arn in setunion(var.administrator_role_arns, var.operator_role_arns) : split(":", arn)[4] == local.account])
       error_message = "Backup roles must belong to the actual provider account."
     }
+    precondition {
+      condition     = length(setintersection(var.administrator_role_arns, var.operator_role_arns)) == 0
+      error_message = "Archive operators must not also be key administrators able to disable recovery."
+    }
   }
 }
 resource "aws_s3_bucket" "backup" {

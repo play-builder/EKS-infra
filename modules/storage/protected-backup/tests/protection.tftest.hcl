@@ -52,3 +52,8 @@ run "rejects_external_account_administrator" {
   variables { administrator_role_arns = ["arn:aws:iam::999999999999:role/backup-admin"] }
   expect_failures = [aws_kms_key.backup]
 }
+run "rejects_operator_key_administration_overlap" {
+  command = plan
+  variables { operator_role_arns = ["arn:aws:iam::123456789012:role/backup-admin"] }
+  expect_failures = [aws_kms_key.backup]
+}

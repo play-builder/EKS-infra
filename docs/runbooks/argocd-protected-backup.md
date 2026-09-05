@@ -13,6 +13,10 @@ cannot delete versions, shorten retention or bypass governance. Storage and KMS 
 cleanup must report them as retained, never as an empty inventory. A later separately reviewed retention
 disposal must preserve the key while any archive still needs decryption.
 
+Administrator and backup operator role sets must be disjoint. Combining them would give the archive
+operator key-administration privileges that can defeat recovery even while Object Lock retains bytes.
+Organizations must also review identity-policy grants and role-assumption paths outside this module.
+
 ## Prerequisites
 
 Use same-account, short-lived operator credentials; configure real administrator and operator IAM role
