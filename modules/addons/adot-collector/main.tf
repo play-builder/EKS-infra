@@ -192,6 +192,16 @@ resource "kubernetes_manifest" "otel_collector" {
                         replacement  = var.environment
                       },
                       {
+                        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+                        action        = "replace"
+                        target_label  = "app"
+                      },
+                      {
+                        source_labels = ["__meta_kubernetes_pod_label_rollouts_pod_template_hash"]
+                        action        = "replace"
+                        target_label  = "rollouts_pod_template_hash"
+                      },
+                      {
                         source_labels = ["__meta_kubernetes_namespace"]
                         action        = "replace"
                         target_label  = "namespace"
@@ -253,10 +263,6 @@ resource "kubernetes_manifest" "otel_collector" {
                     bearer_token_file     = "/var/run/secrets/kubernetes.io/serviceaccount/token"
                     kubernetes_sd_configs = [{ role = "node" }]
                     relabel_configs = [
-                      {
-                        action = "labelmap"
-                        regex  = "__meta_kubernetes_node_label_(.+)"
-                      },
                       {
                         target_label = "__address__"
                         replacement  = "kubernetes.default.svc:443"

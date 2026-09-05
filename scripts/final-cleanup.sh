@@ -5,15 +5,14 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
-source "$SCRIPT_DIR/lib/terraform-plan-contract.sh"
 
 if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
   [[ -d "$COURSE_CHECK_BIN_DIR" ]] || course_fail 'COURSE_CHECK_BIN_DIR is not a directory' 64
   PATH="$COURSE_CHECK_BIN_DIR:$PATH"
 fi
 
-plan=''
-saved_plan_dir=''
+saved_plan_manifest=''
+apply_progress=''
 inventory=''
 decisions=''
 preflight=''
@@ -24,17 +23,14 @@ dev_context=''
 prod_context=''
 pre_destroy_output=''
 residual_output=''
-backend_bucket=''
-request_identity=''
-approval_run_id=''
 execute=false
 confirm_account=''
 confirm_region=''
 confirm_course=''
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --plan) plan=${2:-}; shift 2 ;;
-    --saved-plan-dir) saved_plan_dir=${2:-}; shift 2 ;;
+    --saved-plan-manifest) saved_plan_manifest=${2:-}; shift 2 ;;
+    --apply-progress) apply_progress=${2:-}; shift 2 ;;
     --inventory) inventory=${2:-}; shift 2 ;;
     --retain-decisions) decisions=${2:-}; shift 2 ;;
     --preflight-evidence) preflight=${2:-}; shift 2 ;;
@@ -45,9 +41,6 @@ while [[ $# -gt 0 ]]; do
     --prod-context) prod_context=${2:-}; shift 2 ;;
     --kubernetes-pre-destroy-output) pre_destroy_output=${2:-}; shift 2 ;;
     --residual-output) residual_output=${2:-}; shift 2 ;;
-    --backend-bucket) backend_bucket=${2:-}; shift 2 ;;
-    --request-identity) request_identity=${2:-}; shift 2 ;;
-    --approval-run-id) approval_run_id=${2:-}; shift 2 ;;
     --execute) execute=true; shift ;;
     --confirm-account-id) confirm_account=${2:-}; shift 2 ;;
     --confirm-region) confirm_region=${2:-}; shift 2 ;;
@@ -55,18 +48,12 @@ while [[ $# -gt 0 ]]; do
     *) course_fail "unknown argument: $1" 64 ;;
   esac
 done
-for name in plan saved_plan_dir inventory decisions preflight in_flight freeze removal dev_context prod_context \
-  pre_destroy_output residual_output backend_bucket request_identity approval_run_id; do
+for name in saved_plan_manifest apply_progress inventory decisions preflight in_flight freeze removal dev_context prod_context pre_destroy_output residual_output; do
   [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64
 done
-[[ -d "$saved_plan_dir" ]] || course_fail 'FINAL_CLEANUP_SAVED_PLAN_REQUIRED' 64
-saved_plan_dir=$(cd -- "$saved_plan_dir" && pwd -P)
-export ENTERPRISE_CLEANUP_AGGREGATE_PLAN="$plan"
-[[ "$request_identity" =~ [^[:space:]] && "$request_identity" != pending ]] || \
-  course_fail 'FINAL_CLEANUP_REQUEST_IDENTITY_INVALID' 64
-[[ "$approval_run_id" =~ ^[1-9][0-9]*$ ]] || course_fail 'FINAL_CLEANUP_APPROVAL_RUN_ID_INVALID' 64
 
-course_require_file "$plan"
+cleanup_validate_saved_plan_manifest "$saved_plan_manifest" "$REPO_ROOT" "$inventory"
+cleanup_require_canonical_runtime_output "$apply_progress" "$REPO_ROOT" saved-plan-progress.json
 cleanup_validate_decisions "$inventory" "$decisions"
 cleanup_validate_freeze_removal "$inventory" "$freeze" "$removal"
 course_require_file "$preflight"
@@ -76,8 +63,9 @@ course_require_file "$in_flight"
 
 course_assert_json "$preflight" '
   def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
-  keys == ["accountId","courseId","evidenceGrade","expiresAt","inventorySha256","observedAt","planSha256","region","schemaVersion","status"] and
+  keys == ["accountId","courseId","evidenceGrade","expiresAt","inventorySha256","observedAt","planSha256","project","region","schemaVersion","status"] and
   .schemaVersion == "course.cleanup-preflight/v1" and .evidenceGrade == "CLOUD_RUNTIME" and .status == "PASS" and
+  (.project | type == "string" and test("[^[:space:]\uFEFF]")) and
   (.courseId | nonblank) and (.accountId | test("^[0-9]{12}$")) and
   (.region == "ap-northeast-2" or .region == "us-east-1") and
   (.planSha256 | test("^[0-9a-f]{64}$")) and (.inventorySha256 | test("^[0-9a-f]{64}$")) and
@@ -109,7 +97,7 @@ course_assert_json "$in_flight" '
 inventory_course=$(jq -r '.courseId' "$inventory")
 inventory_account=$(jq -r '.accountId' "$inventory")
 inventory_region=$(jq -r '.region' "$inventory")
-[[ $(jq -r '.planSha256' "$preflight") == "$(course_raw_sha256_file "$plan")" ]] || course_fail 'CLEANUP_PLAN_DIGEST_MISMATCH'
+[[ $(jq -r '.planSha256' "$preflight") == "$(course_raw_sha256_file "$saved_plan_manifest")" ]] || course_fail 'CLEANUP_PLAN_DIGEST_MISMATCH'
 [[ $(jq -r '.inventorySha256' "$preflight") == "$(course_raw_sha256_file "$inventory")" ]] || course_fail 'CLEANUP_INVENTORY_DIGEST_MISMATCH'
 jq -en --arg course "$inventory_course" --arg account "$inventory_account" --arg region "$inventory_region" \
   --arg devContext "$dev_context" --arg prodContext "$prod_context" \
@@ -136,30 +124,12 @@ print_dry_run() {
   echo 'DRY-RUN phase 2/6: verify zero writers, retention decisions, snapshots, state, and external delete guards.'
   echo 'DRY-RUN phase 3/6: consume the GitOps reconciliation freeze evidence.'
   echo 'DRY-RUN phase 4/6: consume the reviewed desired-state removal evidence.'
-  echo 'DRY-RUN phase 5/6: scan Kubernetes before EKS deletion, then destroy allowlisted runtime layers.'
+  echo 'DRY-RUN phase 5/6: scan Kubernetes before EKS deletion, then apply reviewed saved plans.'
   echo 'DRY-RUN phase 6/6: scan AWS residuals without kubectl and write completion evidence.'
   [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] final cleanup plan validated without mutation.'
 }
 
-layer_output=$(python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" layers "$inventory") || course_fail 'ENTERPRISE_CLEANUP_ORDER_BLOCKED'
-layers=()
-while IFS= read -r layer; do layers+=("$layer"); done <<<"$layer_output"
-
 if [[ "$execute" != true ]]; then
-  source_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
-  for layer in "${layers[@]}"; do
-    artifact_dir="$saved_plan_dir/${layer//\//_}"
-    python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" guard "$artifact_dir/tfplan.json" "$inventory" || course_fail "ENTERPRISE_ROOT_DELETE_GUARD_FAILED: $layer"
-    expected_backend_key=$(terraform_plan_expected_backend_key_for_root "$layer")
-    jq -e '
-      (.resource_changes | type == "array") and
-      all(.resource_changes[]?; (.change.actions | type == "array") and
-        all(.change.actions[]; . == "delete" or . == "no-op" or . == "read"))
-    ' "$artifact_dir/tfplan.json" >/dev/null || course_fail "CLEANUP_PLAN_ACTION_NOT_ALLOWED: $layer"
-    bash "$SCRIPT_DIR/verify-saved-plan.sh" "$artifact_dir" "$layer" "$inventory_account" "$inventory_region" \
-      "$backend_bucket" "$expected_backend_key" s3-native-lockfile "$source_sha" \
-      "$request_identity" "$approval_run_id" destroy || course_fail "FINAL_CLEANUP_PLAN_VERIFICATION_FAILED: $layer"
-  done
   print_dry_run
   exit 0
 fi
@@ -180,21 +150,6 @@ cleanup_require_canonical_runtime_output "$pre_destroy_output" "$REPO_ROOT" kube
 cleanup_require_canonical_runtime_output "$residual_output" "$REPO_ROOT" residual.json
 for command_name in aws kubectl terraform jq; do command -v "$command_name" >/dev/null || course_fail "required command not found: $command_name" 69; done
 
-for layer in "${layers[@]}"; do [[ -d "$REPO_ROOT/$layer" ]] || course_fail "cleanup layer not found: $layer"; done
-source_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
-for layer in "${layers[@]}"; do
-  artifact_dir="$saved_plan_dir/${layer//\//_}"
-  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" guard "$artifact_dir/tfplan.json" "$inventory" || course_fail "ENTERPRISE_ROOT_DELETE_GUARD_FAILED: $layer"
-  expected_backend_key=$(terraform_plan_expected_backend_key_for_root "$layer")
-  jq -e '
-    (.resource_changes | type == "array") and
-    all(.resource_changes[]?; (.change.actions | type == "array") and
-      all(.change.actions[]; . == "delete" or . == "no-op" or . == "read"))
-  ' "$artifact_dir/tfplan.json" >/dev/null || course_fail "CLEANUP_PLAN_ACTION_NOT_ALLOWED: $layer"
-  bash "$SCRIPT_DIR/verify-saved-plan.sh" "$artifact_dir" "$layer" "$inventory_account" "$inventory_region" \
-    "$backend_bucket" "$expected_backend_key" s3-native-lockfile "$source_sha" \
-    "$request_identity" "$approval_run_id" destroy || course_fail "FINAL_CLEANUP_PLAN_VERIFICATION_FAILED: $layer"
-done
 caller=$(aws sts get-caller-identity --profile "$AWS_PROFILE" --region "$confirm_region" --output json)
 [[ $(jq -r '.Account' <<<"$caller") == "$confirm_account" ]] || course_fail 'FINAL_CLEANUP_CALLER_ACCOUNT_MISMATCH'
 
@@ -207,8 +162,8 @@ stage() {
   if [[ -n "${COURSE_CLEANUP_STAGE_LOG:-}" ]]; then echo "$number" >>"$COURSE_CLEANUP_STAGE_LOG"; fi
 }
 
-python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" discover "$inventory" || course_fail 'ENTERPRISE_DISCOVERY_INCOMPLETE'
 stage 1
+python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" discover "$inventory" || course_fail ENTERPRISE_DISCOVERY_INCOMPLETE
 echo 'PHASE 1/6 scope: account identity verified.'
 stage 2
 stage 3
@@ -231,12 +186,7 @@ fi
 stage 11
 stage 12
 stage 13
-for layer in "${layers[@]}"; do
-  artifact_dir="$saved_plan_dir/${layer//\//_}"
-  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" guard "$artifact_dir/tfplan.json" "$inventory" || course_fail "ENTERPRISE_ROOT_DELETE_GUARD_FAILED: $layer"
-  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" log-key-ready "$artifact_dir/tfplan.json" "$inventory" || course_fail "LOG_KEY_DELETE_READINESS_FAILED: $layer"
-  terraform -chdir="$REPO_ROOT/$layer" apply "$artifact_dir/tfplan" || course_fail "TERRAFORM_APPLY_FAILED: $layer"
-done
+cleanup_apply_saved_plans "$saved_plan_manifest" "$REPO_ROOT" "$inventory" "$apply_progress" "$(jq -r '.project' "$preflight")"
 stage 14
 echo 'PHASE 6/6 completion proof: scanning AWS residuals without Kubernetes API calls.'
 if ! bash "$SCRIPT_DIR/residual-scan.sh" \

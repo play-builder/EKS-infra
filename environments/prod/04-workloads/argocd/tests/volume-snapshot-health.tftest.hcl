@@ -24,11 +24,12 @@ run "volume_snapshot_health_and_manual_bootstrap" {
   command = plan
 
   variables {
-    tags             = { PlatformInstanceId = "fixture", Owner = "platform", CostCenter = "engineering", Environment = "prod" }
-    argocd_platform  = { server_replicas = 2, repo_server_replicas = 2, controller_replicas = 2, applicationset_replicas = 2, redis_ha = true, node_count = 3, az_count = 3, public_url = "https://argocd.example.invalid", oidc_issuer_url = "https://id.example.invalid", oidc_client_id = "argocd", admin_group = "admins", readonly_group = "readers" }
-    aws_region       = "us-east-1"
-    gitops_repo_url  = "https://github.com/play-builder/argocd-gitops.git"
-    enable_bootstrap = true
+    tags              = { PlatformInstanceId = "fixture", Owner = "platform", CostCenter = "engineering", Environment = "prod" }
+    argocd_platform   = { server_replicas = 2, repo_server_replicas = 2, controller_replicas = 2, applicationset_replicas = 2, redis_ha = true, node_count = 3, az_count = 3, public_url = "https://argocd.example.invalid", oidc_issuer_url = "https://id.example.invalid", oidc_client_id = "argocd", admin_group = "admins", readonly_group = "readers" }
+    aws_region        = "us-east-1"
+    gitops_repo_url   = "https://github.com/play-builder/argocd-gitops.git"
+    enable_bootstrap  = true
+    state_bucket_name = "course-prod-state"
   }
 
   assert {
@@ -47,4 +48,8 @@ run "volume_snapshot_health_and_manual_bootstrap" {
     )
     error_message = "Prod bootstrap must be manual and must not render syncPolicy.automated."
   }
+}
+
+variables {
+  state_bucket_name = "course-state"
 }

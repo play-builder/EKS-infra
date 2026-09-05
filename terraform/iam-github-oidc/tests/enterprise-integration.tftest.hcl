@@ -56,8 +56,9 @@ run "reject_other_account_scope" {
   expect_failures = [aws_iam_policy.enterprise]
 }
 variables {
-  aws_region = "ap-northeast-2"
-  tags       = { PlatformInstanceId = "fixture", Owner = "platform", CostCenter = "engineering" }
+  state_bucket_arns = ["arn:aws:s3:::course-state"]
+  aws_region        = "ap-northeast-2"
+  tags              = { PlatformInstanceId = "fixture", Owner = "platform", CostCenter = "engineering" }
 }
 run "state_and_runtime_secret_boundaries" {
   command = plan

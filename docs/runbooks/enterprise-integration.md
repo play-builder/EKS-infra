@@ -23,6 +23,22 @@ Runtime order: FinOps → network/private access → EKS/platform/controllers �
 readiness → application admission → RDS bootstrap/migration → delivery/SLO/DR evidence.
 The recovery root requires a separately produced, actually distinct EKS/OIDC identity.
 
+### Reviewed plan and drift inputs
+
+Provide protected GitHub secrets `TERRAFORM_PLAN_INPUTS_JSON` and `TERRAFORM_DRIFT_INPUTS_JSON` as
+objects keyed by the ten exact workload root paths. Each selected input object must declare
+`aws_region`; 02-eks, 03-platform and 04-workloads/argocd also require `state_bucket_name`.
+Both database roots require `state_bucket`, `state_region` and `expected_account_id`.
+The projector checks these against the canonical `AWS_REGION`, `AWS_ACCOUNT_ID` and
+`STATE_BUCKET_NAME` workflow variables; downstream remote-state reads must use that same bucket.
+Missing or contradictory identity inputs fail before Terraform runs.
+
+`scripts/lib/project-terraform-inputs.py` creates only the selected root's temporary tfvars using
+exclusive, no-symlink creation and mode 0600. The workflow always removes a successfully created
+file, never uploads it, and refuses an existing destination. Apply reads no new input secret or
+tfvars: the reviewed binary plan remains authoritative. Keep both input secrets and their review
+process protected; do not use operator-only FinOps or backup roots through this workload lane.
+
 Argo ExternalSecret health follows the pinned ESO v2.10.0 producer: Ready=True with
 reason SecretSynced/message `secret synced`, nonempty refreshTime and the current generation prefix
 of syncedResourceVersion. ESO does not emit observedGeneration. Deleting, stale, missing/deleted and
@@ -36,7 +52,7 @@ and [ESO reconciliation](https://github.com/external-secrets/external-secrets/bl
 핵심 요약: IAM scopes are explicit operator inputs. Empty sets grant no corresponding lifecycle
 permission; Terraform mocks verify JSON construction, not effective AWS authorization.
 
-Set exact `workload_state_bucket_names` and `enterprise_resource_arns={rds,secrets,kms,waf,sns}`
+Set exact `state_bucket_arns` and `enterprise_resource_arns={rds,secrets,kms,waf,sns}`
 in the workload account/Region. Include DB/subnet-group/parameter-group/source/final-snapshot ARNs
 as applicable. Key administration also requires the key's explicit admin policy, including the
 bootstrap execution principal; key/alias identities must be approved separately.
@@ -90,6 +106,13 @@ identity. Zero unapproved residuals does not mean zero retained objects or zero 
 4. Backup/RDS/unclassified `KmsKey`, versioned 120-day GOVERNANCE backup buckets, automated backups, account OIDC and FinOps
    kinds cannot be DELETE in normal cleanup. No bypass-governance, force-empty or snapshot eraser
    is supplied. Terraform prevent_destroy and Object Lock remain intact.
+
+Cleanup uses the latest-main operator-reviewed `--saved-plan-manifest` contract and crash-safe
+`--apply-progress` registry, replacing the former `--saved-plan-dir` convention. Each manifest entry
+binds its exact binary digest and ordered layer; plan semantics, inventory and ownership are checked
+before execution and at resume. This explicit operator cleanup approval is not a GitHub protected
+apply approval. The general CI saved-plan identity/source/backend/FinOps gates remain separate.
+See the canonical commands in [the cleanup runbook](../runbook.md).
 
 The scanner describes each declared identity, fails on denial/malformed responses, and discovers
 CourseId-tagged RDS/KMS/log/WAF/S3/ECR resources omitted from inventory. Tags do not prove historical

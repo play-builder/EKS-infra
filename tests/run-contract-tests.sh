@@ -22,6 +22,15 @@ tests=(
   access-entry-review-contract.sh
   mng-autoscaler-drill-contract.sh
   eks-upgrade-preflight-contract.sh
+  state-backend-contract.sh
+  cluster-identity-contract.sh
+  saved-plan-cleanup-contract.sh
+  saved-plan-artifact-contract.sh
+  saved-plan-preflight-recovery-contract.sh
+  saved-plan-execution-contract.sh
+  platform-telemetry-output-contract.sh
+  workflow-supply-chain-contract.sh
+  workflow-supply-chain-contract.test.sh
   course-check-contract.sh
   evidence-common-contract.sh
   ch10-runtime-contract.sh
@@ -72,6 +81,8 @@ for test_file in "${tests[@]}"; do
 done
 
 python3 "$root/tests/enterprise-cleanup-contract.py"
+python3 "$root/tests/enterprise-cleanup-resume-contract.py"
+python3 "$root/tests/project-terraform-inputs-contract.py"
 python3 "$root/tests/log-key-cleanup-contract.py"
 python3 "$root/tests/lua-installer-contract.py"
 python3 "$root/tests/platform-image-mirror-test.py"

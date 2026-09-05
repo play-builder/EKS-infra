@@ -30,3 +30,18 @@ output "otlp_traces_protocol" {
   description = "Application trace protocol accepted by the collector"
   value       = var.enable_xray ? "http/protobuf" : null
 }
+
+output "otlp_http_port" {
+  description = "In-cluster OTLP HTTP receiver port when the X-Ray pipeline is active"
+  value       = var.enable_xray ? 4318 : null
+}
+
+output "otlp_http_traces_path" {
+  description = "OTLP HTTP protobuf traces path when the X-Ray pipeline is active"
+  value       = var.enable_xray ? "/v1/traces" : null
+}
+
+output "xray_enabled" {
+  description = "Whether the OTLP receiver and AWS X-Ray exporter pipeline are active"
+  value       = var.enable_xray
+}

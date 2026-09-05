@@ -18,4 +18,7 @@ run "provider_mode_is_an_explicit_ownership_decision" {
     error_message = "ownership mode must be persisted as an output"
   }
 }
-variables { tags = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" } }
+variables {
+  state_bucket_arns = ["arn:aws:s3:::course-state"]
+  tags              = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" }
+}

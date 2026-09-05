@@ -24,10 +24,11 @@ run "external_secret_health_is_generation_aware" {
   command = plan
 
   variables {
-    tags            = { PlatformInstanceId = "fixture", Owner = "platform", CostCenter = "engineering", Environment = "dev" }
-    argocd_platform = { server_replicas = 2, repo_server_replicas = 2, controller_replicas = 2, applicationset_replicas = 2, redis_ha = true, node_count = 3, az_count = 3, public_url = "https://argocd.example.invalid", oidc_issuer_url = "https://id.example.invalid", oidc_client_id = "argocd", admin_group = "admins", readonly_group = "readers" }
-    aws_region      = "ap-northeast-2"
-    gitops_repo_url = "https://github.com/play-builder/argocd-gitops.git"
+    tags              = { PlatformInstanceId = "fixture", Owner = "platform", CostCenter = "engineering", Environment = "dev" }
+    argocd_platform   = { server_replicas = 2, repo_server_replicas = 2, controller_replicas = 2, applicationset_replicas = 2, redis_ha = true, node_count = 3, az_count = 3, public_url = "https://argocd.example.invalid", oidc_issuer_url = "https://id.example.invalid", oidc_client_id = "argocd", admin_group = "admins", readonly_group = "readers" }
+    aws_region        = "ap-northeast-2"
+    gitops_repo_url   = "https://github.com/play-builder/argocd-gitops.git"
+    state_bucket_name = "course-dev-state"
   }
 
   assert {
@@ -40,4 +41,8 @@ run "external_secret_health_is_generation_aware" {
     )
     error_message = "Argo CD must own the generation-aware ExternalSecret Ready health contract."
   }
+}
+
+variables {
+  state_bucket_name = "course-state"
 }

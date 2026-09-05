@@ -45,15 +45,15 @@ jobs:
         with:
           terraform_version: "1.16.0"
       - name: Require dedicated read-only identity and root inputs
+        id: root-inputs
         env:
           DRIFT_ROLE: ${{ secrets.TERRAFORM_DRIFT_ROLE_ARN }}
-          DRIFT_ROOT_INPUTS_JSON: ${{ secrets.TERRAFORM_DRIFT_INPUTS_JSON }}
+          TERRAFORM_DRIFT_INPUTS_JSON: ${{ secrets.TERRAFORM_DRIFT_INPUTS_JSON }}
         run: |
           set -euo pipefail
-          [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ && -n "$BACKEND_BUCKET" && -n "$DRIFT_ROLE" ]] || { echo DRIFT_INPUTS_REQUIRED >&2; exit 64; }
-          [[ "$AWS_REGION" == ap-northeast-2 || "$AWS_REGION" == us-east-1 ]] || exit 64
-          umask 077
-          printf '%s' "$DRIFT_ROOT_INPUTS_JSON" | jq -e --arg root "$TF_ROOT" '.[$root] | select(type == "object" and length > 0)' > "$TF_ROOT/terraform.tfvars.json" || { echo DRIFT_INPUTS_REQUIRED >&2; exit 64; }
+          [[ -n "$DRIFT_ROLE" ]] || { echo DRIFT_INPUTS_REQUIRED >&2; exit 64; }
+          python3 scripts/lib/project-terraform-inputs.py drift
+          echo 'created=true' >> "$GITHUB_OUTPUT"
       - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
         with:
           role-to-assume: ${{ secrets.TERRAFORM_DRIFT_ROLE_ARN }}
@@ -73,5 +73,5 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
       - name: Remove ephemeral root inputs
-        if: always()
-        run: rm -f -- "$TF_ROOT/terraform.tfvars.json"
+        if: ${{ always() && steps.root-inputs.outputs.created == 'true' }}
+        run: python3 scripts/lib/project-terraform-inputs.py cleanup

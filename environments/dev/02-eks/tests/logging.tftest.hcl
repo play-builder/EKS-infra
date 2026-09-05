@@ -18,8 +18,8 @@ mock_provider "aws" {
 }
 
 variables {
+  state_bucket_name                    = "course-state"
   aws_region                           = "ap-northeast-2"
-  cluster_name                         = "dev-playdevops-eks"
   cluster_endpoint_public_access       = false
   cluster_endpoint_public_access_cidrs = []
   vpc_cni_addon_version                = "v1.20.4-eksbuild.1"
@@ -32,6 +32,7 @@ variables {
 override_data {
   target = data.terraform_remote_state.network
   values = { outputs = {
+    eks_cluster_name   = "dev-playdevops-eks"
     vpc_id             = "vpc-0123456789abcdef0"
     public_subnet_ids  = ["subnet-00123456789abcdef"]
     private_subnet_ids = ["subnet-0123456789abcdef0"]
@@ -74,7 +75,34 @@ run "existing_cluster_log_group_consumes_network_key" {
 }
 run "different_cluster_name_is_rejected" {
   command = plan
-  variables { cluster_name = "wrong-cluster" }
+  override_data {
+    target = data.terraform_remote_state.network
+    values = { outputs = {
+      eks_cluster_name   = "wrong-cluster"
+      vpc_id             = "vpc-0123456789abcdef0"
+      public_subnet_ids  = ["subnet-00123456789abcdef"]
+      private_subnet_ids = ["subnet-0123456789abcdef0"]
+      logging_contract = {
+        kms_key_arn  = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555"
+        cluster_name = "dev-playdevops-eks"
+        waf_name     = "dev-playdevops"
+        account_id   = "123456789012"
+        aws_region   = "ap-northeast-2"
+        log_group_names = {
+          control_plane = "/aws/eks/dev-playdevops-eks/cluster"
+          vpc_flow      = "/aws/vpc/dev-playdevops/flow-logs"
+          application   = "/aws/containerinsights/dev-playdevops-eks/application"
+          performance   = "/aws/containerinsights/dev-playdevops-eks/performance"
+          waf           = "aws-waf-logs-dev-playdevops"
+        }
+        platform_tags = { PlatformInstanceId = "platform", Owner = "team", CostCenter = "cc", Environment = "dev", ManagedBy = "Terraform" }
+      }
+      audit_log_groups = {
+        control_plane = { arn = "arn:aws:logs:ap-northeast-2:123456789012:log-group:/aws/eks/dev-playdevops-eks/cluster", retention_days = 90, kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555" }
+        vpc_flow      = { arn = "arn:aws:logs:ap-northeast-2:123456789012:log-group:/aws/vpc/dev-playdevops/flow-logs", retention_days = 90, kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555" }
+      }
+    } }
+  }
   expect_failures = [terraform_data.logging_identity]
 }
 

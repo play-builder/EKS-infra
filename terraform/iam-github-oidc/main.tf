@@ -13,6 +13,29 @@ locals {
   oidc_provider_arn = var.oidc_provider_mode == "create" ? (
     aws_iam_openid_connect_provider.github[0].arn
   ) : data.aws_iam_openid_connect_provider.external[0].arn
+
+  terraform_state_keys = toset([
+    "shared/iam-github-oidc/terraform.tfstate",
+    "shared/github-governance/terraform.tfstate",
+    "dev/01-network/terraform.tfstate",
+    "dev/02-eks/terraform.tfstate",
+    "dev/03-platform/terraform.tfstate",
+    "dev/04-workloads/argocd/terraform.tfstate",
+    "prod/01-network/terraform.tfstate",
+    "prod/02-eks/terraform.tfstate",
+    "prod/03-platform/terraform.tfstate",
+    "prod/04-workloads/argocd/terraform.tfstate",
+    "prod/03-database/terraform.tfstate",
+    "recovery/03-database/terraform.tfstate",
+  ])
+  terraform_state_object_arns = toset(flatten([
+    for bucket_arn in var.state_bucket_arns : [
+      for state_key in local.terraform_state_keys : "${bucket_arn}/${state_key}"
+    ]
+  ]))
+  terraform_lock_object_arns = toset([
+    for state_arn in local.terraform_state_object_arns : "${state_arn}.tflock"
+  ])
 }
 
 data "aws_caller_identity" "current" {}
@@ -206,23 +229,23 @@ resource "aws_iam_policy" "infra" {
         Resource = "*"
       },
       {
-        Sid       = "TerraformStateBuckets"
+        Sid       = "TerraformStateBucketList"
         Effect    = "Allow"
         Action    = ["s3:ListBucket"]
-        Resource  = [for b in local.workload_state_buckets : "arn:aws:s3:::${b}"]
-        Condition = { StringEquals = { "s3:prefix" = concat(local.workload_state_keys, [for k in local.workload_state_keys : "${k}.tflock"]) } }
+        Resource  = sort(tolist(var.state_bucket_arns))
+        Condition = { StringEquals = { "s3:prefix" = concat(sort(tolist(local.terraform_state_keys)), [for k in local.terraform_state_keys : "${k}.tflock"]) } }
       },
       {
         Sid      = "TerraformStateObjects"
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject"]
-        Resource = local.workload_state_objects
+        Resource = sort(tolist(local.terraform_state_object_arns))
       },
       {
-        Sid      = "TerraformStateLocks"
+        Sid      = "TerraformStateLockObjects"
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-        Resource = [for a in local.workload_state_objects : "${a}.tflock"]
+        Resource = sort(tolist(local.terraform_lock_object_arns))
       }
     ]
   })
@@ -350,4 +373,63 @@ module "ecr_registry_scanning" {
   source                = "../../modules/security/ecr-registry-scanning"
   configuration         = var.ecr_registry_scanning
   required_repositories = [var.sample_app_ecr_repository, var.mini_commerce_ecr_repository, aws_ecr_repository.platform_istio_proxy.name]
+}
+
+resource "aws_iam_role" "sample_app_supply_chain" {
+  name        = var.sample_app_supply_chain_role_name
+  description = "Repository-scoped attestation and verification role for cicd-course-sample-app"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Principal = { Federated = local.oidc_provider_arn }
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = ["sts.amazonaws.com"]
+          "token.actions.githubusercontent.com:sub" = [var.sample_app_supply_chain_oidc_subject]
+        }
+      }
+    }]
+  })
+  tags = local.common_tags
+}
+
+resource "aws_iam_policy" "sample_app_supply_chain" {
+  name        = "${var.sample_app_supply_chain_role_name}-policy"
+  description = "Read and write OCI evidence only in the sample-app ECR repository"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "EcrLogin"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "ReadWriteSampleAppOci"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload",
+          "ecr:PutImage",
+          "ecr:UploadLayerPart",
+        ]
+        Resource = aws_ecr_repository.sample_app.arn
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "sample_app_supply_chain" {
+  role       = aws_iam_role.sample_app_supply_chain.name
+  policy_arn = aws_iam_policy.sample_app_supply_chain.arn
 }

@@ -22,6 +22,7 @@ mock_provider "kubernetes" {}
 mock_provider "kubectl" {}
 mock_provider "http" {}
 variables {
+  state_bucket_name            = "course-state"
   aws_region                   = "ap-northeast-2"
   acm_domain_name              = "example.invalid"
   hosted_zone_id               = "Z1234"

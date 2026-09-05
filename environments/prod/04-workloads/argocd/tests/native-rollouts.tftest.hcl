@@ -10,10 +10,11 @@ override_data {
   values = { outputs = { rollouts_amp_role_arn = null } }
 }
 variables {
-  aws_region      = "ap-northeast-2"
-  gitops_repo_url = "https://github.com/play-builder/argocd-gitops.git"
-  tags            = { PlatformInstanceId = "fixture", Owner = "platform", CostCenter = "engineering", Environment = "spoofed", ManagedBy = "spoofed", CourseId = "spoofed" }
-  argocd_platform = { server_replicas = 2, repo_server_replicas = 2, controller_replicas = 2, applicationset_replicas = 2, redis_ha = true, node_count = 3, az_count = 3, public_url = "https://argocd.example.invalid", oidc_issuer_url = "https://id.example.invalid", oidc_client_id = "argocd", admin_group = "admins", readonly_group = "readers" }
+  state_bucket_name = "course-state"
+  aws_region        = "ap-northeast-2"
+  gitops_repo_url   = "https://github.com/play-builder/argocd-gitops.git"
+  tags              = { PlatformInstanceId = "fixture", Owner = "platform", CostCenter = "engineering", Environment = "spoofed", ManagedBy = "spoofed", CourseId = "spoofed" }
+  argocd_platform   = { server_replicas = 2, repo_server_replicas = 2, controller_replicas = 2, applicationset_replicas = 2, redis_ha = true, node_count = 3, az_count = 3, public_url = "https://argocd.example.invalid", oidc_issuer_url = "https://id.example.invalid", oidc_client_id = "argocd", admin_group = "admins", readonly_group = "readers" }
 }
 run "native_istio_only" {
   command = plan

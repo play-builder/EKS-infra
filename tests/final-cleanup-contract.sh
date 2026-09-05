@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$root/tests/cleanup-fixture-helpers.sh"
-source "$root/scripts/lib/terraform-plan-contract.sh"
 
 if grep -Eq 'kubectl .*delete[[:space:]]+pvc' "$root/README.md"; then
   echo 'README bypasses guarded cleanup with direct PVC deletion' >&2
@@ -20,16 +19,6 @@ grep -Fq 'aws sts get-caller-identity --region "$AWS_REGION"' "$runbook" || {
   echo 'runbook AWS identity check must carry the selected Region explicitly' >&2
   exit 1
 }
-for required_argument in --saved-plan-dir --backend-bucket --request-identity --approval-run-id; do
-  grep -Fq -- "$required_argument" "$root/README.md" || {
-    echo "README cleanup invocation is missing $required_argument" >&2
-    exit 1
-  }
-  grep -Fq -- "$required_argument" "$runbook" || {
-    echo "runbook cleanup invocation is missing $required_argument" >&2
-    exit 1
-  }
-done
 
 runbook_line() {
   local marker=$1
@@ -82,46 +71,38 @@ fi
 
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
-mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence" "$tmp_dir/saved-plan"
+mkdir -p "$tmp_dir/bin" "$tmp_dir/evidence"
 prepare_cleanup_fixtures "$root" "$tmp_dir/evidence" ap-northeast-2
+export CLEANUP_RUNTIME_EVIDENCE_MAX_AGE_SECONDS=3153600000
+prepare_saved_plan_manifest "$tmp_dir/plans" "$tmp_dir/saved-plans.json"
+prepare_realistic_destroy_plan_jsons "$tmp_dir/plan-json"
 
-plan="$root/tests/fixtures/cleanup-course-owned.json"
-cleanup_layers=(
-  environments/prod/04-workloads/argocd environments/dev/04-workloads/argocd
-  environments/prod/03-platform environments/dev/03-platform
-  environments/prod/02-eks environments/dev/02-eks
-  environments/prod/01-network environments/dev/01-network
-)
-for layer in "${cleanup_layers[@]}"; do
-  plan_dir="$tmp_dir/saved-plan/${layer//\//_}"
-  mkdir -p "$plan_dir"
-  cp "$plan" "$plan_dir/tfplan"
-  jq '.terraform_version="1.16.0"' "$plan" >"$plan_dir/tfplan.json"
-done
-plan_sha=$(raw_sha256 "$plan")
+plan_manifest="$tmp_dir/saved-plans.json"
+plan_sha=$(raw_sha256 "$plan_manifest")
 inventory_sha=$(raw_sha256 "$tmp_dir/evidence/inventory.json")
-observed=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-expires=$(date -u -v+1H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ)
-jq -n --arg plan "$plan_sha" --arg inventory "$inventory_sha" --arg observed "$observed" --arg expires "$expires" '
+jq -n --arg plan "$plan_sha" --arg inventory "$inventory_sha" '
   {schemaVersion:"course.cleanup-preflight/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
-   courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",
-   planSha256:$plan,inventorySha256:$inventory,observedAt:$observed,expiresAt:$expires}
+   courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",project:"playdevops",
+   planSha256:$plan,inventorySha256:$inventory,observedAt:"2026-09-03T00:05:00Z",expiresAt:"2099-09-03T01:00:00Z"}
 ' >"$tmp_dir/evidence/preflight.json"
-jq -n --arg observed "$observed" --arg expires "$expires" '
+jq -n '
   {schemaVersion:"course.in-flight-zero/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
    courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",
    clusters:[
      {environment:"dev",context:"course-dev",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks"},
      {environment:"prod",context:"course-prod",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks"}],
    remainingWriters:{loadGenerators:0,chaosResources:0,recoveryJobs:0,migrationJobs:0},
-   observedAt:$observed,expiresAt:$expires}
+   observedAt:"2026-09-03T00:09:00Z",expiresAt:"2099-09-03T01:00:00Z"}
 ' >"$tmp_dir/evidence/in-flight.json"
 
 cat >"$tmp_dir/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-if [[ "$*" == 'version -json' ]]; then
-  printf '{"terraform_version":"1.16.0"}\n'
+chdir=''
+for argument in "$@"; do case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac; done
+layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
+if [[ " $* " == *" show -json "* ]]; then
+  cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
   exit 0
 fi
 printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
@@ -139,6 +120,7 @@ cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+if [[ "$1 $2" == "resourcegroupstaggingapi get-resources" ]]; then echo '{"ResourceTagMappingList":[]}'; exit 0; fi
 case "$1 $2" in
   'sts get-caller-identity') printf '{"Account":"123456789012"}\n' ;;
   'elbv2 describe-load-balancers') printf '{"LoadBalancers":[]}\n' ;;
@@ -146,7 +128,6 @@ case "$1 $2" in
   'eks list-clusters') printf '{"clusters":[]}\n' ;;
   'ec2 describe-volumes') printf '{"Volumes":[]}\n' ;;
   'ec2 describe-snapshots') printf '{"Snapshots":[{"SnapshotId":"snap-retained-001"}]}\n' ;;
-  'resourcegroupstaggingapi get-resources') printf '{"ResourceTagMappingList":[]}\n' ;;
   'amp list-workspaces') printf '{"workspaces":[]}\n' ;;
   'sns list-topics') printf '{"Topics":[]}\n' ;;
   'ecr describe-repositories') printf '{"repositories":[{"repositoryArn":"arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app"}]}\n' ;;
@@ -155,50 +136,15 @@ case "$1 $2" in
 esac
 EOF
 chmod +x "$tmp_dir/bin/terraform" "$tmp_dir/bin/kubectl" "$tmp_dir/bin/aws"
-
-request_identity=release-requester
-approval_identity=platform-approver
-approval_run_id=987654321
-for layer in "${cleanup_layers[@]}"; do
-  plan_dir="$tmp_dir/saved-plan/${layer//\//_}"
-  backend_key=$(terraform_plan_expected_backend_key_for_root "$layer")
-  jq -n --arg request "$request_identity" --arg run "$approval_run_id" --arg approver "$approval_identity" '
-    {schemaVersion:"platform.saved-plan-approval/v1",source:"github-actions-review-history",
-     environment:"production",state:"approved",runId:$run,requestIdentity:$request,
-     approvalIdentity:$approver}' >"$plan_dir/approval-evidence.json"
-  saved_plan_sha=$(raw_sha256 "$plan_dir/tfplan")
-  saved_plan_json_sha=$(raw_sha256 "$plan_dir/tfplan.json")
-  binary_sha=$(raw_sha256 "$tmp_dir/bin/terraform")
-  lock_sha=$(raw_sha256 "$root/$layer/.terraform.lock.hcl")
-  approval_sha=$(raw_sha256 "$plan_dir/approval-evidence.json")
-  printf '%s  tfplan\n' "$saved_plan_sha" >"$plan_dir/tfplan.sha256"
-  printf '%s  tfplan.json\n' "$saved_plan_json_sha" >"$plan_dir/tfplan.json.sha256"
-  jq -n --arg plan "$saved_plan_sha" --arg planJson "$saved_plan_json_sha" \
-    --arg source "$(git -C "$root" rev-parse HEAD)" --arg layer "$layer" \
-    --arg backend "$backend_key" --arg binary "$binary_sha" --arg lock "$lock_sha" \
-    --arg request "$request_identity" --arg approver "$approval_identity" --arg run "$approval_run_id" \
-    --arg approval "$approval_sha" '
-    {schemaVersion:"platform.saved-plan/v1",accountId:"123456789012",region:"ap-northeast-2",
-     terraformRoot:$layer,backendBucket:"cleanup-state",backendKey:$backend,
-     lockIdentity:"s3-native-lockfile",sourceSha:$source,terraformVersion:"1.16.0",
-     terraformBinarySha256:("sha256:"+$binary),providerLockSha256:("sha256:"+$lock),
-     planSha256:("sha256:"+$plan),planJsonSha256:("sha256:"+$planJson),operation:"destroy",
-     requestIdentity:$request,approvalIdentity:$approver,approvalRunId:$run,
-     approvalEvidenceSha256:("sha256:"+$approval),createdAt:(now|todateiso8601)}
-  ' >"$plan_dir/plan-identity.json"
-done
 : >"$tmp_dir/mutations.log"
 : >"$tmp_dir/kubectl.log"
 : >"$tmp_dir/aws.log"
 
 common=(
-  --saved-plan-dir "$tmp_dir/saved-plan"
-  --backend-bucket cleanup-state
-  --request-identity "$request_identity"
-  --approval-run-id "$approval_run_id"
-  --plan "$plan"
+  --saved-plan-manifest "$plan_manifest"
   --inventory "$tmp_dir/evidence/inventory.json"
   --retain-decisions "$tmp_dir/evidence/decisions.json"
+  --apply-progress "$tmp_dir/evidence/apply-progress.json"
   --preflight-evidence "$tmp_dir/evidence/preflight.json"
   --in-flight-evidence "$tmp_dir/evidence/in-flight.json"
   --gitops-freeze-evidence "$tmp_dir/evidence/freeze.json"
@@ -207,35 +153,6 @@ common=(
   --kubernetes-pre-destroy-output "$tmp_dir/evidence/generated-pre-destroy.json"
   --residual-output "$tmp_dir/evidence/generated-residual.json"
 )
-
-first_plan="$tmp_dir/saved-plan/environments_prod_04-workloads_argocd"
-cp "$first_plan/tfplan.json" "$first_plan/tfplan.json.valid"
-cp "$first_plan/tfplan.json.sha256" "$first_plan/tfplan.json.sha256.valid"
-cp "$first_plan/plan-identity.json" "$first_plan/plan-identity.json.valid"
-jq '.resource_changes[0].change.actions=["update"]' "$first_plan/tfplan.json.valid" >"$first_plan/tfplan.json"
-changed_sha=$(raw_sha256 "$first_plan/tfplan.json")
-printf '%s  tfplan.json\n' "$changed_sha" >"$first_plan/tfplan.json.sha256"
-jq --arg digest "$changed_sha" '.planJsonSha256=("sha256:"+$digest)' \
-  "$first_plan/plan-identity.json.valid" >"$first_plan/plan-identity.json"
-set +e
-output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  bash "$root/scripts/final-cleanup.sh" "${common[@]}" 2>&1)
-status=$?
-set -e
-[[ "$status" -ne 0 && "$output" == *CLEANUP_PLAN_ACTION_NOT_ALLOWED* && ! -s "$tmp_dir/mutations.log" ]]
-mv "$first_plan/tfplan.json.valid" "$first_plan/tfplan.json"
-mv "$first_plan/tfplan.json.sha256.valid" "$first_plan/tfplan.json.sha256"
-mv "$first_plan/plan-identity.json.valid" "$first_plan/plan-identity.json"
-
-cp "$first_plan/plan-identity.json" "$first_plan/plan-identity.json.valid"
-jq '.backendKey="attacker/other.tfstate"' "$first_plan/plan-identity.json.valid" >"$first_plan/plan-identity.json"
-set +e
-output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  bash "$root/scripts/final-cleanup.sh" "${common[@]}" 2>&1)
-status=$?
-set -e
-[[ "$status" -ne 0 && "$output" == *SAVED_PLAN_BACKEND_KEY_MISMATCH* && ! -s "$tmp_dir/mutations.log" ]]
-mv "$first_plan/plan-identity.json.valid" "$first_plan/plan-identity.json"
 
 cp "$tmp_dir/evidence/preflight.json" "$tmp_dir/evidence/preflight-valid.json"
 assert_preflight_timestamp_rejected_before_cloud_calls() {
@@ -376,6 +293,7 @@ rm -f "$tmp_dir/stages.log" "$tmp_dir/evidence/generated-pre-destroy.json"
 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
 COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
 COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" COURSE_CLEANUP_STAGE_LOG="$tmp_dir/stages.log" \
+COURSE_FAKE_REPO_ROOT="$root" COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" \
 AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
   bash "$root/scripts/course-check.sh" ch26 --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026
@@ -385,5 +303,8 @@ jq -e '.evidenceGrade == "STATIC" and .status == "PASS" and .unapprovedCourseOwn
 [[ $(paste -sd',' "$tmp_dir/stages.log") == '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15' ]]
 [[ -s "$tmp_dir/kubectl.log" ]]
 grep -Fq -- '--region ap-northeast-2' "$tmp_dir/aws.log"
+while IFS= read -r saved_plan; do
+  grep -Fq "apply $saved_plan" "$tmp_dir/mutations.log"
+done < <(jq -r '.plans[].path' "$plan_manifest")
 
 echo 'PASS: guarded ordered final cleanup contract'

@@ -1,9 +1,9 @@
 data "aws_caller_identity" "logging" {}
 resource "terraform_data" "logging_identity" {
-  input = var.cluster_name
+  input = local.cluster_name
   lifecycle {
     precondition {
-      condition     = var.cluster_name == data.terraform_remote_state.network.outputs.logging_contract.cluster_name && var.aws_region == data.terraform_remote_state.network.outputs.logging_contract.aws_region && data.aws_caller_identity.logging.account_id == data.terraform_remote_state.network.outputs.logging_contract.account_id
+      condition     = local.cluster_name == data.terraform_remote_state.network.outputs.logging_contract.cluster_name && var.aws_region == data.terraform_remote_state.network.outputs.logging_contract.aws_region && data.aws_caller_identity.logging.account_id == data.terraform_remote_state.network.outputs.logging_contract.account_id
       error_message = "EKS name/Region must match the precomputed network log-key contract."
     }
   }

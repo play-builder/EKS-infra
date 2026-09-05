@@ -3,8 +3,9 @@ mock_provider "aws" {
   mock_resource "aws_iam_policy" { defaults = { arn = "arn:aws:iam::123456789012:policy/fixture" } }
 }
 variables {
-  aws_region = "ap-northeast-2"
-  tags       = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" }
+  state_bucket_arns = ["arn:aws:s3:::course-state"]
+  aws_region        = "ap-northeast-2"
+  tags              = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" }
 }
 run "rejects_non_numeric_publisher_identity" {
   command = plan

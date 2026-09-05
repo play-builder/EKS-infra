@@ -1,7 +1,5 @@
 locals {
-  workload_state_buckets = var.workload_state_bucket_names == null ? toset([for e in ["dev", "prod"] : "${var.project_name}-infra-tf-${e}"]) : var.workload_state_bucket_names
-  workload_state_keys    = concat(flatten([for e in ["dev", "prod"] : [for layer in ["01-network", "02-eks", "03-platform", "04-workloads/argocd"] : "${e}/${layer}/terraform.tfstate"]]), ["prod/03-database/terraform.tfstate", "recovery/03-database/terraform.tfstate"])
-  workload_state_objects = flatten([for b in local.workload_state_buckets : [for k in local.workload_state_keys : "arn:aws:s3:::${b}/${k}"]])
+  workload_state_objects = sort(tolist(local.terraform_state_object_arns))
 }
 
 variable "billing_monitor_role_arn" {
@@ -14,15 +12,6 @@ variable "billing_monitor_role_arn" {
   }
 }
 
-variable "workload_state_bucket_names" {
-  description = "Exact workload backend buckets. Management FinOps and protected backup states use separate operator roles."
-  type        = set(string)
-  default     = null
-  validation {
-    condition     = var.workload_state_bucket_names == null ? true : length(var.workload_state_bucket_names) > 0 && alltrue([for b in var.workload_state_bucket_names : can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", b))])
-    error_message = "Use exact S3 bucket names, never wildcard patterns."
-  }
-}
 variable "enterprise_resource_arns" {
   description = "Pre-approved exact regional resource ARNs, including planned resources. Empty sets grant no lifecycle permissions. Separate DB bootstrap/migration/backup/billing roles are not assumed."
   type        = object({ rds = set(string), secrets = set(string), kms = set(string), waf = set(string), sns = set(string) })

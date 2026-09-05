@@ -63,6 +63,11 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
+      TF_ROOT: ${{ inputs.terraform_root }}
+      TF_BACKEND: ${{ inputs.backend_config }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      BACKEND_BUCKET: ${{ vars.STATE_BUCKET_NAME }}
       FINOPS_CONTRACT_JSON: ${{ vars.FINOPS_CONTRACT_PATH }}
       FINOPS_CONTRACT_SHA256: ${{ vars.FINOPS_CONTRACT_SHA256 }}
       PLATFORM_INSTANCE_ID: ${{ vars.PLATFORM_INSTANCE_ID }}
@@ -77,6 +82,14 @@ jobs:
         with:
           terraform_version: "1.16.0"
           terraform_wrapper: false
+      - name: Project private root inputs
+        id: root-inputs
+        env:
+          TERRAFORM_PLAN_INPUTS_JSON: ${{ secrets.TERRAFORM_PLAN_INPUTS_JSON }}
+        run: |
+          set -euo pipefail
+          python3 scripts/lib/project-terraform-inputs.py plan
+          echo 'created=true' >> "$GITHUB_OUTPUT"
       - name: Install pinned FinOps collector dependencies
         if: ${{ !startsWith(inputs.terraform_root, 'environments/dev/') }}
         run: |
@@ -95,12 +108,18 @@ jobs:
           BACKEND_BUCKET: ${{ vars.STATE_BUCKET_NAME }}
           PLAN_REQUEST_IDENTITY: ${{ github.triggering_actor }}
           PLAN_RUN_ID: ${{ github.run_id }}
-        run: bash "$GITHUB_WORKSPACE/scripts/create-saved-plan.sh" "$GITHUB_WORKSPACE/${{ inputs.terraform_root }}" "$GITHUB_WORKSPACE/${{ inputs.backend_config }}" "$GITHUB_WORKSPACE/plan-artifact" apply
+        run: |
+          set -euo pipefail
+          [[ "$(aws sts get-caller-identity --query Account --output text --region "$AWS_REGION")" == "$AWS_ACCOUNT_ID" ]] || { echo PLAN_ACCOUNT_MISMATCH >&2; exit 1; }
+          bash "$GITHUB_WORKSPACE/scripts/create-saved-plan.sh" "$GITHUB_WORKSPACE/$TF_ROOT" "$GITHUB_WORKSPACE/$TF_BACKEND" "$GITHUB_WORKSPACE/plan-artifact" apply
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: reviewed-terraform-plan
           path: ${{ github.workspace }}/plan-artifact
           retention-days: 1
+      - name: Remove ephemeral root inputs
+        if: ${{ always() && steps.root-inputs.outputs.created == 'true' }}
+        run: python3 scripts/lib/project-terraform-inputs.py cleanup
 
   reviewed-plan-apply:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -226,6 +245,7 @@ jobs:
           scan-type: config
           scan-ref: .
           skip-dirs: vendor
+          skip-files: tests/fixtures/terraform-plan-noop-malformed.json
           trivyignores: .trivyignore.yaml
           severity: HIGH,CRITICAL
           exit-code: "1"
@@ -306,6 +326,7 @@ jobs:
           - environments/prod/00-finops
           - environments/prod/03-database
           - environments/recovery/03-database
+          - modules/addons/adot-collector
           - environments/dev/01-network
           - environments/dev/02-eks
           - environments/dev/03-platform

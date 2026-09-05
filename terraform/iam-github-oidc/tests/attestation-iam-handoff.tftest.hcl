@@ -5,8 +5,9 @@ mock_provider "aws" {
   mock_resource "aws_ecr_repository" { defaults = { arn = "arn:aws:ecr:ap-northeast-2:123456789012:repository/fixture", repository_url = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/fixture" } }
 }
 variables {
-  aws_region = "ap-northeast-2"
-  tags       = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" }
+  state_bucket_arns = ["arn:aws:s3:::course-state"]
+  aws_region        = "ap-northeast-2"
+  tags              = { PlatformInstanceId = "fixture", Owner = "fixture", CostCenter = "fixture" }
 }
 run "attestation_role_is_separate_and_exact" {
   command = apply

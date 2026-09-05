@@ -285,7 +285,19 @@ def present(kind, ident, query=aws):
 
 if __name__ == "__main__":
     try:
-        if sys.argv[1] == "guard":
+        if sys.argv[1] == "guard-stdin":
+            guard(json.load(sys.stdin), json.load(open(sys.argv[2])))
+        elif sys.argv[1] == "guard-manifest":
+            manifest, inventory = json.load(open(sys.argv[2])), json.load(open(sys.argv[3]))
+            changes = []
+            for item in manifest["plans"]:
+                response = subprocess.run(["terraform", "-chdir=" + sys.argv[4] + "/" + item["layer"], "show", "-json", item["path"]], capture_output=True, text=True, check=True)
+                changes.extend(json.loads(response.stdout).get("resource_changes", []))
+            guard({"resource_changes": changes}, inventory)
+        elif sys.argv[1] == "log-key-ready-stdin":
+            plan = json.load(sys.stdin)
+            log_key_ready(plan, json.load(open(sys.argv[2])), plan)
+        elif sys.argv[1] == "guard":
             aggregate = json.load(open(os.environ["ENTERPRISE_CLEANUP_AGGREGATE_PLAN"])) if os.environ.get("ENTERPRISE_CLEANUP_AGGREGATE_PLAN") else None
             guard(json.load(open(sys.argv[2])), json.load(open(sys.argv[3])), aggregate)
         elif sys.argv[1] == "log-key-ready":
