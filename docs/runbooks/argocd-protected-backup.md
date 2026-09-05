@@ -27,8 +27,10 @@ not a reason to grant wildcard secrets or key access.
 The source and isolated target must be different actual EKS clusters. Install the same Argo CD 3.5.2
 on the target through Terraform, with `enable_bootstrap=false` while preparing restore. Rehydrate
 `argocd-oidc`, `argocd-notifications-secret`, and `argocd-repository-credentials` using the GitOps
-ExternalSecret objects and target cluster IRSA. The script checks current Ready generations without
-reading their Kubernetes Secret values. ExternalSecret readiness does not prove SSO login or paging.
+ExternalSecret objects and target cluster IRSA. The script checks `Ready=True`, successful sync reason,
+`syncedResourceVersion` generation and a valid refresh timestamp without reading Kubernetes Secret
+values. ESO 2.10 does not expose `observedGeneration`; retained/deleted/missing targets are not successful
+rehydration. ExternalSecret readiness does not prove SSO login or paging.
 
 Install the fixed CLI separately and confirm `argocd version --client --short`. Use Python3.10+ with
 the repository requirements in an isolated venv, AWS CLI/kubeconfig authentication, and `kubectl`.
@@ -102,7 +104,10 @@ than a full platform failover or business RPO/RTO assessment.
 
 After approved manual sync, run the read-only verifier. It checks exact stored bytes/version and source
 hash again, the new cluster's identity/server version, Secret rehydration, recent import receipt and
-actual selected Application `Synced`/`Healthy` revision. It never performs a sync or promotion.
+actual selected Application `Synced`/`Healthy` revision. Live source, destination and project must still
+match the imported archive, and Argo's compared source/destination and reconciliation time must describe
+that spec after the import receipt. A stale healthy status or a redirected Application blocks success.
+It never performs a sync or promotion.
 
 ```bash
 bash scripts/argocd-backup.sh verify --storage "$EVIDENCE_DIR/backup-storage.json" \
@@ -135,5 +140,6 @@ an archive bucket nor perform an actual restore. No plaintext archive or secrets
 
 - [Argo CD disaster recovery](https://argo-cd.readthedocs.io/en/stable/operator-manual/disaster_recovery/)
 - [Pinned Argo CD export/import source](https://github.com/argoproj/argo-cd/blob/v3.5.2/cmd/argocd/commands/admin/backup.go)
+- [Pinned ESO status generation](https://github.com/external-secrets/external-secrets/blob/v2.10.0/pkg/controllers/util/util.go)
 - [S3 Object Lock modes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html)
 - [S3 SSE-KMS](https://docs.aws.amazon.com/AmazonS3/latest/userguide/specifying-kms-encryption.html)

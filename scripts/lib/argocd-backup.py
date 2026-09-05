@@ -98,7 +98,7 @@ def validate_object(payload, body, response):
     return body
 
 
-def verify_restore(metadata, target_arn, namespace, version, applications, current=None):
+def verify_restore(metadata, target_arn, namespace, version, applications, current=None, *, expected_applications, imported_at):
     current = current or utcnow()
     source = metadata['source']
     if (metadata.get('schemaVersion') != 'platform.argocd-dr/v1' or target_arn == source['clusterArn'] or
@@ -110,8 +110,29 @@ def verify_restore(metadata, target_arn, namespace, version, applications, curre
     if not captured <= current <= captured+dt.timedelta(days=90):
         raise Denied('RESTORE_ARCHIVE_STALE')
     revisions = {}
+    expected={obj['metadata']['name']:obj for obj in expected_applications if obj.get('kind')=='Application'}
+    if not expected or not isinstance(imported_at,dt.datetime) or not captured <= imported_at <= current:
+        raise Denied('RESTORE_IMPORT_BINDING_REQUIRED')
     for app in applications:
         state=app.get('status',{})
+        original=expected.get(app.get('metadata',{}).get('name'))
+        if not original or app['metadata'].get('namespace') != namespace or app.get('operation') or app['metadata'].get('deletionTimestamp'):
+            raise Denied('RESTORE_APPLICATION_SPEC_MISMATCH')
+        spec=app.get('spec',{})
+        expected_spec=original['spec']
+        if (any(spec.get(key) != expected_spec.get(key) for key in ('source','sources','destination','project')) or
+            spec.get('destination',{}).get('server') != 'https://kubernetes.default.svc' or
+            spec.get('syncPolicy',{}).get('automated') is not None):
+            raise Denied('RESTORE_APPLICATION_SPEC_MISMATCH')
+        compared=state.get('sync',{}).get('comparedTo',{})
+        if any(compared.get(key) != expected_spec.get(key) for key in ('source','sources','destination')):
+            raise Denied('RESTORE_APPLICATION_COMPARISON_STALE')
+        try:
+            reconciled=dt.datetime.fromisoformat(state['reconciledAt'].replace('Z','+00:00'))
+            if not imported_at <= reconciled <= current:
+                raise Denied('RESTORE_APPLICATION_RECONCILIATION_STALE')
+        except (KeyError,TypeError,ValueError) as error:
+            raise Denied('RESTORE_APPLICATION_RECONCILIATION_STALE') from error
         if state.get('sync',{}).get('status') != 'Synced' or state['sync'].get('revision') != source['gitopsRevision'] or state.get('health',{}).get('status') != 'Healthy':
             raise Denied('RESTORE_APPLICATION_NOT_HEALTHY_AT_REVISION')
         revisions[app['metadata']['name']]=state['sync']['revision']
@@ -268,9 +289,22 @@ def rehydrated_secrets(run,context,namespace):
     ready=set()
     for obj in items:
         target=obj.get('spec',{}).get('target',{}).get('name',obj['metadata']['name'])
-        for condition in obj.get('status',{}).get('conditions',[]):
-            generation=condition.get('observedGeneration',obj.get('status',{}).get('observedGeneration'))
-            if condition.get('type')=='Ready' and condition.get('status')=='True' and generation==obj['metadata']['generation']:
+        status=obj.get('status',{})
+        metadata=obj.get('metadata',{})
+        # ESO records generation plus a metadata hash, not observedGeneration.
+        version=re.fullmatch(r'([1-9][0-9]*)-([a-zA-Z0-9]+)',status.get('syncedResourceVersion',''))
+        if metadata.get('deletionTimestamp') or not version or int(version.group(1)) != metadata.get('generation'):
+            continue
+        try:
+            refreshed=dt.datetime.fromisoformat(status['refreshTime'].replace('Z','+00:00'))
+            created=dt.datetime.fromisoformat(metadata['creationTimestamp'].replace('Z','+00:00'))
+            if not created <= refreshed <= utcnow():
+                continue
+        except (KeyError,TypeError,ValueError):
+            continue
+        for condition in status.get('conditions',[]):
+            if (condition.get('type')=='Ready' and condition.get('status')=='True' and
+                condition.get('reason')=='SecretSynced' and condition.get('message')=='secret synced'):
                 ready.add(target)
     if not names.issubset(ready):
         raise Denied('EXTERNALSECRET_REHYDRATION_PENDING')
@@ -356,7 +390,8 @@ def main():
             receipt_time=dt.datetime.fromisoformat(receipt['observedAt'].replace('Z','+00:00'))
             if (receipt.get('schemaVersion')!='platform.argocd-import/v1' or receipt.get('evidenceGrade')!='CAPTURED' or receipt.get('clusterArn')!=args.cluster_arn or receipt.get('namespace')!=args.namespace or receipt.get('archiveSha256')!=metadata['payload']['sha256'] or receipt.get('sourceHash')!=source_hash(metadata['source']) or args.application not in receipt.get('applicationNames',[]) or not now-dt.timedelta(days=1)<=receipt_time<=now):
                 raise Denied('IMPORT_RECEIPT_BINDING_OR_FRESHNESS_MISMATCH')
-            record=verify_restore(metadata,args.cluster_arn,args.namespace,version,[application(invoke,args.context,args.namespace,args.application)],now)
+            expected=[obj for obj in restore_objects(documents,args.namespace) if obj['kind']=='Application']
+            record=verify_restore(metadata,args.cluster_arn,args.namespace,version,[application(invoke,args.context,args.namespace,args.application)],now,expected_applications=expected,imported_at=receipt_time)
             record['evidenceGrade']='CLOUD_RUNTIME'
     write_json(args.output,record)
     print('PASS: '+record['schemaVersion']+' '+record['evidenceGrade']+'; metadata written, no secret values printed')
