@@ -1,0 +1,13 @@
+expected_account_id = "REPLACE_ACCOUNT_ID"
+aws_region = "REPLACE_WORKLOAD_REGION"
+state_bucket = "REPLACE_PRODUCTION_STATE_BUCKET"
+state_region = "REPLACE_STATE_REGION"
+identifier = "commerce-recovery-REPLACE"
+engine_version = "REPLACE_REGIONAL_EXACT_POSTGRES_VERSION"
+instance_class = "REPLACE_REGIONAL_SUPPORTED_CLASS"
+ca_cert_identifier = "REPLACE_REGIONAL_SUPPORTED_CA"
+client_security_group_ids = ["REPLACE_ACTUAL_CLIENT_SG"]
+final_snapshot_identifier = "commerce-recovery-final-REPLACE"
+tags = { PlatformInstanceId = "REPLACE", Owner = "REPLACE", CostCenter = "REPLACE", Environment = "prod" }
+restore_time = "REPLACE_EXACT_UTC_CUTOFF"
+recovery_cluster_name = "REPLACE_DISTINCT_REBUILT_CLUSTER"

@@ -1,0 +1,3 @@
+key = "prod/03-database/terraform.tfstate"
+encrypt = true
+use_lockfile = true
