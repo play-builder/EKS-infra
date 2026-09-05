@@ -1,0 +1,77 @@
+name: Publish approved platform images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        release: [stable, candidate]
+    concurrency:
+      group: platform-image-mirror-${{ github.repository_id }}-${{ matrix.release }}
+      cancel-in-progress: false
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Install checksum-verified registry tooling
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CRANE_VERSION=$(jq -r '.crane.version' platform-images.lock.json)
+          CRANE_SHA256=$(jq -r '.crane.linuxAmd64ArchiveSha256' platform-images.lock.json)
+          TOOL_DIR=$(mktemp -d "$RUNNER_TEMP/crane.XXXXXXXX")
+          curl --fail --silent --show-error --location --retry 3 "https://github.com/google/go-containerregistry/releases/download/v${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" --output "$TOOL_DIR/crane.tar.gz"
+          printf '%s  %s\n' "$CRANE_SHA256" "$TOOL_DIR/crane.tar.gz" | sha256sum -c -
+          tar -xzf "$TOOL_DIR/crane.tar.gz" -C "$TOOL_DIR" crane
+          echo "$TOOL_DIR" >> "$GITHUB_PATH"
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.PLATFORM_IMAGE_PUBLISHER_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd
+        with:
+          mask-password: true
+      - name: Mirror and verify source and target indexes
+        id: mirror
+        env:
+          IMAGE_REPOSITORY: ${{ vars.PLATFORM_ISTIO_PROXY_REPOSITORY_URL }}
+          RELEASE_CHANNEL: ${{ matrix.release }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/lib/platform-image-mirror.py "$RELEASE_CHANNEL" --repository "$IMAGE_REPOSITORY" --output "$RUNNER_TEMP/mirror-predicate.json" --execute
+          echo "digest=$(jq -r '.mirroredDigest' "$RUNNER_TEMP/mirror-predicate.json")" >> "$GITHUB_OUTPUT"
+          echo "predicate-type=$(jq -r '.predicateType' platform-images.lock.json)" >> "$GITHUB_OUTPUT"
+      - name: Attest the approved mirror operation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-name: ${{ vars.PLATFORM_ISTIO_PROXY_REPOSITORY_URL }}
+          subject-digest: ${{ steps.mirror.outputs.digest }}
+          predicate-type: ${{ steps.mirror.outputs.predicate-type }}
+          predicate-path: ${{ runner.temp }}/mirror-predicate.json
+          push-to-registry: true
+          create-storage-record: false
+      - name: Verify published custom attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_REPOSITORY: ${{ vars.PLATFORM_ISTIO_PROXY_REPOSITORY_URL }}
+          IMAGE_DIGEST: ${{ steps.mirror.outputs.digest }}
+          PREDICATE_TYPE: ${{ steps.mirror.outputs.predicate-type }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh attestation verify "oci://$IMAGE_REPOSITORY@$IMAGE_DIGEST" --repo "$GITHUB_REPOSITORY" --bundle-from-oci --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publish-platform-images.yml" --source-digest "$GITHUB_SHA" --predicate-type "$PREDICATE_TYPE"
