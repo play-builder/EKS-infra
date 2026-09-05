@@ -194,6 +194,15 @@ jobs:
           terraform_version: "1.16.0"
           terraform_wrapper: false
 
+      - name: Install contract runner prerequisites
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
+          for tool in bash git jq python3 rg ruby terraform; do
+            command -v "$tool" >/dev/null || { echo "CONTRACT_PREREQUISITE_MISSING: $tool" >&2; exit 69; }
+          done
+
       - name: Verify course repository contracts
         run: bash tests/run-contract-tests.sh
 
@@ -279,9 +288,19 @@ jobs:
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
         with:
           version: v4.2.4
+      - name: Install enterprise static runner prerequisites
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
+          for tool in bash git helm jq python3 rg ruby terraform; do
+            command -v "$tool" >/dev/null || { echo "ENTERPRISE_STATIC_PREREQUISITE_MISSING: $tool" >&2; exit 69; }
+          done
       - name: Install pinned static test prerequisites
         run: |
-          for tool in jq ruby rg go; do command -v "$tool" >/dev/null; done
+          for tool in curl go jq python3 rg ruby sha256sum tar; do
+            command -v "$tool" >/dev/null || { echo "ENTERPRISE_STATIC_BUILD_PREREQUISITE_MISSING: $tool" >&2; exit 69; }
+          done
           python3 -c 'import sys; assert sys.version_info >= (3, 10)'
           python3 -m venv "$RUNNER_TEMP/enterprise-python"
           "$RUNNER_TEMP/enterprise-python/bin/pip" install -r scripts/requirements-argocd-backup.txt
