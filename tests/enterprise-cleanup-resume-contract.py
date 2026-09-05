@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import subprocess
 import tempfile
 
@@ -53,3 +54,73 @@ with tempfile.TemporaryDirectory(prefix="enterprise-resume-") as directory:
     assert [x["layer"] for x in progress["completed"]][2:4]==["environments/recovery/03-database","environments/prod/03-database"]
     assert all(not pathlib.Path(x["path"]).exists() for x in manifest["plans"])
 print("PASS: ten-root enterprise cleanup uses RC progress, rejects retained DB, and removes completed fixture binaries")
+
+# Missing real module addresses must not block the destructive-plan gate. Derive the resource
+# declarations from the local Terraform producer, but exercise the actual shell/JSON guard.
+with tempfile.TemporaryDirectory(prefix="enterprise-addresses-") as directory:
+    work = pathlib.Path(directory)
+    (work / "bin").mkdir()
+    fake = work / "bin/terraform"
+    fake.write_text('#!/usr/bin/env python3\nimport os,pathlib,sys\nassert sys.argv[2:4]==["show","-json"]\nprint(pathlib.Path(os.environ["ADDRESS_PLAN"]).read_text())\n')
+    fake.chmod(0o755)
+    env = {**os.environ, "PATH": str(work / "bin") + ":" + os.environ["PATH"], "ADDRESS_PLAN": str(work / "plan.json")}
+    inventory = json.loads((root / "tests/fixtures/cleanup-ownership-valid.json").read_text())
+    (work / "inventory.json").write_text(json.dumps(inventory))
+    script = 'set -euo pipefail; source "$1/scripts/lib/evidence-common.sh"; source "$1/scripts/lib/cleanup-evidence.sh"; cleanup_inspect_saved_destroy_plan "$3" "$2/binary.tfplan" "$2/inventory.json" "$1" course-2026 123456789012 ap-northeast-2 playdevops'
+
+    def inspect(layer, address, resource_type, before=None):
+        environment = layer.split("/")[1]
+        semantic = "eks" if layer.endswith("02-eks") else "platform" if layer.endswith("03-platform") else "workloads"
+        values = {"id": "fixture-resource", "tags_all": {"CourseId": "course-2026", "Project": "playdevops", "Environment": environment, "Layer": semantic, "ManagedBy": "Terraform"}} if before is None else before
+        plan = {"format_version": "1.2", "resource_changes": [{"address": address, "mode": "managed", "type": resource_type, "change": {"actions": ["delete"], "before": values}}]}
+        (work / "plan.json").write_text(json.dumps(plan))
+        return subprocess.run(["bash", "-c", script, "fixture", str(root), str(work), layer], env=env, capture_output=True, text=True)
+
+    tested = 0
+    for environment in ("dev", "prod"):
+        modules = {"managed_addons": "modules/eks/managed-addons", "access_entries": "modules/eks/access-entries"}
+        if environment == "prod":
+            modules["operator_access"] = "modules/compute/operator-access"
+        for module_name, source in modules.items():
+            declarations = re.findall(r'^resource "([^"]+)" "([^"]+)"', (root / source / "main.tf").read_text(), re.M)
+            assert declarations
+            for resource_type, name in declarations:
+                suffix = '["platform-operator"]' if module_name == "access_entries" else ""
+                address = f"module.{module_name}.{resource_type}.{name}{suffix}"
+                untagged = resource_type in ("aws_iam_role_policy", "aws_iam_role_policy_attachment", "aws_eks_access_policy_association")
+                result = inspect(f"environments/{environment}/02-eks", address, resource_type, {"id": "fixture-resource"} if untagged else None)
+                assert result.returncode == 0 and result.stdout.strip() == "DELETE", (address, result.stderr)
+                tested += 1
+        result = inspect(f"environments/{environment}/02-eks", "terraform_data.logging_identity", "terraform_data", {"id": "local-marker", "input": f"{environment}-playdevops-eks"})
+        assert result.returncode == 0, result.stderr
+
+        # Enterprise modules in adjacent roots were already allowed; retain their actual producers.
+        for layer, address, resource_type, before in [
+            ("03-platform", "terraform_data.logging_identity", "terraform_data", {"id": "local-marker", "input": {}}),
+            ("03-platform", "module.sigstore_policy_controller.helm_release.policy_controller", "helm_release", {"id": "policy-controller"}),
+            ("03-platform", 'module.mini_commerce_secrets.aws_secretsmanager_secret.this["database"]', "aws_secretsmanager_secret", None),
+            ("04-workloads/argocd", "module.argocd.helm_release.argocd", "helm_release", {"id": "argocd"}),
+        ]:
+            result = inspect(f"environments/{environment}/{layer}", address, resource_type, before)
+            assert result.returncode == 0, (address, result.stderr)
+
+    for layer, address, resource_type in [
+        ("environments/unknown/02-eks", "module.managed_addons.aws_eks_addon.coredns", "aws_eks_addon"),
+        ("environments/dev/02-eks", "module.operator_access.aws_instance.operator", "aws_instance"),
+        ("environments/prod/03-platform", "module.operator_access.aws_instance.operator", "aws_instance"),
+        ("environments/prod/02-eks", "module.unknown.aws_eks_addon.coredns", "aws_eks_addon"),
+        ("environments/prod/02-eks", "module.managed_addons.aws_unknown.coredns", "aws_unknown"),
+        ("environments/prod/02-eks", "module.managed_addons.aws_eks_addon.unknown", "aws_eks_addon"),
+        ("environments/prod/02-eks", "module.operator_access.aws_s3_bucket.unknown", "aws_s3_bucket"),
+        ("environments/prod/02-eks", "module.managed_addons.aws_eks_addon.coredns", "helm_release"),
+        ("environments/prod/02-eks", "terraform_data.unknown", "terraform_data"),
+        ("environments/prod/02-eks", "module.operator_access.aws_kms_key.this", "aws_kms_key"),
+    ]:
+        result = inspect(layer, address, resource_type)
+        assert result.returncode != 0, (layer, address, "unexpected DELETE")
+    wrong_owner = {"id": "fixture-resource", "tags_all": {"CourseId": "foreign", "Project": "playdevops", "Environment": "prod", "Layer": "eks", "ManagedBy": "Terraform"}}
+    assert inspect("environments/prod/02-eks", "module.managed_addons.aws_eks_addon.coredns", "aws_eks_addon", wrong_owner).returncode != 0
+    inventory["resources"].append({"kind": "EksCluster", "id": "fixture-resource", "environment": "prod", "decision": "RETAIN", "owner": "course", "managedBy": "terraform"})
+    (work / "inventory.json").write_text(json.dumps(inventory))
+    assert inspect("environments/prod/02-eks", "module.managed_addons.aws_eks_addon.coredns", "aws_eks_addon").returncode != 0
+    print(f"PASS: {tested} declared EKS module resources, root markers and adjacent enterprise addresses; unknown scope/type and foreign ownership rejected")

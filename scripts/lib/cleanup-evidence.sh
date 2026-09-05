@@ -77,12 +77,12 @@ cleanup_inspect_saved_destroy_plan() {
   environment=${layer#environments/}
   environment=${environment%%/*}
   case "$layer" in
-    */01-network) semantic_layer=network ;;
-    */02-eks) semantic_layer=eks ;;
-    */03-platform) semantic_layer=platform ;;
+    environments/dev/01-network|environments/prod/01-network) semantic_layer=network ;;
+    environments/dev/02-eks|environments/prod/02-eks) semantic_layer=eks ;;
+    environments/dev/03-platform|environments/prod/03-platform) semantic_layer=platform ;;
     environments/prod/03-database) semantic_layer=database ;;
     environments/recovery/03-database) semantic_layer=recovery-database ;;
-    */04-workloads/argocd) semantic_layer=workloads ;;
+    environments/dev/04-workloads/argocd|environments/prod/04-workloads/argocd) semantic_layer=workloads ;;
     *) course_fail "SAVED_DESTROY_PLAN_LAYER_UNSUPPORTED: $layer" ;;
   esac
 
@@ -123,7 +123,15 @@ cleanup_inspect_saved_destroy_plan() {
       if $semanticLayer == "network" then
         .address | test("^module\\.(vpc|log_key)(\\[[^]]+\\])?\\.")
       elif $semanticLayer == "eks" then
-        .address | test("^module\\.(eks_cluster|node_group_public|node_group_private|bastion)(\\[[^]]+\\])?\\.")
+        (.address | test("^module\\.(eks_cluster|node_group_public|node_group_private|bastion)(\\[[^]]+\\])?\\.")) or
+        (.type == "terraform_data" and .address == "terraform_data.logging_identity") or
+        (.type == "aws_eks_addon" and (.address | test("^module\\.managed_addons\\.aws_eks_addon\\.(coredns|kube_proxy)$"))) or
+        ((.type == "aws_eks_access_entry" or .type == "aws_eks_access_policy_association") and
+          (.type as $type | .address | startswith("module.access_entries." + $type + ".")) and
+          (.address | test("^module\\.access_entries\\.aws_eks_access_(entry|policy_association)\\.this\\[\"[^\"]+\"\\]$"))) or
+        ($environment == "prod" and
+          (.type as $type | .address | startswith("module.operator_access." + $type + ".")) and
+          (.address | test("^module\\.operator_access\\.(aws_security_group\\.operator|aws_vpc_security_group_ingress_rule\\.operator_eks_api|aws_iam_role\\.(instance|operator)|aws_iam_role_policy\\.(instance_assume_operator|operator_eks)|aws_iam_role_policy_attachment\\.instance_ssm|aws_iam_instance_profile\\.instance|aws_instance\\.operator)$")))
       elif $semanticLayer == "platform" then
         (.address | test("^(terraform_data\\.(external_secrets_ownership_gate|logging_identity)|kubernetes_storage_class_v1\\.course_gp3|kubectl_manifest\\.(gateway_api|aws_lbc_gateway|volume_snapshot_class)(\\[[^]]+\\])?|aws_secretsmanager_secret\\.(sample_app_runtime|sample_app_db)|aws_eks_addon\\.snapshot_controller(\\[[^]]+\\])?|aws_iam_(role|policy|role_policy_attachment)\\.recovery_db_secret_reader(\\[[^]]+\\])?)$")) or
         (.address | test("^module\\.(external_secrets_reader_irsa|rollouts_amp_irsa|external_secrets|reloader|k6_operator|chaos_mesh|ebs_csi_driver|aws_load_balancer_controller|external_dns|acm|metrics_server|cluster_autoscaler|container_insights|amp|adot_collector|amp_alerting|amg|sigstore_policy_controller|mini_commerce_secrets|waf)(\\[[^]]+\\])?\\."))
