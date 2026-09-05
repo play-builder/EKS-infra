@@ -7,7 +7,7 @@ VIEW="arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
 ADMIN="arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 def fixture():
  old=[{"address":"module.operator_access."+kind+".operator","type":kind,"values":{"principal_arn":ARN,"cluster_name":"prod"}} for kind in ["aws_eks_access_entry","aws_eks_access_policy_association"]]
- old[1]["values"].update(policy_arn=ADMIN,access_scope=[{"type":"cluster","namespaces":[]}])
+ old[1]["values"].update(policy_arn=VIEW,access_scope=[{"type":"namespace","namespaces":["app-prod","platform-system"]}])
  mapping=[{"oldAddress":r["address"],"newAddress":"module.access_entries."+r["type"]+'.this["platform-operator"]',"principalArn":ARN} for r in old]
  mapping[1].update(policyArn=VIEW,accessScope={"type":"namespace","namespaces":["app-prod","platform-system"]})
  planned=copy.deepcopy(old)
@@ -16,11 +16,11 @@ def fixture():
  state={"values":{"root_module":{"child_modules":[{"resources":old}]}}}
  plan={"planned_values":{"root_module":{"child_modules":[{"resources":planned}]}},"resource_changes":[{"address":r["address"],"type":r["type"],"change":{"actions":["no-op"],"after":r["values"]}} for r in planned]}
  plan["resource_changes"][0]["change"]["before"]=copy.deepcopy(old[0]["values"])
- plan["resource_changes"][1]["change"].update(actions=["update"],before=copy.deepcopy(old[1]["values"]))
+ plan["resource_changes"][1]["change"]["before"]=copy.deepcopy(old[1]["values"])
  return state,mapping,plan
 def targets(plan):return plan["planned_values"]["root_module"]["child_modules"][0]["resources"]
 class Migration(unittest.TestCase):
- def test_full_workflow_allows_reviewed_reduction(self):
+ def test_full_workflow_allows_address_only_noop(self):
   state,mapping,plan=fixture()
   with tempfile.TemporaryDirectory() as d:
    paths=[pathlib.Path(d)/n for n in ["old-state.json","mapping.json","plan.json"]]
@@ -40,9 +40,25 @@ class Migration(unittest.TestCase):
     state,mapping,plan=fixture();mutate(mapping)
     with self.assertRaises(ValueError):m.validate(state,mapping,plan)
  def test_rejects_create_delete_even_with_valid_targets(self):
-  for actions in [["create"],["delete"],["delete","create"]]:
-   state,mapping,plan=fixture();plan["resource_changes"][0]["change"]["actions"]=actions
-   with self.assertRaisesRegex(ValueError,"MIGRATION_ACCESS_REPLACEMENT"):m.validate(state,mapping,plan)
+  for index in [0,1]:
+   for actions in [["create"],["delete"],["delete","create"]]:
+    state,mapping,plan=fixture();plan["resource_changes"][index]["change"]["actions"]=actions
+    with self.assertRaisesRegex(ValueError,"MIGRATION_ACCESS_REPLACEMENT"):m.validate(state,mapping,plan)
+ def test_rejects_policy_or_scope_change_even_if_mapping_matches_plan(self):
+  for action in [["update"],["no-op"]]:
+   for changed in ["policy","scope-type","namespaces"]:
+    with self.subTest(action=action,changed=changed):
+     state,mapping,plan=fixture()
+     old=state["values"]["root_module"]["child_modules"][0]["resources"][1]["values"]
+     if changed=="policy":old["policy_arn"]=ADMIN
+     elif changed=="scope-type":old["access_scope"]=[{"type":"cluster","namespaces":[]}]
+     else:old["access_scope"]=[{"type":"namespace","namespaces":["different-namespace"]}]
+     plan["resource_changes"][1]["change"].update(actions=action,before=copy.deepcopy(old))
+     with self.assertRaises(ValueError):m.validate(state,mapping,plan)
+ def test_rejects_misleading_inplace_access_actions(self):
+  for index in [0,1]:
+   state,mapping,plan=fixture();plan["resource_changes"][index]["change"]["actions"]=["update"]
+   with self.assertRaises(ValueError):m.validate(state,mapping,plan)
  def test_rejects_duplicated_old_state_addresses(self):
   state,mapping,plan=fixture()
   old=state["values"]["root_module"]["child_modules"][0]["resources"]

@@ -37,15 +37,21 @@ def validate(state,mapping,plan):
   require(isinstance(cluster,str) and cluster and values.get("cluster_name")==cluster,"MIGRATION_CLUSTER_MISMATCH")
   if r["type"]=="aws_eks_access_policy_association":
    require(isinstance(m.get("policyArn"),str) and m["policyArn"] and values.get("policy_arn")==m["policyArn"],"MIGRATION_POLICY_MISMATCH")
+   require(m["policyArn"]==r["values"].get("policy_arn"),"MIGRATION_POLICY_CHANGE_NOT_ADDRESS_ONLY")
    scopes=values.get("access_scope")
    require(isinstance(scopes,list) and len(scopes)==1,"MIGRATION_INVALID_SCOPE")
    require(access_scope(m.get("accessScope"))==access_scope(scopes[0]),"MIGRATION_SCOPE_MISMATCH")
+   old_scopes=r["values"].get("access_scope")
+   require(isinstance(old_scopes,list) and len(old_scopes)==1,"MIGRATION_INVALID_SCOPE")
+   require(access_scope(scopes[0])==access_scope(old_scopes[0]),"MIGRATION_SCOPE_CHANGE_NOT_ADDRESS_ONLY")
   pair=(r["type"],m["principalArn"],cluster);require(pair not in targets,"MIGRATION_DUPLICATE_PRINCIPAL");targets[pair]=match[1]
  for (kind,arn,cluster),key in targets.items():
   other="aws_eks_access_policy_association" if kind=="aws_eks_access_entry" else "aws_eks_access_entry"
   require(targets.get((other,arn,cluster))==key,"MIGRATION_MISSING_ENTRY_POLICY_PAIR")
  for r in plan.get("resource_changes",[]):
-  if r["type"] in KINDS:require(not set(r["change"]["actions"]) & {"create","delete"},"MIGRATION_ACCESS_REPLACEMENT")
+  if r["type"] in KINDS:
+   require(not set(r["change"]["actions"]) & {"create","delete"},"MIGRATION_ACCESS_REPLACEMENT")
+   require(r["change"]["actions"]==["no-op"],"MIGRATION_NOT_ADDRESS_ONLY")
 if __name__=="__main__":
  try:
   validate(*[json.loads(pathlib.Path(p).read_text()) for p in sys.argv[1:]])
