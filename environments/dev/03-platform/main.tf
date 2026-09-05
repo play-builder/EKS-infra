@@ -402,6 +402,7 @@ module "adot_collector" {
   amp_workspace_endpoint = var.enable_amp ? module.amp[0].workspace_prometheus_endpoint : ""
   amp_workspace_arn      = var.enable_amp ? module.amp[0].workspace_arn : "*"
   enable_xray            = var.enable_adot_xray
+  environment            = "dev"
 
   tags = local.common_tags
 
@@ -409,7 +410,11 @@ module "adot_collector" {
 }
 
 module "amp_alerting" {
-  source = "../../../modules/addons/amp-alerting"
+  source      = "../../../modules/addons/amp-alerting"
+  environment = "dev"
+  slo         = var.slo
+  alert_owner = var.amp_alert_owner
+  runbook_url = var.amp_runbook_url
 
   enabled             = var.enable_amp && var.enable_amp_alerting
   workspace_id        = var.enable_amp ? module.amp[0].workspace_id : "disabled"

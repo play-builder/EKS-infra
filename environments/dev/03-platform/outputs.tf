@@ -82,6 +82,20 @@ output "amp_alerting_enabled" {
   value       = module.amp_alerting.enabled
 }
 
+output "slo" {
+  description = "SLO contract; declared thresholds do not prove runtime alert delivery."
+  value       = module.amp_alerting.slo
+}
+
+output "amp_workspace_arn" {
+  description = "Exact workspace identity for SLO evidence."
+  value       = var.enable_amp ? module.amp[0].workspace_arn : null
+}
+
+output "amp_scrape_contract" {
+  value = var.enable_adot_collector ? module.adot_collector[0].scrape_contract : null
+}
+
 output "sns_alert_topic_arn" {
   description = "Region-local SNS topic used by AMP Alertmanager"
   value       = module.amp_alerting.sns_topic_arn

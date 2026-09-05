@@ -165,31 +165,31 @@ resource "kubernetes_manifest" "otel_collector" {
                 }
                 scrape_configs = [
                   {
-                    job_name              = "kubernetes-pods"
+                    job_name              = "mini-commerce-management"
+                    metrics_path          = "/metrics"
                     sample_limit          = 10000
                     kubernetes_sd_configs = [{ role = "pod" }]
                     relabel_configs = [
                       {
-                        source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
+                        source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_label_app_kubernetes_io_name", "__meta_kubernetes_pod_container_port_name", "__meta_kubernetes_pod_container_port_number"]
                         action        = "keep"
-                        regex         = "true"
+                        regex         = "app-${var.environment};mini-commerce;management;3001"
                       },
                       {
-                        source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
-                        action        = "replace"
-                        target_label  = "__metrics_path__"
-                        regex         = "(.+)"
+                        source_labels = ["__meta_kubernetes_pod_phase"]
+                        action        = "keep"
+                        regex         = "Running"
                       },
                       {
-                        source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+                        source_labels = ["__meta_kubernetes_pod_ip"]
                         action        = "replace"
-                        regex         = "([^:]+)(?::\\d+)?;(\\d+)"
-                        replacement   = "$1:$2"
                         target_label  = "__address__"
+                        regex         = "(.+)"
+                        replacement   = "$1:3001"
                       },
                       {
-                        action = "labelmap"
-                        regex  = "__meta_kubernetes_pod_label_(.+)"
+                        target_label = "environment"
+                        replacement  = var.environment
                       },
                       {
                         source_labels = ["__meta_kubernetes_namespace"]
@@ -202,6 +202,46 @@ resource "kubernetes_manifest" "otel_collector" {
                         target_label  = "pod"
                       }
                     ]
+                    metric_relabel_configs = [{
+                      source_labels = ["__name__"]
+                      regex         = "mini_commerce_.*"
+                      action        = "keep"
+                    }]
+                  },
+                  {
+                    job_name              = "istio-proxy"
+                    metrics_path          = "/stats/prometheus"
+                    sample_limit          = 10000
+                    kubernetes_sd_configs = [{ role = "pod" }]
+                    relabel_configs = [
+                      {
+                        source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name", "__meta_kubernetes_pod_container_port_name", "__meta_kubernetes_pod_container_port_number"]
+                        regex         = "app-${var.environment};istio-proxy;http-envoy-prom;15090"
+                        action        = "keep"
+                      },
+                      {
+                        source_labels = ["__meta_kubernetes_pod_phase"]
+                        regex         = "Running"
+                        action        = "keep"
+                      },
+                      {
+                        target_label = "environment"
+                        replacement  = var.environment
+                      },
+                      {
+                        source_labels = ["__meta_kubernetes_namespace"]
+                        target_label  = "namespace"
+                      },
+                      {
+                        source_labels = ["__meta_kubernetes_pod_name"]
+                        target_label  = "pod"
+                      }
+                    ]
+                    metric_relabel_configs = [{
+                      source_labels = ["__name__"]
+                      regex         = "istio_requests_total|istio_request_duration_milliseconds_(bucket|sum|count)"
+                      action        = "keep"
+                    }]
                   },
                   {
                     job_name = "kubernetes-nodes-cadvisor"

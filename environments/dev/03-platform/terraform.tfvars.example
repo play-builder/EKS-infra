@@ -26,6 +26,20 @@ enable_recovery_secret_reader   = false
 # recovery_secret_kms_key_arn   = "arn:aws:kms:<region>:<account>:key/<uuid>"
 enable_chaos_mesh               = false
 enable_amp_alerting             = false
+amp_alert_owner = "platform"
+amp_runbook_url = "https://github.com/play-builder/EKS-infra/blob/main/docs/runbooks/amp-slo.md"
+slo = {
+  success_target = 0.999
+  latency_ms_target = 500
+  short_window = "5m"
+  long_window = "1h"
+  short_burn_threshold = 14.4
+  long_burn_threshold = 14.4
+  traffic_floor_rps = 0.1
+  paging_severity = "warning"
+  escalation_route = "platform-sns"
+  alert_resolve_timeout_minutes = 15
+}
 enable_sns_alert_delivery       = false
 # sns_alert_email_endpoint      = "oncall@example.com"
 

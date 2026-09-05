@@ -3,6 +3,16 @@ variable "eks_cluster_name" {
   type        = string
 }
 
+variable "environment" {
+  description = "Exact Mini Commerce namespace environment and remote-write identity."
+  type        = string
+  default     = "dev"
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "environment must be dev or prod."
+  }
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string

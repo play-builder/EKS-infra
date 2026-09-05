@@ -266,6 +266,55 @@ variable "enable_amp_alerting" {
   default     = false
 }
 
+variable "amp_alert_owner" {
+  type    = string
+  default = "platform"
+}
+
+variable "amp_runbook_url" {
+  type    = string
+  default = "https://github.com/play-builder/EKS-infra/blob/main/docs/runbooks/amp-slo.md"
+}
+
+variable "slo" {
+  type = object({
+    success_target                = number
+    latency_ms_target             = number
+    short_window                  = string
+    long_window                   = string
+    short_burn_threshold          = number
+    long_burn_threshold           = number
+    traffic_floor_rps             = number
+    paging_severity               = string
+    escalation_route              = string
+    alert_resolve_timeout_minutes = number
+  })
+  default = {
+    success_target                = 0.999
+    latency_ms_target             = 500
+    short_window                  = "5m"
+    long_window                   = "1h"
+    short_burn_threshold          = 14.4
+    long_burn_threshold           = 14.4
+    traffic_floor_rps             = 0.1
+    paging_severity               = "critical"
+    escalation_route              = "platform-sns"
+    alert_resolve_timeout_minutes = 15
+  }
+  validation {
+    condition     = var.slo.success_target > 0 && var.slo.success_target < 1 && var.slo.latency_ms_target > 0 && var.slo.traffic_floor_rps > 0 && var.slo.short_burn_threshold > 0 && var.slo.long_burn_threshold > 0 && var.slo.alert_resolve_timeout_minutes > 0
+    error_message = "SLO targets, burn thresholds, traffic floor and resolve timeout must be positive; success_target must be below one."
+  }
+  validation {
+    condition     = can(regex("^[1-9][0-9]*[mh]$", var.slo.short_window)) && can(regex("^[1-9][0-9]*[mh]$", var.slo.long_window)) && try(tonumber(trimsuffix(trimsuffix(var.slo.short_window, "m"), "h")) * (endswith(var.slo.short_window, "h") ? 60 : 1) < tonumber(trimsuffix(trimsuffix(var.slo.long_window, "m"), "h")) * (endswith(var.slo.long_window, "h") ? 60 : 1), false)
+    error_message = "Use positive minute/hour windows with short strictly below long."
+  }
+  validation {
+    condition     = contains(["warning", "critical"], var.slo.paging_severity) && can(regex("^[a-z][a-z0-9-]+$", var.slo.escalation_route))
+    error_message = "Use a bounded severity and an explicit receiver name."
+  }
+}
+
 variable "enable_sns_alert_delivery" {
   description = "Enable Ch16 SNS alert delivery after an endpoint is supplied"
   type        = bool
