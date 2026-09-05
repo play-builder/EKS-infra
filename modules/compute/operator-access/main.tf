@@ -14,6 +14,16 @@ resource "aws_security_group" "operator" {
   tags = var.tags
 }
 
+resource "aws_vpc_security_group_ingress_rule" "operator_eks_api" {
+  security_group_id            = var.cluster_security_group_id
+  referenced_security_group_id = aws_security_group.operator.id
+  description                  = "Private Kubernetes API HTTPS from the SSM operator instance"
+  ip_protocol                  = "tcp"
+  from_port                    = 443
+  to_port                      = 443
+  tags                         = var.tags
+}
+
 resource "aws_iam_role" "instance" {
   name = "${var.name}-operator-ssm-instance"
   assume_role_policy = jsonencode({

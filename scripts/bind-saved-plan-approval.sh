@@ -16,6 +16,11 @@ course_require_file "$review_history"
   course_fail SAVED_PLAN_APPROVAL_HISTORY_INVALID
 [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || course_fail SAVED_PLAN_APPROVAL_HISTORY_INVALID
 
+# Preserve the requester captured when the plan was created. An apply-only rerun
+# by another actor cannot rebind that artifact to itself.
+jq -e --arg requester "$request_identity" '.requestIdentity == $requester' \
+  "$manifest" >/dev/null || course_fail SAVED_PLAN_REQUEST_IDENTITY_MISMATCH
+
 approval_identity=$(jq -er --arg environment "$environment" --arg requester "$request_identity" '
   [ .[] |
     select(.state == "approved") |
@@ -32,9 +37,9 @@ jq -n --arg environment "$environment" --arg run "$run_id" --arg requester "$req
    environment:$environment,state:"approved",runId:$run,requestIdentity:$requester,
    approvalIdentity:$approver}' >"$artifact_dir/.approval-evidence.json.tmp"
 approval_sha=$(course_raw_sha256_file "$artifact_dir/.approval-evidence.json.tmp")
-jq --arg requester "$request_identity" --arg approver "$approval_identity" --arg run "$run_id" \
+jq --arg approver "$approval_identity" --arg run "$run_id" \
   --arg approval "$approval_sha" '
-  .requestIdentity=$requester | .approvalIdentity=$approver | .approvalRunId=$run |
+  .approvalIdentity=$approver | .approvalRunId=$run |
   .approvalEvidenceSha256=("sha256:"+$approval)
 ' "$manifest" >"$artifact_dir/.plan-identity.json.tmp"
 mv -- "$artifact_dir/.approval-evidence.json.tmp" "$artifact_dir/approval-evidence.json"

@@ -42,6 +42,7 @@ tests=(
   batch1-review-contract.sh
   saved-plan-create-contract.sh
   saved-plan-identity-contract.sh
+  saved-plan-apply-workflow-contract.sh
   terraform-drift-contract.sh
   terraform-drift-exit-code-contract.sh
   final-cleanup-contract.sh

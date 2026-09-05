@@ -121,6 +121,24 @@ bash "$root/scripts/bind-saved-plan-approval.sh" "$tmp_dir/bind" "$tmp_dir/histo
   production "$request_identity" "$run_id"
 verify "$tmp_dir/bind" >/dev/null
 
+# A different rerun actor must not rewrite the original requester or make the
+# complete verifier accept that substituted identity.
+cp -R "$tmp_dir/bind" "$tmp_dir/bind-mismatch"
+set +e
+output=$(bash "$root/scripts/bind-saved-plan-approval.sh" "$tmp_dir/bind-mismatch" \
+  "$tmp_dir/history-approved.json" production different-requester "$run_id" 2>&1)
+bind_status=$?
+verify_output=$(request_identity=different-requester verify "$tmp_dir/bind-mismatch" 2>&1)
+verify_status=$?
+set -e
+[[ "$bind_status" -ne 0 && "$output" == *SAVED_PLAN_REQUEST_IDENTITY_MISMATCH* &&
+   "$verify_status" -ne 0 && "$verify_output" == *SAVED_PLAN_REQUEST_IDENTITY_MISMATCH* ]] || {
+  echo "requester substitution accepted: bind=$bind_status verify=$verify_status" >&2
+  exit 1
+}
+diff -r "$tmp_dir/bind" "$tmp_dir/bind-mismatch"
+verify "$tmp_dir/bind-mismatch" >/dev/null
+
 for invalid in pending blank self; do
   case "$invalid" in
     pending) history='[{"state":"pending","environments":[{"name":"production"}],"user":{"login":"platform-approver"}}]' ;;

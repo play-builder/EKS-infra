@@ -5,6 +5,7 @@ output "operator_access_status" {
     private_instance_id       = aws_instance.operator.id
     operator_role_arn         = aws_iam_role.operator.arn
     private_endpoint_required = true
+    cluster_security_group_id = aws_vpc_security_group_ingress_rule.operator_eks_api.security_group_id
   }
 }
 

@@ -115,6 +115,13 @@ jobs:
         run: |
           gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" > "$RUNNER_TEMP/approval-history.json"
           bash "$GITHUB_WORKSPACE/scripts/bind-saved-plan-approval.sh" "$GITHUB_WORKSPACE/plan-artifact" "$RUNNER_TEMP/approval-history.json" production "$GITHUB_TRIGGERING_ACTOR" "$GITHUB_RUN_ID"
+      - name: Initialize reviewed backend and locked providers
+        run: |
+          terraform -chdir="$GITHUB_WORKSPACE/${{ inputs.terraform_root }}" init -input=false \
+            -lockfile=readonly \
+            -backend-config="$GITHUB_WORKSPACE/${{ inputs.backend_config }}" \
+            -backend-config="bucket=${{ vars.STATE_BUCKET_NAME }}" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
       - name: Verify reviewed saved plan before apply
         run: |
           LIVE_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)

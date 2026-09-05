@@ -2,6 +2,10 @@ variable "name" { type = string }
 variable "vpc_id" { type = string }
 variable "subnet_id" { type = string }
 variable "cluster_arn" { type = string }
+variable "cluster_security_group_id" {
+  description = "EKS-created cluster security group receiving HTTPS from the operator security group"
+  type        = string
+}
 variable "trusted_sso_principal_arn" {
   type = string
   validation {

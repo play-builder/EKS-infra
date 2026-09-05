@@ -111,6 +111,7 @@ module "operator_access" {
   subnet_id                 = var.operator_access.subnet_id
   cluster_name              = module.eks_cluster.cluster_name
   cluster_arn               = module.eks_cluster.cluster_arn
+  cluster_security_group_id = module.eks_cluster.cluster_security_group_id
   trusted_sso_principal_arn = var.operator_access.trusted_sso_principal_arn
   ami_id                    = var.operator_access.ami_id
   instance_type             = var.operator_access.instance_type
