@@ -39,6 +39,7 @@ tests=(
   in-flight-zero-contract.sh
   checkpoint-teardown-contract.sh
   saved-plan-identity-contract.sh
+  terraform-drift-contract.sh
   final-cleanup-contract.sh
 )
 

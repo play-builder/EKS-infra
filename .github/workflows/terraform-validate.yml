@@ -1,6 +1,23 @@
 name: terraform-validate
 
 on:
+  workflow_dispatch:
+    inputs:
+      terraform_root:
+        required: true
+        type: string
+      backend_config:
+        required: true
+        type: string
+      account_id:
+        required: true
+        type: string
+      backend_bucket:
+        required: true
+        type: string
+      backend_key:
+        required: true
+        type: string
   pull_request:
     paths:
       - "**/*.tf"
@@ -26,7 +43,58 @@ on:
 permissions:
   contents: read
 
+  # Plan jobs deliberately cannot assume AWS identities or apply infrastructure.
+
 jobs:
+  reviewed-plan:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.16.0"
+      - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
+        with:
+          role-to-assume: ${{ secrets.TERRAFORM_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Create reviewed plan artifact
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: bash scripts/create-saved-plan.sh "${{ inputs.terraform_root }}" "${{ inputs.backend_config }}" plan-artifact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-terraform-plan
+          path: plan-artifact
+
+  reviewed-plan-apply:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/download-artifact@v4
+        with:
+          name: reviewed-terraform-plan
+          path: plan-artifact
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.16.0"
+      - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
+        with:
+          role-to-assume: ${{ secrets.TERRAFORM_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Verify reviewed saved plan before apply
+        run: bash scripts/verify-saved-plan.sh plan-artifact "${{ inputs.terraform_root }}" "${{ inputs.account_id }}" "${{ vars.AWS_REGION }}" "${{ inputs.backend_bucket }}" "${{ inputs.backend_key }}" s3-native-lockfile "$GITHUB_SHA"
+      - name: Apply the verified binary plan
+        run: terraform -chdir="${{ inputs.terraform_root }}" apply plan-artifact/tfplan
+
   contract:
     runs-on: ubuntu-latest
     steps:

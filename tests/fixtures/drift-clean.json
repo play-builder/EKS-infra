@@ -1,0 +1,1 @@
+{"schemaVersion":"platform.terraform-drift/v1","evidenceGrade":"CLOUD_RUNTIME","terraformRoot":"environments/prod/03-platform","sourceSha":"701139222a836002b3b05b68a70d0ddf359f5f01","decision":"NO_DRIFT","observedAt":"2026-09-05T00:00:00Z"}
