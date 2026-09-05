@@ -267,6 +267,7 @@ jobs:
           "$RUNNER_TEMP/enterprise-python/bin/pip" install -r scripts/requirements-argocd-backup.txt
           echo "ENTERPRISE_PYTHON=$RUNNER_TEMP/enterprise-python/bin/python3" >> "$GITHUB_ENV"
           GOBIN="$RUNNER_TEMP/enterprise-bin" go install github.com/mikefarah/yq/v4@v4.53.6
+          bash scripts/install-lua.sh "$RUNNER_TEMP/enterprise-bin"
           curl -fsSL https://github.com/prometheus/prometheus/releases/download/v3.14.0/prometheus-3.14.0.linux-amd64.tar.gz -o "$RUNNER_TEMP/prometheus.tgz"
           printf '%s  %s\n' f665c6da19eb7ba399c915d30c7d9793c9b417bf8a749b504bc470678631478d "$RUNNER_TEMP/prometheus.tgz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/prometheus.tgz" -C "$RUNNER_TEMP/enterprise-bin" --strip-components=1 prometheus-3.14.0.linux-amd64/promtool
