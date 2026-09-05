@@ -5,5 +5,12 @@ module "backup" {
   administrator_role_arns = var.administrator_role_arns
   operator_role_arns      = var.operator_role_arns
   retention_days          = var.retention_days
-  tags                    = merge(var.tags, { Environment = "prod" })
+  tags = merge(var.tags, {
+    CourseId    = var.course_id
+    Project     = var.project_name
+    AccountId   = data.aws_caller_identity.current.account_id
+    Region      = var.aws_region
+    Environment = "prod"
+    Layer       = "platform-backup"
+  })
 }

@@ -5,6 +5,14 @@ variable "project_name" {
     error_message = "project_name must be a 3-18 character lowercase identifier."
   }
 }
+variable "course_id" {
+  type        = string
+  description = "Ownership identifier shared with resource inventory and retained-resource cleanup."
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
+    error_message = "course_id must be an 8-63 character lowercase ownership identifier."
+  }
+}
 variable "aws_region" {
   type = string
   validation {
