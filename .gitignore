@@ -88,3 +88,7 @@ sh.sh
 # OS Specific
 .DS_Store
 Thumbs.db
+
+# Python bytecode is generated locally.
+__pycache__/
+*.py[cod]
