@@ -15,31 +15,31 @@ cat >"$tmp_dir/fake-bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 [[ "$*" == *" show -json "* ]] || { echo "unexpected terraform command: $*" >&2; exit 97; }
-if [[ -n "${COURSE_FAKE_PLAN_JSON:-}" ]]; then
-  cat "$COURSE_FAKE_PLAN_JSON"
+if [[ -n "${PLATFORM_FAKE_PLAN_JSON:-}" ]]; then
+  cat "$PLATFORM_FAKE_PLAN_JSON"
   exit 0
 fi
 chdir=''
 for argument in "$@"; do case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac; done
-layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
-cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
+layer=${chdir#"$PLATFORM_FAKE_REPO_ROOT/"}
+cat "$PLATFORM_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
 EOF
 chmod +x "$tmp_dir/fake-bin/terraform"
-export COURSE_FAKE_REPO_ROOT="$root"
-export COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json"
+export PLATFORM_FAKE_REPO_ROOT="$root"
+export PLATFORM_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json"
 
 run_valid() {
-  COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" \
-  COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
-  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight --saved-plan-manifest "$tmp_dir/saved-plans.json" \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" \
+  OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
+    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
       --inventory-output "$tmp_dir/inventory.json" --retain-template "$tmp_dir/retain-template.json" \
       --preflight-output "$tmp_dir/preflight.json"
   jq -e '.evidenceGrade == "STATIC" and (.resources | length == 7)' "$tmp_dir/inventory.json" >/dev/null
   jq -e '.evidenceGrade == "LOCAL_RUNTIME" and .status == "PENDING"' "$tmp_dir/retain-template.json" >/dev/null
   jq -e '.evidenceGrade == "STATIC" and .status == "PASS"' "$tmp_dir/preflight.json" >/dev/null
-  course_assert_file_mode "$tmp_dir/inventory.json" 600
+  pb_assert_file_mode "$tmp_dir/inventory.json" 600
 }
 run_valid
 
@@ -48,10 +48,10 @@ jq '.resources[0].classification=" "' \
   "$root/tests/fixtures/cleanup-ownership-valid.json" >"$whitespace_inventory"
 
 whitespace_rejected=true
-if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-course-owned.json" \
-  COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
-  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
+  OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
+    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$whitespace_inventory" \
       --inventory-output "$tmp_dir/whitespace-inventory.json" \
@@ -75,10 +75,10 @@ for output_path in "$sentinel_inventory" "$sentinel_retain" "$sentinel_preflight
   printf '%s\n' '{"sentinel":true}' >"$output_path"
 done
 sentinel_digest_before=$(shasum -a 256 "$sentinel_inventory" "$sentinel_retain" "$sentinel_preflight")
-if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-course-owned.json" \
-  COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
-  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
+  OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
+    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$whitespace_inventory" \
       --inventory-output "$sentinel_inventory" --retain-template "$sentinel_retain" \
@@ -98,10 +98,10 @@ bom=$(printf '\357\273\277')
 jq --arg blank "$bom" '.resources[0].classification=$blank' \
   "$root/tests/fixtures/cleanup-ownership-valid.json" >"$bom_inventory"
 bom_rejected=true
-if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-course-owned.json" \
-  COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
-  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
+  OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
+    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$bom_inventory" \
       --inventory-output "$tmp_dir/bom-inventory.json" \
@@ -118,10 +118,10 @@ for output_path in "$tmp_dir/bom-inventory.json" "$tmp_dir/bom-retain.json" \
   fi
 done
 sentinel_digest_before=$(shasum -a 256 "$sentinel_inventory" "$sentinel_retain" "$sentinel_preflight")
-if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-course-owned.json" \
-  COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
-  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
+  OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
+    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$bom_inventory" \
       --inventory-output "$sentinel_inventory" --retain-template "$sentinel_retain" \
@@ -138,17 +138,17 @@ fi
 
 for protected_id in \
   arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:shared-provider \
-  arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app \
+  arn:aws:ecr:ap-northeast-2:123456789012:repository/mini-commerce \
   snap-retained-001; do
   protected_plan="$tmp_dir/protected-plan.json"
   jq --arg id "$protected_id" '.resource_changes[1].change.before.id=$id' \
     "$tmp_dir/plan-json/environments__prod__04-workloads__argocd.json" >"$protected_plan"
   rm -f "$tmp_dir/rejected-inventory.json" "$tmp_dir/rejected-retain.json" "$tmp_dir/rejected-preflight.json"
   set +e
-  output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$protected_plan" \
-    COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
-    AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-      bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight --saved-plan-manifest "$tmp_dir/saved-plans.json" \
+  output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$protected_plan" \
+    OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
+    AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
+      bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight --saved-plan-manifest "$tmp_dir/saved-plans.json" \
         --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
         --inventory-output "$tmp_dir/rejected-inventory.json" --retain-template "$tmp_dir/rejected-retain.json" \
         --preflight-output "$tmp_dir/rejected-preflight.json" 2>&1)
@@ -165,9 +165,9 @@ non_destroy_plan="$tmp_dir/non-destroy-plan.json"
 jq '.resource_changes[0].change.actions=["create"]' \
   "$tmp_dir/plan-json/environments__prod__04-workloads__argocd.json" >"$non_destroy_plan"
 rm -f "$tmp_dir/non-destroy-inventory.json" "$tmp_dir/non-destroy-retain.json" "$tmp_dir/non-destroy-preflight.json"
-if COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$non_destroy_plan" \
-  COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
-    bash "$root/scripts/course-check.sh" ch26 --cleanup-preflight \
+if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$non_destroy_plan" \
+  OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
+    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
       --inventory-output "$tmp_dir/non-destroy-inventory.json" \
@@ -180,7 +180,7 @@ fi
 
 rm -f "$tmp_dir/runtime-inventory.json" "$tmp_dir/runtime-retain.json" "$tmp_dir/runtime-preflight.json"
 set +e
-output=$(COURSE_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-course-owned.json" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
+output=$(PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
   bash "$root/scripts/cleanup-preflight.sh" --saved-plan-manifest "$tmp_dir/saved-plans.json" \
     --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
     --inventory-output "$tmp_dir/runtime-inventory.json" --retain-template "$tmp_dir/runtime-retain.json" \
@@ -195,9 +195,9 @@ fi
 
 rm -f "$tmp_dir/fixture-inventory.json" "$tmp_dir/fixture-preflight.json"
 set +e
-output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" COURSE_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-course-owned.json" \
-  COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 \
-  AWS_REGION=ap-northeast-2 COURSE_PROJECT=playdevops \
+output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
+  OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
     bash "$root/scripts/cleanup-preflight.sh" --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
       --inventory-output "$tmp_dir/fixture-inventory.json" \
@@ -219,7 +219,7 @@ cleanup_require_canonical_runtime_output \
 
 ln -s "$boundary_repo/evidence/cleanup" "$tmp_dir/cleanup-link"
 set +e
-output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/fake-bin" cleanup_require_canonical_runtime_output \
+output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" cleanup_require_canonical_runtime_output \
   "$tmp_dir/cleanup-link/ownership-inventory.json" "$boundary_repo" ownership-inventory.json 2>&1)
 status=$?
 set -e

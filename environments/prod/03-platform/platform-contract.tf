@@ -1,4 +1,4 @@
-variable "enable_course_resources" {
+variable "enable_platform_resources" {
   description = "Create Gateway CRDs, Secrets Manager containers, and IRSA roles"
   type        = bool
   default     = true
@@ -21,7 +21,7 @@ variable "secret_recovery_window_in_days" {
   }
 }
 
-variable "course_application_namespace" {
+variable "pb_application_namespace" {
   description = "Namespace where the sample application is deployed"
   type        = string
   default     = ""
@@ -40,14 +40,14 @@ variable "rollouts_service_account" {
 }
 
 locals {
-  application_namespace = var.course_application_namespace != "" ? var.course_application_namespace : "app-${var.environment}"
+  application_namespace = var.pb_application_namespace != "" ? var.pb_application_namespace : "app-${var.environment}"
 }
 
-resource "kubernetes_storage_class_v1" "course_gp3" {
-  count = var.enable_course_resources && var.enable_course_storage_class && var.enable_ebs_csi_driver ? 1 : 0
+resource "kubernetes_storage_class_v1" "pb_gp3" {
+  count = var.enable_platform_resources && var.enable_pb_storage_class && var.enable_ebs_csi_driver ? 1 : 0
 
   metadata {
-    name = "course-gp3"
+    name = "mini-commerce-gp3"
     annotations = {
       "storageclass.kubernetes.io/is-default-class" = "false"
     }
@@ -76,7 +76,7 @@ data "kubectl_file_documents" "aws_lbc_gateway" {
 }
 
 resource "kubectl_manifest" "gateway_api" {
-  for_each = var.enable_course_resources && var.enable_gateway_api ? data.kubectl_file_documents.gateway_api.manifests : {}
+  for_each = var.enable_platform_resources && var.enable_gateway_api ? data.kubectl_file_documents.gateway_api.manifests : {}
 
   yaml_body         = each.value
   server_side_apply = true
@@ -85,7 +85,7 @@ resource "kubectl_manifest" "gateway_api" {
 }
 
 resource "kubectl_manifest" "aws_lbc_gateway" {
-  for_each = var.enable_course_resources && var.enable_gateway_api ? data.kubectl_file_documents.aws_lbc_gateway.manifests : {}
+  for_each = var.enable_platform_resources && var.enable_gateway_api ? data.kubectl_file_documents.aws_lbc_gateway.manifests : {}
 
   yaml_body         = each.value
   server_side_apply = true
@@ -101,7 +101,7 @@ moved {
 }
 
 resource "aws_secretsmanager_secret" "sample_app_runtime" {
-  count = var.enable_course_resources ? 1 : 0
+  count = var.enable_platform_resources ? 1 : 0
 
   name                    = "sample-app/${var.environment}/sample-app-runtime"
   description             = "Runtime secret shell for sample-app ${var.environment}; values are added outside Terraform"
@@ -114,7 +114,7 @@ resource "aws_secretsmanager_secret" "sample_app_runtime" {
 }
 
 resource "aws_secretsmanager_secret" "sample_app_db" {
-  count = var.enable_course_resources ? 1 : 0
+  count = var.enable_platform_resources ? 1 : 0
 
   name                    = "sample-app/${var.environment}/sample-app-db"
   description             = "Database secret shell for sample-app ${var.environment}; values are added outside Terraform"
@@ -128,7 +128,7 @@ resource "aws_secretsmanager_secret" "sample_app_db" {
 
 module "external_secrets_reader_irsa" {
   source = "../../../modules/iam/irsa"
-  count  = var.enable_course_resources ? 1 : 0
+  count  = var.enable_platform_resources ? 1 : 0
 
   name = "${local.name}-external-secrets-reader"
 
@@ -157,7 +157,7 @@ module "external_secrets_reader_irsa" {
 
 module "rollouts_amp_irsa" {
   source = "../../../modules/iam/irsa"
-  count  = var.enable_course_resources && var.enable_amp ? 1 : 0
+  count  = var.enable_platform_resources && var.enable_amp ? 1 : 0
 
   name = "${local.name}-argo-rollouts-amp"
 
@@ -186,39 +186,39 @@ module "rollouts_amp_irsa" {
   tags = local.common_tags
 }
 
-output "course_secret_name" {
+output "pb_secret_name" {
   description = "Backward-compatible runtime secret name; no secret value enters Terraform state"
-  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_runtime[0].name : null
+  value       = var.enable_platform_resources ? aws_secretsmanager_secret.sample_app_runtime[0].name : null
 }
 
 output "sample_app_runtime_secret_name" {
   description = "Runtime secret name consumed by the Reloader target"
-  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_runtime[0].name : null
+  value       = var.enable_platform_resources ? aws_secretsmanager_secret.sample_app_runtime[0].name : null
 }
 
 output "sample_app_runtime_secret_arn" {
   description = "Runtime secret ARN; secret values are populated outside Terraform"
-  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_runtime[0].arn : null
+  value       = var.enable_platform_resources ? aws_secretsmanager_secret.sample_app_runtime[0].arn : null
 }
 
 output "sample_app_db_secret_name" {
   description = "Database secret name that must never trigger the runtime reload path"
-  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_db[0].name : null
+  value       = var.enable_platform_resources ? aws_secretsmanager_secret.sample_app_db[0].name : null
 }
 
 output "sample_app_db_secret_arn" {
   description = "Database secret ARN; secret values are populated outside Terraform"
-  value       = var.enable_course_resources ? aws_secretsmanager_secret.sample_app_db[0].arn : null
+  value       = var.enable_platform_resources ? aws_secretsmanager_secret.sample_app_db[0].arn : null
 }
 
 output "external_secrets_reader_role_arn" {
   description = "IRSA role written into the external-secrets-reader ServiceAccount"
-  value       = var.enable_course_resources ? module.external_secrets_reader_irsa[0].iam_role_arn : null
+  value       = var.enable_platform_resources ? module.external_secrets_reader_irsa[0].iam_role_arn : null
 }
 
 output "rollouts_amp_role_arn" {
   description = "IRSA role written into the Argo Rollouts controller ServiceAccount"
-  value       = var.enable_course_resources && var.enable_amp ? module.rollouts_amp_irsa[0].iam_role_arn : null
+  value       = var.enable_platform_resources && var.enable_amp ? module.rollouts_amp_irsa[0].iam_role_arn : null
 }
 
 output "gateway_crd_versions" {
@@ -229,7 +229,7 @@ output "gateway_crd_versions" {
   }
 }
 
-output "course_storage_class_name" {
+output "pb_storage_class_name" {
   description = "Non-default encrypted gp3 StorageClass for stateful workloads"
-  value       = var.enable_course_resources && var.enable_course_storage_class && var.enable_ebs_csi_driver ? kubernetes_storage_class_v1.course_gp3[0].metadata[0].name : null
+  value       = var.enable_platform_resources && var.enable_pb_storage_class && var.enable_ebs_csi_driver ? kubernetes_storage_class_v1.pb_gp3[0].metadata[0].name : null
 }

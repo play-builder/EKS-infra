@@ -8,9 +8,8 @@ provider "aws" {
 
   default_tags {
     tags = {
-      CourseId  = var.course_id
       Project   = var.project_name
-      ManagedBy = "gitops-course"
+      ManagedBy = "Terraform"
     }
   }
 }

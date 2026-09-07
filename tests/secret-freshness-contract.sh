@@ -35,15 +35,15 @@ esac
 EOF
 chmod +x "$tmp_dir/bin/aws" "$tmp_dir/bin/kubectl"
 
-output=$(AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-  bash "$root/scripts/course-check.sh" ch12 course-dev app-dev sample-app-runtime sample-app \
+output=$(AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+  bash "$root/scripts/platform-check.sh" ch12 mini-commerce-dev app-dev sample-app-runtime sample-app \
   sample-app/dev/sample-app-runtime runtime-v2 pod-old)
 grep -Fq 'version=runtime-v2' <<<"$output"
 grep -Fq '[STATIC] SIMULATED_CLOUD_CONTRACT' <<<"$output"
 ! grep -Fq 'secret-value' <<<"$output"
 
-if AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-  bash "$root/scripts/course-check.sh" ch12 course-dev app-dev sample-app-db sample-app \
+if AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+  bash "$root/scripts/platform-check.sh" ch12 mini-commerce-dev app-dev sample-app-db sample-app \
   sample-app/dev/sample-app-db runtime-v2 pod-old >/dev/null 2>&1; then
   echo 'DB secret must never enter the runtime reload path' >&2
   exit 1

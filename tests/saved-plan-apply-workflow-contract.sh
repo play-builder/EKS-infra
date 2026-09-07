@@ -106,7 +106,7 @@ Dir.mktmpdir('saved-plan-workflow-') do |repo|
     c,o=m.fixture(); root=pathlib.Path(sys.argv[2])
     (root/'contract.json').write_text(json.dumps(c));(root/'observations.json').write_text(json.dumps(o))
   PY
-  env.merge!('COURSE_CHECK_BIN_DIR'=>File.join(repo,'bin'), 'FINOPS_FIXTURE_JSON'=>File.join(repo,'observations.json'),
+  env.merge!('PLATFORM_CHECK_BIN_DIR'=>File.join(repo,'bin'), 'FINOPS_FIXTURE_JSON'=>File.join(repo,'observations.json'),
              'FINOPS_CONTRACT_JSON'=>File.join(repo,'contract.json'), 'PLATFORM_INSTANCE_ID'=>'commerce-123',
              'FINOPS_GATE_POLICY'=>'configuration-only', 'FINOPS_CONTRACT_SHA256'=>'sha256:'+Digest::SHA256.file(File.join(repo,'contract.json')).hexdigest,
              'GITHUB_ACTIONS'=>'false', 'FINOPS_BILLING_PROFILE'=>nil, 'FINOPS_BILLING_ROLE_ARN'=>nil)

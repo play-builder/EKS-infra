@@ -17,7 +17,6 @@ locals {
       PlatformInstanceId = var.platform_instance_id
       Owner              = var.owner
       CostCenter         = var.cost_center
-      CourseId           = var.course_id
       Environment        = var.environment
       Project            = var.project_name
       division           = var.division

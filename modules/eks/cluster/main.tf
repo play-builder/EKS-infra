@@ -117,7 +117,7 @@ resource "aws_eks_addon" "vpc_cni" {
     precondition {
       condition = var.vpc_cni_network_policy_enforcing_mode != "strict" || (
         local.vpc_cni_strict_gate != null &&
-        try(local.vpc_cni_strict_gate.schemaVersion, "") == "course.network-policy-strict-gate/v1" &&
+        try(local.vpc_cni_strict_gate.schemaVersion, "") == "playbuilder.network-policy-strict-gate/v1" &&
         try(local.vpc_cni_strict_gate.evidenceGrade, "") == "CLOUD_RUNTIME" &&
         try(local.vpc_cni_strict_gate.status, "") == "APPROVED"
       )

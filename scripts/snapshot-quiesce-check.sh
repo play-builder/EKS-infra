@@ -4,20 +4,20 @@ set -Eeuo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 
-[[ $# -eq 1 ]] || course_fail 'usage: snapshot-quiesce-check.sh <snapshot-quiesce.json>' 64
+[[ $# -eq 1 ]] || pb_fail 'usage: snapshot-quiesce-check.sh <snapshot-quiesce.json>' 64
 evidence=$1
-course_require_file "$evidence"
-course_assert_eks_cluster_arn \
+pb_require_file "$evidence"
+pb_assert_eks_cluster_arn \
   "$(jq -r '.clusterArn // empty' "$evidence")" \
   "$(jq -r '.region // empty' "$evidence")"
 
-course_assert_json "$evidence" '
+pb_assert_json "$evidence" '
   def canonical_utc_seconds:
     type == "string" and
     test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$") and
     ((try (fromdateiso8601 | todateiso8601) catch "") == .);
   (keys | sort) == ["checksum","clusterArn","database","environment","evidenceGrade","expiresAt","gitopsRevision","observedAt","region","schemaVersion","source","storage","writers"] and
-  .schemaVersion == "course.snapshot-quiesce/v1" and .evidenceGrade == "CLOUD_RUNTIME" and
+  .schemaVersion == "playbuilder.snapshot-quiesce/v1" and .evidenceGrade == "CLOUD_RUNTIME" and
   (.environment == "dev" or .environment == "prod") and
   (.region == "ap-northeast-2" or .region == "us-east-1") and
   (.gitopsRevision | test("^[0-9a-f]{40}$")) and
@@ -37,9 +37,9 @@ course_assert_json "$evidence" '
   (.database.stoppedAt | fromdateiso8601) <= (.observedAt | fromdateiso8601)
 ' 'invalid, stale, or unsafe snapshot quiesce evidence'
 
-if [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]]; then
+if [[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]]; then
   echo 'DETAIL: snapshot quiesce ordering and detach evidence is valid.'
-elif [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+elif [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
   echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT snapshot quiesce ordering is valid.'
 else
   echo 'PASS: [CLOUD_RUNTIME] snapshot quiesce evidence is valid; live recheck required before snapshot creation.'

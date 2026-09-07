@@ -10,7 +10,7 @@ backend_config_input=${2:?backend config is required}
 artifact_dir_input=${3:?artifact directory is required}
 : "${BACKEND_BUCKET:?BACKEND_BUCKET is required}"
 : "${AWS_REGION:?AWS_REGION is required}"
-course_validate_region "$AWS_REGION"
+pb_validate_region "$AWS_REGION"
 
 repo_root=$(git -C "$terraform_root_input" rev-parse --show-toplevel)
 repo_root=$(cd -- "$repo_root" && pwd -P)

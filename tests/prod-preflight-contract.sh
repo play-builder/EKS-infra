@@ -17,18 +17,18 @@ render_saved_plan_summary "$root/tests/fixtures/prod-plan-capacity-go.json" \
   "$tmp_dir/eks.tfplan" "$tmp_dir/eks-plan.json" ap-northeast-2
 jq '.mode="estimate"' "$root/tests/fixtures/capacity-go.json" >"$tmp_dir/capacity-estimate.json"
 
-COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
+OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
   bash "$root/scripts/prod-design-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" \
     "$ready" "$tmp_dir/network-plan.json" "$root/tests/fixtures/capacity-go.json" "$tmp_dir/design.json"
 
 cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_AWS_LOG"
 if [[ "$*" == *"describe-instance-types"* ]]; then
-  cat "$COURSE_INSTANCE_FIXTURE"
+  cat "$PLATFORM_INSTANCE_FIXTURE"
 elif [[ "$*" == *"describe-subnets"* ]]; then
-  jq '.subnets' "$COURSE_LIVE_FIXTURE"
+  jq '.subnets' "$PLATFORM_LIVE_FIXTURE"
 else
   exit 97
 fi
@@ -40,11 +40,11 @@ EOF
 chmod +x "$tmp_dir/bin/aws" "$tmp_dir/bin/kubectl"
 
 # The old preflight incorrectly emitted GO with no billing configuration.
-if COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
+if OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=mini-commerce \
 FINOPS_CONTRACT_JSON= PLATFORM_INSTANCE_ID= FINOPS_GATE_POLICY= \
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/missing-finops.log" \
-COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
-COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$tmp_dir/missing-finops.log" \
+PLATFORM_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
+PLATFORM_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
   bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
     "$tmp_dir/design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/missing-finops.json" >/dev/null 2>&1; then
   echo 'FAIL: production GO bypassed required FinOps configuration' >&2
@@ -55,14 +55,14 @@ python3 "$root/tests/finops_readiness_test.py" --export-fixture "$tmp_dir/finops
 export FINOPS_CONTRACT_JSON="$tmp_dir/finops.json" FINOPS_FIXTURE_JSON="$tmp_dir/finops-observations.json"
 export PLATFORM_INSTANCE_ID=commerce-123 FINOPS_GATE_POLICY=configuration-only
 
-COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
-COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
+OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=mini-commerce \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+PLATFORM_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
+PLATFORM_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
   bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
     "$tmp_dir/design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/estimate.json"
 
-jq -e '.schemaVersion == "course.prod-preflight/v2" and .stage == "estimate" and .decision == "GO" and .evidenceGrade == "STATIC" and
+jq -e '.schemaVersion == "playbuilder.prod-preflight/v2" and .stage == "estimate" and .decision == "GO" and .evidenceGrade == "STATIC" and
   .finops.configurationStatus == "CONFIGURED" and .finops.dataStatus == "DATA_PENDING" and .finops.deliveryStatus == "NOT_VERIFIED" and
   .finops.evidenceGrade == "LOCAL_VERIFIED" and .bindings.finopsContractSha256 == .finops.bindings.contractSha256' \
   "$tmp_dir/estimate.json" >/dev/null
@@ -75,10 +75,10 @@ fi
 for mutation in '.notifications |= .[0:2]' '.costTags[0].Status="Inactive"'; do
   jq "$mutation" "$tmp_dir/finops-observations.json" >"$tmp_dir/bad-finops.json"
   : >"$tmp_dir/bad-finops-aws.log"
-  if COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
-    COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/bad-finops-aws.log" \
-    COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
-    COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" FINOPS_FIXTURE_JSON="$tmp_dir/bad-finops.json" \
+  if OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=mini-commerce \
+    PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$tmp_dir/bad-finops-aws.log" \
+    PLATFORM_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
+    PLATFORM_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" FINOPS_FIXTURE_JSON="$tmp_dir/bad-finops.json" \
       bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
         "$tmp_dir/design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/bad-go.json" >/dev/null 2>&1; then
     echo 'invalid FinOps controls must reject production GO' >&2
@@ -88,8 +88,8 @@ for mutation in '.notifications |= .[0:2]' '.costTags[0].Status="Inactive"'; do
 done
 
 # A caller cannot promote fixture observations by omitting the static mode marker.
-if COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
-  COURSE_CHECK_BIN_DIR= FINOPS_RUNTIME_VERIFIED=true \
+if OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=mini-commerce \
+  PLATFORM_CHECK_BIN_DIR= FINOPS_RUNTIME_VERIFIED=true \
     bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
       "$tmp_dir/design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/promoted.json" >/dev/null 2>&1; then
   echo 'fixture promotion must fail' >&2
@@ -115,10 +115,10 @@ expect_preflight_timestamp_rejected_before_cloud() {
       "$tmp_dir/capacity-estimate.json" >"$capacity_candidate"
   fi
   : >"$tmp_dir/aws-$label.log"
-  if COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
-    COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/aws-$label.log" \
-    COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
-    COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
+  if OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=mini-commerce \
+    PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws-$label.log" \
+    PLATFORM_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
+    PLATFORM_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
       bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
         "$design_candidate" "$eks_candidate" "$capacity_candidate" "$rejected" >/dev/null 2>&1; then
     echo "expected $label preflight timestamp to fail" >&2
@@ -139,10 +139,10 @@ expect_preflight_timestamp_rejected_before_cloud capacity-expires-invalid-calend
 
 jq '.expiresAt="2026-01-01T00:00:00Z"' "$tmp_dir/design.json" >"$tmp_dir/stale-design.json"
 set +e
-COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=course \
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/stale.log" \
-COURSE_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
-COURSE_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
+OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 AWS_PROFILE=mini-commerce \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$tmp_dir/stale.log" \
+PLATFORM_INSTANCE_FIXTURE="$root/tests/fixtures/prod-instance-capacity-go.json" \
+PLATFORM_LIVE_FIXTURE="$root/tests/fixtures/prod-live-capacity-go.json" \
   bash "$root/scripts/prod-preflight.sh" "$tmp_dir/deployment.json" "$tmp_dir/slo.json" "$ready" \
     "$tmp_dir/stale-design.json" "$tmp_dir/eks-plan.json" "$tmp_dir/capacity-estimate.json" "$tmp_dir/rejected.json" >/dev/null 2>&1
 status=$?

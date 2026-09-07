@@ -11,12 +11,12 @@ cat >"$tmp_dir/bin/kubectl" <<'EOF'
 set -Eeuo pipefail
 args=" $* "
 case "$args" in
-  *" get storageclass/course-gp3 "*)
+  *" get storageclass/mini-commerce-gp3 "*)
     echo '{"provisioner":"ebs.csi.aws.com","reclaimPolicy":"Delete","volumeBindingMode":"WaitForFirstConsumer","allowVolumeExpansion":true,"parameters":{"type":"gp3","encrypted":"true"}}' ;;
   *" get statefulset sample-app-postgresql "*)
     echo '{"spec":{"replicas":1},"status":{"readyReplicas":1,"currentRevision":"r1","updateRevision":"r1"}}' ;;
   *" get pvc "*)
-    echo '{"items":[{"status":{"phase":"Bound"},"spec":{"storageClassName":"course-gp3"}}]}' ;;
+    echo '{"items":[{"status":{"phase":"Bound"},"spec":{"storageClassName":"mini-commerce-gp3"}}]}' ;;
   *" get job sample-app-migration "*)
     echo '{"status":{"succeeded":1,"failed":0}}' ;;
   *" get pods "*)
@@ -31,7 +31,7 @@ set -Eeuo pipefail
 args=" $* "
 case "$args" in
   *"/products/1/inventory "*) echo '{"productId":1,"availableQuantity":10}' ;;
-  *"/products "*) echo '{"products":[{"sku":"COURSE-1"},{},{},{}]}' ;;
+  *"/products "*) echo '{"products":[{"sku":"PB-1"},{},{},{}]}' ;;
   *"/orders "*) echo '{"order":{"id":7,"status":"CONFIRMED","totalCents":32900}}' ;;
   *) echo "unexpected curl invocation: $*" >&2; exit 97 ;;
 esac
@@ -39,8 +39,8 @@ EOF
 chmod +x "$tmp_dir/bin/kubectl" "$tmp_dir/bin/curl"
 
 run_one() {
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-    bash "$root/scripts/course-check.sh" stateful course-dev app-dev https://example.invalid
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+    bash "$root/scripts/platform-check.sh" stateful mini-commerce-dev app-dev https://example.invalid
 }
 
 first=$(run_one)

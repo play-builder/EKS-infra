@@ -42,11 +42,11 @@ variables {
   sigstore_https_egress_cidrs     = []
   autoscaler_capacity             = { min_nodes = 2, max_nodes = 6, max_pods_per_node = 29, hpa_max_replicas = 10, rollout_surge_replicas = 2, platform_reserve_pods = 10, stable_replicas = 3, canary_replicas = 1, usable_subnet_ips_by_az = { a = 200, b = 200, c = 200 }, required_headroom_percentage = 20 }
   aws_region                      = "ap-northeast-2"
-  state_bucket_name               = "course-dev-state"
+  state_bucket_name               = "mini-commerce-dev-state"
   acm_domain_name                 = "dev.example.com"
   hosted_zone_id                  = "Z0123456789"
   enable_gateway_api              = false
-  enable_course_storage_class     = false
+  enable_pb_storage_class     = false
   enable_ebs_csi_driver           = false
   enable_alb_controller           = false
   enable_external_dns             = false
@@ -87,49 +87,49 @@ override_data {
   target = data.terraform_remote_state.network
   values = { outputs = { vpc_id = "vpc-0123456789abcdef0", logging_contract = {
     kms_key_arn  = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555"
-    cluster_name = "dev-course"
+    cluster_name = "dev-mini-commerce"
     waf_name     = "dev-playdevops"
     account_id   = "123456789012"
     aws_region   = "ap-northeast-2"
     log_group_names = {
-      control_plane = "/aws/eks/dev-course/cluster"
+      control_plane = "/aws/eks/dev-mini-commerce/cluster"
       vpc_flow      = "/aws/vpc/dev-playdevops/flow-logs"
-      application   = "/aws/containerinsights/dev-course/application"
-      performance   = "/aws/containerinsights/dev-course/performance"
+      application   = "/aws/containerinsights/dev-mini-commerce/application"
+      performance   = "/aws/containerinsights/dev-mini-commerce/performance"
       waf           = "aws-waf-logs-dev-playdevops"
     }
     platform_tags = { PlatformInstanceId = "platform", Owner = "team", CostCenter = "cc", Environment = "dev", ManagedBy = "Terraform" }
     }, audit_log_groups = {
-    control_plane = { arn = "arn:aws:logs:ap-northeast-2:123456789012:log-group:/aws/eks/dev-course/cluster", retention_days = 90, kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555" }
+    control_plane = { arn = "arn:aws:logs:ap-northeast-2:123456789012:log-group:/aws/eks/dev-mini-commerce/cluster", retention_days = 90, kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555" }
     vpc_flow      = { arn = "arn:aws:logs:ap-northeast-2:123456789012:log-group:/aws/vpc/dev-playdevops/flow-logs", retention_days = 90, kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555" }
   } } }
 }
 override_data {
   target = data.terraform_remote_state.eks
   values = { outputs = {
-    cluster_name                       = "dev-course"
-    cluster_arn                        = "arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-course"
+    cluster_name                       = "dev-mini-commerce"
+    cluster_arn                        = "arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-mini-commerce"
     cluster_endpoint                   = "https://example.invalid"
     cluster_certificate_authority_data = "Y2E="
     oidc_provider_arn                  = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.ap-northeast-2.amazonaws.com/id/EXAMPLE"
     oidc_provider                      = "oidc.eks.ap-northeast-2.amazonaws.com/id/EXAMPLE"
     logging_contract = {
       kms_key_arn  = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555"
-      cluster_name = "dev-course"
+      cluster_name = "dev-mini-commerce"
       waf_name     = "dev-playdevops"
       account_id   = "123456789012"
       aws_region   = "ap-northeast-2"
       log_group_names = {
-        control_plane = "/aws/eks/dev-course/cluster"
+        control_plane = "/aws/eks/dev-mini-commerce/cluster"
         vpc_flow      = "/aws/vpc/dev-playdevops/flow-logs"
-        application   = "/aws/containerinsights/dev-course/application"
-        performance   = "/aws/containerinsights/dev-course/performance"
+        application   = "/aws/containerinsights/dev-mini-commerce/application"
+        performance   = "/aws/containerinsights/dev-mini-commerce/performance"
         waf           = "aws-waf-logs-dev-playdevops"
       }
       platform_tags = { PlatformInstanceId = "platform", Owner = "team", CostCenter = "cc", Environment = "dev", ManagedBy = "Terraform" }
     }
     audit_log_groups = {
-      control_plane = { arn = "arn:aws:logs:ap-northeast-2:123456789012:log-group:/aws/eks/dev-course/cluster", retention_days = 90, kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555" }
+      control_plane = { arn = "arn:aws:logs:ap-northeast-2:123456789012:log-group:/aws/eks/dev-mini-commerce/cluster", retention_days = 90, kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555" }
       vpc_flow      = { arn = "arn:aws:logs:ap-northeast-2:123456789012:log-group:/aws/vpc/dev-playdevops/flow-logs", retention_days = 90, kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555" }
     }
   } }

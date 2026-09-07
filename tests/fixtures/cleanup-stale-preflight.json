@@ -1,8 +1,8 @@
 {
-  "schemaVersion":"course.cleanup-preflight/v1",
+  "schemaVersion":"playbuilder.cleanup-preflight/v1",
   "evidenceGrade":"CLOUD_RUNTIME",
   "status":"PASS",
-  "courseId":"course-2026",
+  "ownerId":"playbuilder",
   "accountId":"123456789012",
   "region":"ap-northeast-2",
   "planSha256":"0000000000000000000000000000000000000000000000000000000000000000",

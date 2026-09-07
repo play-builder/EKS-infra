@@ -8,7 +8,7 @@ import sys
 from datetime import datetime, timezone
 
 BILLING = {"Budget", "CostAnomalyMonitor", "CostAnomalySubscription", "CostAllocationTag"}
-PROTECTED = BILLING | {"KmsKey", "S3BackupBucket", "S3StateBucket", "TerraformState", "CourseEvidence", "IamOidcProvider", "RdsAutomatedBackup", "BillingSnsTopic"}
+PROTECTED = BILLING | {"KmsKey", "S3BackupBucket", "S3StateBucket", "TerraformState", "PlatformEvidence", "IamOidcProvider", "RdsAutomatedBackup", "BillingSnsTopic"}
 KINDS = PROTECTED | {"RdsInstance", "RdsSnapshot", "RdsSubnetGroup", "RdsParameterGroup", "LogGroup", "WafWebAcl", "SecretsManagerSecret"}
 
 
@@ -192,7 +192,7 @@ def rows(response, key):
 
 def discover(inventory, query=aws):
     response = query("resourcegroupstaggingapi", "get-resources", "--tag-filters",
-                     "Key=CourseId,Values=" + inventory["courseId"], "--resource-type-filters",
+                     "Key=OwnerId,Values=" + inventory["ownerId"], "--resource-type-filters",
                      "rds:db", "rds:snapshot", "rds:subgrp", "rds:pg", "kms:key", "logs:log-group",
                      "wafv2:webacl", "s3:bucket", "ecr:repository")
     if response is None:
@@ -254,7 +254,7 @@ def present(kind, ident, query=aws):
         bucket, key = ident.removeprefix("arn:aws:s3:::").split("/", 1)
         response = query("s3api", "head-object", "--bucket", bucket, "--key", key, "--expected-bucket-owner", os.environ["AWS_ACCOUNT_ID"])
         return response is not None and response["ContentLength"] > 0
-    if kind == "CourseEvidence":
+    if kind == "PlatformEvidence":
         return os.path.isfile(ident) and not os.path.islink(ident)
     if kind == "IamOidcProvider":
         response = query("iam", "get-open-id-connect-provider", "--open-id-connect-provider-arn", ident)

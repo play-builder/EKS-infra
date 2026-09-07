@@ -1,6 +1,5 @@
 locals {
   required_tags = {
-    CourseId           = var.course_id
     AccountId          = var.billing_account_id
     Region             = "us-east-1"
     Project            = var.project_name

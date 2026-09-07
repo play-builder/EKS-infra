@@ -9,7 +9,7 @@ mock_provider "aws" {
   mock_resource "aws_sns_topic" {
     override_during = plan
     defaults = {
-      arn = "arn:aws:sns:ap-northeast-2:123456789012:course-dev-amp-alerts"
+      arn = "arn:aws:sns:ap-northeast-2:123456789012:mini-commerce-dev-amp-alerts"
     }
   }
 }
@@ -28,9 +28,9 @@ run "disabled_without_ch16_flag" {
 
   assert {
     condition = (
-      length(aws_prometheus_rule_group_namespace.course) == 0 &&
-      length(aws_prometheus_alert_manager_definition.course) == 0 &&
-      length(aws_sns_topic.course_alerts) == 0
+      length(aws_prometheus_rule_group_namespace.platform) == 0 &&
+      length(aws_prometheus_alert_manager_definition.platform) == 0 &&
+      length(aws_sns_topic.pb_alerts) == 0
     )
     error_message = "AMP alerting resources must be absent until Ch16."
   }
@@ -50,9 +50,9 @@ run "alerting_does_not_require_an_unconfirmed_email_subscription" {
 
   assert {
     condition = (
-      length(aws_prometheus_rule_group_namespace.course) == 1 &&
-      length(aws_prometheus_alert_manager_definition.course) == 1 &&
-      length(aws_sns_topic.course_alerts) == 1 &&
+      length(aws_prometheus_rule_group_namespace.platform) == 1 &&
+      length(aws_prometheus_alert_manager_definition.platform) == 1 &&
+      length(aws_sns_topic.pb_alerts) == 1 &&
       length(aws_sns_topic_subscription.email) == 0
     )
     error_message = "Ch16 alerting must exist without creating an unrequested email subscription."
@@ -73,7 +73,7 @@ run "sns_policy_scopes_amp_publish_to_workspace" {
 
   assert {
     condition = (
-      length(aws_sns_topic.course_alerts) == 1 &&
+      length(aws_sns_topic.pb_alerts) == 1 &&
       strcontains(aws_sns_topic_policy.amp_publish[0].policy, "aps.amazonaws.com") &&
       strcontains(aws_sns_topic_policy.amp_publish[0].policy, "AWS:SourceAccount") &&
       strcontains(aws_sns_topic_policy.amp_publish[0].policy, "AWS:SourceArn")
@@ -82,7 +82,7 @@ run "sns_policy_scopes_amp_publish_to_workspace" {
   }
 
   assert {
-    condition     = try(yamldecode(yamldecode(aws_prometheus_alert_manager_definition.course[0].definition).alertmanager_config).receivers[0].sns_configs[0].sigv4.region == "ap-northeast-2", false)
+    condition     = try(yamldecode(yamldecode(aws_prometheus_alert_manager_definition.platform[0].definition).alertmanager_config).receivers[0].sns_configs[0].sigv4.region == "ap-northeast-2", false)
     error_message = "Alertmanager SNS receiver must sign in the selected AWS Region."
   }
 }

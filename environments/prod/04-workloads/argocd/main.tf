@@ -21,8 +21,7 @@ data "terraform_remote_state" "platform" {
 }
 
 locals {
-  course_ownership = {
-    CourseId    = var.course_id
+  workload_ownership = {
     AccountId   = data.aws_caller_identity.current.account_id
     Region      = var.aws_region
     Project     = var.project_name
@@ -82,8 +81,8 @@ locals {
   LUA
 }
 
-resource "terraform_data" "course_ownership" {
-  input = local.course_ownership
+resource "terraform_data" "workload_ownership" {
+  input = local.workload_ownership
 }
 
 moved {
@@ -96,13 +95,13 @@ module "argocd" {
   environment       = var.environment
   region            = var.aws_region
   platform          = var.argocd_platform
-  tags              = merge(var.tags, local.course_ownership)
+  tags              = merge(var.tags, local.workload_ownership)
   oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
   health_customizations = {
-    "course.health.external-secret.contract"                                = "external-secret-ready-health/v1"
+    "playbuilder.health.external-secret.contract"                                = "external-secret-ready-health/v1"
     "resource.customizations.health.external-secrets.io_ExternalSecret"     = local.external_secret_health_lua
-    "course.health.volume-snapshot.contract"                                = "volume-snapshot-ready-health/v1"
+    "playbuilder.health.volume-snapshot.contract"                                = "volume-snapshot-ready-health/v1"
     "resource.customizations.health.snapshot.storage.k8s.io_VolumeSnapshot" = local.volume_snapshot_health_lua
   }
 }
@@ -144,7 +143,7 @@ resource "kubectl_manifest" "bootstrap" {
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata = {
-      name      = "course-${var.environment}-bootstrap"
+      name      = "mini-commerce-${var.environment}-bootstrap"
       namespace = "argocd"
       finalizers = [
         "resources-finalizer.argocd.argoproj.io",

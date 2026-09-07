@@ -4,20 +4,20 @@ set -Eeuo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 
-if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
-  [[ -d "$COURSE_CHECK_BIN_DIR" ]] || course_fail 'COURSE_CHECK_BIN_DIR is not a directory' 64
-  PATH="$COURSE_CHECK_BIN_DIR:$PATH"
+if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
+  [[ -d "$PLATFORM_CHECK_BIN_DIR" ]] || pb_fail 'PLATFORM_CHECK_BIN_DIR is not a directory' 64
+  PATH="$PLATFORM_CHECK_BIN_DIR:$PATH"
 fi
 
-[[ $# -eq 2 || $# -eq 3 ]] || course_fail 'usage: prod-baseline-check.sh <kubectl-context> <rollout-name> [output.json]' 64
+[[ $# -eq 2 || $# -eq 3 ]] || pb_fail 'usage: prod-baseline-check.sh <kubectl-context> <rollout-name> [output.json]' 64
 context=$1
 namespace=app-prod
 rollout_name=$2
 output=${3:-}
 : "${AWS_REGION:?AWS_REGION is required}"
 : "${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}"
-course_validate_region "$AWS_REGION"
-course_validate_account "$AWS_ACCOUNT_ID"
+pb_validate_region "$AWS_REGION"
+pb_validate_account "$AWS_ACCOUNT_ID"
 
 rollout=$(kubectl --context "$context" -n "$namespace" get rollout "$rollout_name" -o json)
 replicasets=$(kubectl --context "$context" -n "$namespace" get replicasets -o json)
@@ -29,7 +29,7 @@ jq -e --arg name "$rollout_name" '
   .status.stableRS == .status.currentPodHash and
   .spec.replicas > 0 and .status.replicas == .spec.replicas and
   .status.readyReplicas == .spec.replicas and .status.availableReplicas == .spec.replicas
-' <<<"$rollout" >/dev/null || course_fail 'PROD_BASELINE_ROLLOUT_NOT_HEALTHY'
+' <<<"$rollout" >/dev/null || pb_fail 'PROD_BASELINE_ROLLOUT_NOT_HEALTHY'
 
 rollout_uid=$(jq -r '.metadata.uid' <<<"$rollout")
 stable_hash=$(jq -r '.status.stableRS' <<<"$rollout")
@@ -41,11 +41,11 @@ stable_rs=$(jq -c --arg uid "$rollout_uid" --arg name "$rollout_name" --arg hash
     any(.metadata.ownerReferences[]?; .kind == "Rollout" and .name == $name and .uid == $uid and .controller == true)
   )] | if length == 1 then .[0] else empty end
 ' <<<"$replicasets")
-[[ -n "$stable_rs" ]] || course_fail 'PROD_BASELINE_STABLE_RS_NOT_UNIQUE'
+[[ -n "$stable_rs" ]] || pb_fail 'PROD_BASELINE_STABLE_RS_NOT_UNIQUE'
 jq -e --argjson desired "$desired" '
   .spec.replicas == $desired and .status.replicas == $desired and
   .status.readyReplicas == $desired and .status.availableReplicas == $desired
-' <<<"$stable_rs" >/dev/null || course_fail 'PROD_BASELINE_STABLE_RS_NOT_READY'
+' <<<"$stable_rs" >/dev/null || pb_fail 'PROD_BASELINE_STABLE_RS_NOT_READY'
 
 started=$(jq --arg uid "$rollout_uid" --arg name "$rollout_name" '
   [.items[] | select(
@@ -53,20 +53,20 @@ started=$(jq --arg uid "$rollout_uid" --arg name "$rollout_name" '
     .metadata.labels["rollouts.argoproj.io/rollout-name"] == $name
   )] | length
 ' <<<"$analysisruns")
-[[ "$started" -eq 0 ]] || course_fail 'PROD_BASELINE_ANALYSIS_ALREADY_STARTED'
+[[ "$started" -eq 0 ]] || pb_fail 'PROD_BASELINE_ANALYSIS_ALREADY_STARTED'
 
-grade=$(course_runtime_grade)
-observed_at=$(course_now)
+grade=$(pb_runtime_grade)
+observed_at=$(pb_now)
 payload=$(jq -n --arg grade "$grade" --arg region "$AWS_REGION" --arg context "$context" \
   --arg namespace "$namespace" --arg rollout "$rollout_name" --arg uid "$rollout_uid" \
   --arg hash "$stable_hash" --arg observed "$observed_at" --argjson replicas "$desired" '
   {
-    schemaVersion:"course.prod-rollout-baseline/v1", evidenceGrade:$grade, status:"HEALTHY", region:$region,
+    schemaVersion:"playbuilder.prod-rollout-baseline/v1", evidenceGrade:$grade, status:"HEALTHY", region:$region,
     kubectlContext:$context, namespace:$namespace, rolloutName:$rollout, rolloutUid:$uid,
     stablePodHash:$hash, stableRevision:1, replicas:$replicas, analysisRunsStarted:0, observedAt:$observed
   }
 ')
-[[ -z "$output" ]] || course_write_json "$output" "$payload"
+[[ -z "$output" ]] || pb_write_json "$output" "$payload"
 [[ -n "$output" ]] || printf '%s\n' "$payload"
 if [[ "$grade" == STATIC ]]; then
   echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT Prod baseline Rollout is Healthy at revision 1.'

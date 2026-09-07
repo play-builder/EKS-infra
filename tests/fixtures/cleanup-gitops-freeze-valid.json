@@ -1,5 +1,5 @@
 {
-  "schemaVersion":"course.gitops-freeze/v1",
+  "schemaVersion":"playbuilder.gitops-freeze/v1",
   "evidenceGrade":"CLOUD_RUNTIME",
   "status":"FROZEN",
   "gitopsRevision":"5555555555555555555555555555555555555555",

@@ -32,14 +32,14 @@ sha256_file() {
 validate_handoff() {
   local file=$1 now=${2:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
   [[ -f "$file" ]] || fail "handoff evidence not found: $file"
-  course_assert_canonical_utc_seconds_value "$now" 'platform release handoff evaluation time'
-  course_assert_canonical_utc_seconds "$file" 'platform release handoff timestamps' \
+  pb_assert_canonical_utc_seconds_value "$now" 'platform release handoff evaluation time'
+  pb_assert_canonical_utc_seconds "$file" 'platform release handoff timestamps' \
     '["observedAt"]' '["expiresAt"]'
   jq -e --arg now "$now" '
     (.clusterArn |
       capture("^arn:aws:eks:(?<region>ap-northeast-2|us-east-1):[0-9]{12}:cluster/[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")) as $cluster |
     (keys | sort) == (["application","clusterArn","environment","evidenceGrade","expiresAt","gitopsRevision","observedAt","ownership","readiness","region","release","schemaVersion"] | sort) and
-    .schemaVersion == "course.platform-release-handoff/v1" and
+    .schemaVersion == "playbuilder.platform-release-handoff/v1" and
     .evidenceGrade == "CLOUD_RUNTIME" and
     (.environment == "dev" or .environment == "prod") and
     (.region == "ap-northeast-2" or .region == "us-east-1") and
@@ -84,7 +84,7 @@ validate_adoption() {
     def release_keys:
       ["chart","crdUids","helmStorageObjectUid","name","namespace","revision","status","valuesSha256","version","workloadUids"];
     (keys | sort) == (["clusterArn","environment","evidenceGrade","expiresAt","handoffSha256","observedAt","region","release","schemaVersion","terraform"] | sort) and
-    .schemaVersion == "course.platform-release-adoption/v1" and
+    .schemaVersion == "playbuilder.platform-release-adoption/v1" and
     .evidenceGrade == "CLOUD_RUNTIME" and
     .handoffSha256 == $handoff_sha and
     .environment == $handoff[0].environment and
@@ -258,7 +258,7 @@ adopt_release() {
     --argjson before "$before_release" --argjson after "$after_release" \
     --arg observedAt "$observed_at" --arg expiresAt "$expires_at" '
       {
-        schemaVersion:"course.platform-release-adoption/v1", evidenceGrade:"CLOUD_RUNTIME",
+        schemaVersion:"playbuilder.platform-release-adoption/v1", evidenceGrade:"CLOUD_RUNTIME",
         environment:$handoff[0].environment, region:$handoff[0].region, clusterArn:$handoff[0].clusterArn,
         handoffSha256:$handoffSha,
         release:{before:$before,after:$after},

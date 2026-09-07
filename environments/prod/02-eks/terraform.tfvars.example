@@ -2,7 +2,6 @@
 aws_region   = "ap-northeast-2"
 project_name = "playdevops"
 state_bucket_name = "replace-with-your-prod-state-bucket"
-course_id    = "replace-with-unique-course-id"
 environment  = "prod"
 platform_instance_id = "replace-with-platform-instance-id"
 owner                = "platform-sre"

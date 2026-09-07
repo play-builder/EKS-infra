@@ -8,7 +8,7 @@ override_data {
     outputs = {
       oidc_provider_arn                  = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.ap-northeast-2.amazonaws.com/id/fixture"
       oidc_provider                      = "oidc.eks.ap-northeast-2.amazonaws.com/id/fixture"
-      cluster_name                       = "prod-course"
+      cluster_name                       = "prod-mini-commerce"
       cluster_endpoint                   = "https://eks.example.invalid"
       cluster_certificate_authority_data = "Y2E="
     }
@@ -29,12 +29,12 @@ run "volume_snapshot_health_and_manual_bootstrap" {
     aws_region        = "us-east-1"
     gitops_repo_url   = "https://github.com/play-builder/argocd-gitops.git"
     enable_bootstrap  = true
-    state_bucket_name = "course-prod-state"
+    state_bucket_name = "mini-commerce-prod-state"
   }
 
   assert {
     condition = (
-      module.argocd.helm_values.configs.cm["course.health.volume-snapshot.contract"] == "volume-snapshot-ready-health/v1" &&
+      module.argocd.helm_values.configs.cm["playbuilder.health.volume-snapshot.contract"] == "volume-snapshot-ready-health/v1" &&
       strcontains(module.argocd.helm_values.configs.cm["resource.customizations.health.snapshot.storage.k8s.io_VolumeSnapshot"], "obj.status.readyToUse == true") &&
       strcontains(module.argocd.helm_values.configs.cm["resource.customizations.health.snapshot.storage.k8s.io_VolumeSnapshot"], "obj.status.error ~= nil")
     )
@@ -51,5 +51,5 @@ run "volume_snapshot_health_and_manual_bootstrap" {
 }
 
 variables {
-  state_bucket_name = "course-state"
+  state_bucket_name = "mini-commerce-state"
 }

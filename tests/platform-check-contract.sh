@@ -11,12 +11,12 @@ cat >"$tmp_dir/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 if [[ "$1 $2" == "run list" ]]; then
-  cat "$COURSE_CHECK_RUNS_FIXTURE"
+  cat "$PLATFORM_CHECK_RUNS_FIXTURE"
 elif [[ "$1 $2" == "run watch" ]]; then
   exit 0
 elif [[ "$1 $2" == "run view" ]]; then
   run_id=$3
-  jq --argjson id "$run_id" --arg sha "$COURSE_CHECK_HEAD_SHA" --arg workflow "${COURSE_CHECK_WORKFLOW_NAME:-CI}" '
+  jq --argjson id "$run_id" --arg sha "$PLATFORM_CHECK_HEAD_SHA" --arg workflow "${PLATFORM_CHECK_WORKFLOW_NAME:-CI}" '
     {databaseId:$id,headSha:$sha,workflowName:$workflow,event:"push",status:"completed",conclusion:"success",url:"https://example.invalid/run/\($id)"}
   ' <<<'{}'
 elif [[ "$1" == "api" ]]; then
@@ -49,8 +49,8 @@ EOF
 cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-: "${COURSE_FAKE_AWS_LOG:?}"
-printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+: "${PLATFORM_FAKE_AWS_LOG:?}"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_AWS_LOG"
 profile=""
 previous=""
 for argument in "$@"; do
@@ -64,14 +64,14 @@ case "$profile" in
 esac
 case "$1 $2" in
   'sts get-caller-identity')
-    jq -n --arg account "$account_id" '{Account:$account,Arn:("arn:aws:iam::"+$account+":user/course")}'
+    jq -n --arg account "$account_id" '{Account:$account,Arn:("arn:aws:iam::"+$account+":user/mini-commerce")}'
     ;;
   's3api get-bucket-tagging')
-    if [[ "${COURSE_FAKE_CASE:-}" == "bucket-environment-mismatch" && "$account_role" == "dev" ]]; then
+    if [[ "${PLATFORM_FAKE_CASE:-}" == "bucket-environment-mismatch" && "$account_role" == "dev" ]]; then
       account_role=network
     fi
     jq -n --arg account_role "$account_role" \
-      '{TagSet:[{Key:"ManagedBy",Value:"gitops-course"},{Key:"Project",Value:"course"},{Key:"Environment",Value:$account_role}]}'
+      '{TagSet:[{Key:"ManagedBy",Value:"Terraform"},{Key:"Project",Value:"mini-commerce"},{Key:"Environment",Value:$account_role}]}'
     ;;
   's3api get-bucket-location')
     if [[ "$AWS_REGION" == "us-east-1" ]]; then
@@ -102,7 +102,7 @@ case "$1 $2" in
     fi
     ;;
   'route53 list-resource-record-sets')
-    case "${COURSE_FAKE_CASE:-}" in
+    case "${PLATFORM_FAKE_CASE:-}" in
       delegation-missing)
         echo '{"ResourceRecordSets":[{"Name":"dev.example.com.","Type":"A","TTL":300,"ResourceRecords":[{"Value":"192.0.2.1"}]}]}' ;;
       delegation-mismatch)
@@ -112,7 +112,7 @@ case "$1 $2" in
     esac
     ;;
   'iam list-open-id-connect-providers')
-    if [[ "${COURSE_FAKE_CASE:-}" == "duplicate-dev-oidc" && "$account_role" == "dev" ]]; then
+    if [[ "${PLATFORM_FAKE_CASE:-}" == "duplicate-dev-oidc" && "$account_role" == "dev" ]]; then
       jq -n --arg account "$account_id" '{OpenIDConnectProviderList:[{Arn:("arn:aws:iam::"+$account+":oidc-provider/token.actions.githubusercontent.com")},{Arn:("arn:aws:iam::"+$account+":oidc-provider/token.actions.githubusercontent.com/duplicate")}]}'
     else
       jq -n --arg account "$account_id" '{OpenIDConnectProviderList:[{Arn:("arn:aws:iam::"+$account+":oidc-provider/token.actions.githubusercontent.com")}]}'
@@ -131,7 +131,7 @@ EOF
 cat >"$tmp_dir/bin/dig" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-case "${COURSE_FAKE_CASE:-}:${!#}" in
+case "${PLATFORM_FAKE_CASE:-}:${!#}" in
   public-child-mismatch:dev.example.com) printf '%s\n' ns-other-1.example.net. ns-other-2.example.net. ;;
   public-apex-mismatch:example.com) printf '%s\n' ns-1.example.net. ns-9.example.net. ;;
   dig-failure:dev.example.com) echo ';; connection timed out; no servers could be reached' >&2; exit 9 ;;
@@ -147,11 +147,11 @@ sha=0123456789abcdef0123456789abcdef01234567
 run_case() {
   local fixture=$1 expected_status=$2 expected_text=$3 output status
   set +e
-  output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-    COURSE_CHECK_RUNS_FIXTURE="$fixtures/$fixture" \
-    COURSE_CHECK_HEAD_SHA="$sha" \
-    COURSE_CHECK_WAIT_ATTEMPTS=1 \
-    bash "$root/scripts/course-check.sh" ch05 owner/repo "$sha" CI push 100 2>&1)
+  output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+    PLATFORM_CHECK_RUNS_FIXTURE="$fixtures/$fixture" \
+    PLATFORM_CHECK_HEAD_SHA="$sha" \
+    PLATFORM_CHECK_WAIT_ATTEMPTS=1 \
+    bash "$root/scripts/platform-check.sh" ch05 owner/repo "$sha" CI push 100 2>&1)
   status=$?
   set -e
   [[ "$status" -eq "$expected_status" ]]
@@ -167,11 +167,11 @@ run_case workflow-runs-one-exact.json 0 'databaseId'
 run_case workflow-runs-none.json 1 'EXACT_RUN_NOT_FOUND'
 run_case workflow-runs-ambiguous.json 1 'AMBIGUOUS_RUN'
 
-default_workflow_output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-  COURSE_CHECK_RUNS_FIXTURE="$fixtures/workflow-runs-one-exact-lowercase.json" \
-  COURSE_CHECK_HEAD_SHA="$sha" COURSE_CHECK_WORKFLOW_NAME=ci \
-  COURSE_CHECK_WAIT_ATTEMPTS=1 \
-  bash "$root/scripts/course-check.sh" ch05 owner/repo "$sha")
+default_workflow_output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+  PLATFORM_CHECK_RUNS_FIXTURE="$fixtures/workflow-runs-one-exact-lowercase.json" \
+  PLATFORM_CHECK_HEAD_SHA="$sha" PLATFORM_CHECK_WORKFLOW_NAME=ci \
+  PLATFORM_CHECK_WAIT_ATTEMPTS=1 \
+  bash "$root/scripts/platform-check.sh" ch05 owner/repo "$sha")
 grep -Fq 'databaseId' <<<"$default_workflow_output"
 grep -Fq '[STATIC] SIMULATED_CLOUD_CONTRACT' <<<"$default_workflow_output"
 
@@ -179,23 +179,23 @@ grep -Fq 'OTEL_EXPORTER_OTLP_ENDPOINT' "$root/README.md"
 ! grep -Fq 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT' "$root/README.md"
 
 for region in ap-northeast-2 us-east-1; do
-  AWS_REGION=$region COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-    bash "$root/scripts/course-check.sh" ch14 --contract-only >"$tmp_dir/ch14-$region.out"
+  AWS_REGION=$region PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+    bash "$root/scripts/platform-check.sh" ch14 --contract-only >"$tmp_dir/ch14-$region.out"
   [[ $(grep -Ec 'PASS: \[STATIC\]' "$tmp_dir/ch14-$region.out") -eq 1 ]]
 done
 
 for region in ap-northeast-2 us-east-1; do
   aws_log="$tmp_dir/aws-ch02-$region.log"
   : >"$aws_log"
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$aws_log" \
-    NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION="$region" LAB_PROJECT_NAME=course \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$aws_log" \
+    NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION="$region" LAB_PROJECT_NAME=mini-commerce \
     ROOT_DOMAIN=example.com INFRA_GH_REPO=owner/EKS-infra \
     APP_GH_REPO=owner/mini-commerce GITOPS_GH_REPO=owner/argocd-gitops \
-    bash "$root/scripts/course-check.sh" ch02 >"$tmp_dir/ch02-$region.out"
+    bash "$root/scripts/platform-check.sh" ch02 >"$tmp_dir/ch02-$region.out"
   [[ $(grep -Ec 'PASS: \[STATIC\]' "$tmp_dir/ch02-$region.out") -eq 1 ]]
   # Per-account state buckets derive from the profile account ID, never from STATE_BUCKET_NAME.
-  grep -Fq 'STATE_BUCKET[network]=course-tfstate-111111111111' "$tmp_dir/ch02-$region.out"
-  grep -Fq 'STATE_BUCKET[dev]=course-tfstate-222222222222' "$tmp_dir/ch02-$region.out"
+  grep -Fq 'STATE_BUCKET[network]=mini-commerce-tfstate-111111111111' "$tmp_dir/ch02-$region.out"
+  grep -Fq 'STATE_BUCKET[dev]=mini-commerce-tfstate-222222222222' "$tmp_dir/ch02-$region.out"
   grep -Fq 'GITHUB_OIDC_ARN[network]=arn:aws:iam::111111111111:' "$tmp_dir/ch02-$region.out"
   grep -Fq 'GITHUB_OIDC_ARN[dev]=arn:aws:iam::222222222222:' "$tmp_dir/ch02-$region.out"
   grep -Fq 'IMMUTABLE_MAIN_SUB[owner/mini-commerce]=repo:owner@101/mini-commerce@202:ref:refs/heads/main' "$tmp_dir/ch02-$region.out"
@@ -219,10 +219,10 @@ expect_ch02_fail() {
   local label=$1 expected_text=$2 output status
   shift 2
   set +e
-  output=$(env COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_AWS_LOG="$tmp_dir/aws-negative.log" \
-    NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION=ap-northeast-2 LAB_PROJECT_NAME=course \
+  output=$(env PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws-negative.log" \
+    NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION=ap-northeast-2 LAB_PROJECT_NAME=mini-commerce \
     ROOT_DOMAIN=example.com INFRA_GH_REPO=owner/EKS-infra APP_GH_REPO=owner/mini-commerce GITOPS_GH_REPO=owner/argocd-gitops \
-    "$@" bash "$root/scripts/course-check.sh" ch02 2>&1)
+    "$@" bash "$root/scripts/platform-check.sh" ch02 2>&1)
   status=$?
   set -e
   [[ "$status" -ne 0 ]] || { printf 'ch02 negative case passed unexpectedly: %s\n' "$label" >&2; exit 1; }
@@ -236,27 +236,27 @@ expect_ch02_fail() {
 expect_ch02_fail same-profile 'NETWORK_AWS_PROFILE과 DEV_AWS_PROFILE은 서로 다른 계정 profile이어야 합니다.' DEV_AWS_PROFILE=network
 expect_ch02_fail uppercase-root-domain 'ROOT_DOMAIN은 trailing dot이 없는 소문자 도메인이어야 합니다' ROOT_DOMAIN=Example.com
 expect_ch02_fail trailing-dot-root-domain 'ROOT_DOMAIN은 trailing dot이 없는 소문자 도메인이어야 합니다' ROOT_DOMAIN=example.com.
-expect_ch02_fail bucket-environment-mismatch 'state bucket ownership tag가 일치하지 않습니다(account=dev)' COURSE_FAKE_CASE=bucket-environment-mismatch
-expect_ch02_fail public-apex-mismatch 'Route 53 지정 nameserver와 public DNS 응답이 다릅니다.' COURSE_FAKE_CASE=public-apex-mismatch
-expect_ch02_fail delegation-missing 'NS 위임 record가 없습니다' COURSE_FAKE_CASE=delegation-missing
-expect_ch02_fail delegation-mismatch 'NS 위임 record가 child zone nameserver와 다릅니다.' COURSE_FAKE_CASE=delegation-mismatch
-expect_ch02_fail public-child-mismatch 'child zone nameserver와 public DNS dev.example.com NS 응답이 다릅니다.' COURSE_FAKE_CASE=public-child-mismatch
-expect_ch02_fail dig-failure 'public DNS dev.example.com NS 조회에 실패했습니다(dig exit=9).' COURSE_FAKE_CASE=dig-failure
-expect_ch02_fail duplicate-dev-oidc 'GitHub OIDC provider는 dev 계정에 정확히 1개여야 합니다(found=2).' COURSE_FAKE_CASE=duplicate-dev-oidc
+expect_ch02_fail bucket-environment-mismatch 'state bucket ownership tag가 일치하지 않습니다(account=dev)' PLATFORM_FAKE_CASE=bucket-environment-mismatch
+expect_ch02_fail public-apex-mismatch 'Route 53 지정 nameserver와 public DNS 응답이 다릅니다.' PLATFORM_FAKE_CASE=public-apex-mismatch
+expect_ch02_fail delegation-missing 'NS 위임 record가 없습니다' PLATFORM_FAKE_CASE=delegation-missing
+expect_ch02_fail delegation-mismatch 'NS 위임 record가 child zone nameserver와 다릅니다.' PLATFORM_FAKE_CASE=delegation-mismatch
+expect_ch02_fail public-child-mismatch 'child zone nameserver와 public DNS dev.example.com NS 응답이 다릅니다.' PLATFORM_FAKE_CASE=public-child-mismatch
+expect_ch02_fail dig-failure 'public DNS dev.example.com NS 조회에 실패했습니다(dig exit=9).' PLATFORM_FAKE_CASE=dig-failure
+expect_ch02_fail duplicate-dev-oidc 'GitHub OIDC provider는 dev 계정에 정확히 1개여야 합니다(found=2).' PLATFORM_FAKE_CASE=duplicate-dev-oidc
 
 while IFS=$'\t' read -r chapter mode; do
   [[ -n "$chapter" ]] || continue
   case "$mode" in
     contract)
-      AWS_REGION=ap-northeast-2 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-        bash "$root/scripts/course-check.sh" "$chapter" --contract-only >/dev/null
+      AWS_REGION=ap-northeast-2 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+        bash "$root/scripts/platform-check.sh" "$chapter" --contract-only >/dev/null
       ;;
     workflow)
-      COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_CHECK_RUNS_FIXTURE="$fixtures/workflow-runs-one-exact.json" \
-        COURSE_CHECK_HEAD_SHA="$sha" COURSE_CHECK_WAIT_ATTEMPTS=1 \
-        bash "$root/scripts/course-check.sh" "$chapter" owner/repo "$sha" CI push 100 >/dev/null
+      PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_CHECK_RUNS_FIXTURE="$fixtures/workflow-runs-one-exact.json" \
+        PLATFORM_CHECK_HEAD_SHA="$sha" PLATFORM_CHECK_WAIT_ATTEMPTS=1 \
+        bash "$root/scripts/platform-check.sh" "$chapter" owner/repo "$sha" CI push 100 >/dev/null
       ;;
   esac
 done < <(jq -r '.chapters[] | [.chapter,.mode] | @tsv' "$fixtures/chapter-command-contracts.json")
 
-echo 'PASS: course-check semantic dispatcher contract'
+echo 'PASS: platform-check semantic dispatcher contract'

@@ -9,12 +9,12 @@ mkdir -p "$tmp_dir/bin"
 cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_AWS_LOG"
 if [[ "$1 $2" == "sts get-caller-identity" ]]; then
-  account=$(jq -r '.fixtureCallerAccount // "123456789012"' "$COURSE_OIDC_FIXTURE")
+  account=$(jq -r '.fixtureCallerAccount // "123456789012"' "$PLATFORM_OIDC_FIXTURE")
   jq -n --arg account "$account" '{Account:$account}'
 elif [[ "$1 $2" == "iam get-open-id-connect-provider" ]]; then
-  cat "$COURSE_OIDC_FIXTURE"
+  cat "$PLATFORM_OIDC_FIXTURE"
 else
   exit 97
 fi
@@ -27,8 +27,8 @@ run_case() {
   local fixture=$1 expected=$2 pattern=$3 status output log
   log="$tmp_dir/${fixture}.log"
   set +e
-  output=$(AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-    COURSE_FAKE_AWS_LOG="$log" COURSE_OIDC_FIXTURE="$root/tests/fixtures/$fixture" \
+  output=$(AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+    PLATFORM_FAKE_AWS_LOG="$log" PLATFORM_OIDC_FIXTURE="$root/tests/fixtures/$fixture" \
     bash "$root/scripts/validate-external-oidc.sh" "$arn" 2>&1)
   status=$?
   set -e

@@ -12,19 +12,19 @@ while [[ $# -gt 0 ]]; do
     --mode) mode=${2:-}; shift 2 ;;
     --input) input=${2:-}; shift 2 ;;
     --output) output=${2:-}; shift 2 ;;
-    *) course_fail "unknown argument: $1" 64 ;;
+    *) pb_fail "unknown argument: $1" 64 ;;
   esac
 done
-[[ "$mode" == design || "$mode" == estimate || "$mode" == live ]] || course_fail 'mode must be design, estimate, or live' 64
-[[ -n "$input" ]] || course_fail '--input is required' 64
-course_require_file "$input"
-course_assert_canonical_utc_seconds "$input" 'capacity input timestamps' \
+[[ "$mode" == design || "$mode" == estimate || "$mode" == live ]] || pb_fail 'mode must be design, estimate, or live' 64
+[[ -n "$input" ]] || pb_fail '--input is required' 64
+pb_require_file "$input"
+pb_assert_canonical_utc_seconds "$input" 'capacity input timestamps' \
   '["observedAt"]' '["expiresAt"]'
 
-CAPACITY_MODE="$mode" course_assert_json "$input" '
-  keys == ["accountId","billable","courseId","daemonSets","evidenceGrade","expiresAt","mode","network","nodes","observedAt","region","reserve","rollout","schemaVersion","workload"] and
-  .schemaVersion == "course.capacity-input/v1" and .evidenceGrade == "STATIC" and .mode == $ENV.CAPACITY_MODE and
-  (.courseId | type == "string" and length > 0) and (.accountId | test("^[0-9]{12}$")) and
+CAPACITY_MODE="$mode" pb_assert_json "$input" '
+  keys == ["accountId","billable","daemonSets","evidenceGrade","expiresAt","mode","network","nodes","observedAt","ownerId","region","reserve","rollout","schemaVersion","workload"] and
+  .schemaVersion == "playbuilder.capacity-input/v1" and .evidenceGrade == "STATIC" and .mode == $ENV.CAPACITY_MODE and
+  (.ownerId | type == "string" and length > 0) and (.accountId | test("^[0-9]{12}$")) and
   (.region == "ap-northeast-2" or .region == "us-east-1") and
   (.nodes | keys == ["count","minMaxPodsPerNode","totalCpuMilli","totalMemoryMiB","totalPodSlots"]) and
   (.reserve | keys == ["cpuMilli","memoryMiB","pods"]) and
@@ -42,10 +42,10 @@ CAPACITY_MODE="$mode" course_assert_json "$input" '
 result=$(jq --arg mode "$mode" '
   (.workload.replicas + .rollout.maxSurgePods) as $peak |
   {
-    schemaVersion:"course.capacity-decision/v1",
+    schemaVersion:"playbuilder.capacity-decision/v1",
     evidenceGrade:"STATIC",
     mode:$mode,
-    courseId:.courseId,
+    ownerId:.ownerId,
     accountId:.accountId,
     region:.region,
     decision:(if
@@ -74,10 +74,10 @@ result=$(jq --arg mode "$mode" '
   }
 ' "$input")
 
-[[ -z "$output" ]] || course_write_json "$output" "$result"
+[[ -z "$output" ]] || pb_write_json "$output" "$result"
 printf '%s\n' "$result"
 if [[ $(jq -r '.decision' <<<"$result") != GO ]]; then
   echo 'NO_GO: CPU, memory, pod, subnet IP, or cost headroom is insufficient.' >&2
   exit 2
 fi
-[[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] capacity arithmetic is GO.'
+[[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] capacity arithmetic is GO.'

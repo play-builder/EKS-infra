@@ -217,7 +217,7 @@ def collect_observations(c, client, now):
 
 
 def runtime_clients(args):
-    require(not os.environ.get("COURSE_CHECK_BIN_DIR"), "runtime collector refuses command doubles")
+    require(not os.environ.get("PLATFORM_CHECK_BIN_DIR"), "runtime collector refuses command doubles")
     require(not any(k.startswith("AWS_ENDPOINT_URL") for k in os.environ), "custom AWS endpoints prohibited")
     try:
         import boto3

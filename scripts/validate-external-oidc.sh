@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
-  PATH="$COURSE_CHECK_BIN_DIR:$PATH"
+if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
+  PATH="$PLATFORM_CHECK_BIN_DIR:$PATH"
 fi
 
 fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
@@ -22,7 +22,7 @@ caller_account=$(jq -r '.Account' <<<"$caller")
 [[ $(jq -r '.Url' <<<"$provider") == 'token.actions.githubusercontent.com' ]] || fail 'OIDC_ISSUER_MISMATCH'
 jq -e 'any(.ClientIDList[]?; . == "sts.amazonaws.com")' <<<"$provider" >/dev/null || fail 'OIDC_AUDIENCE_MISSING'
 
-if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
   echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT external OIDC identity is valid.'
 else
   echo 'PASS: [CLOUD_RUNTIME] external OIDC identity is valid.'

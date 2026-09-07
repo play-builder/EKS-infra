@@ -15,11 +15,11 @@ variables {
 run "provider_accepts_raw_rule_yaml" {
   command = apply
   assert {
-    condition     = try(length(yamldecode(aws_prometheus_rule_group_namespace.course[0].data).groups[0].rules) >= 8, false)
+    condition     = try(length(yamldecode(aws_prometheus_rule_group_namespace.platform[0].data).groups[0].rules) >= 8, false)
     error_message = "Provider input must be raw rule YAML with service and business alerts."
   }
   assert {
-    condition     = try(yamldecode(yamldecode(aws_prometheus_alert_manager_definition.course[0].definition).alertmanager_config).receivers[0].sns_configs[0].send_resolved, false)
+    condition     = try(yamldecode(yamldecode(aws_prometheus_alert_manager_definition.platform[0].definition).alertmanager_config).receivers[0].sns_configs[0].send_resolved, false)
     error_message = "Nested Alertmanager YAML must route firing and resolved alerts."
   }
 }
@@ -48,7 +48,7 @@ run "workspace_account_mismatch_rejected" {
   variables {
     workspace_arn = "arn:aws:aps:ap-northeast-2:999999999999:workspace/ws-12345678-abcd-1234-abcd-123456789012"
   }
-  expect_failures = [aws_prometheus_rule_group_namespace.course]
+  expect_failures = [aws_prometheus_rule_group_namespace.platform]
 }
 
 run "workspace_region_mismatch_rejected" {
@@ -56,5 +56,5 @@ run "workspace_region_mismatch_rejected" {
   variables {
     workspace_arn = "arn:aws:aps:us-east-1:123456789012:workspace/ws-12345678-abcd-1234-abcd-123456789012"
   }
-  expect_failures = [aws_prometheus_rule_group_namespace.course]
+  expect_failures = [aws_prometheus_rule_group_namespace.platform]
 }

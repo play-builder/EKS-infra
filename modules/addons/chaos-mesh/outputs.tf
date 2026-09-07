@@ -16,7 +16,6 @@ output "chart_version" {
 output "game_day_contract" {
   description = "Bounded fault admission settings"
   value = {
-    courseId                   = var.course_id
     allowedNamespaces          = var.allowed_namespaces
     maxFaultDurationSeconds    = var.max_fault_duration_seconds
     maxFaults                  = var.max_faults

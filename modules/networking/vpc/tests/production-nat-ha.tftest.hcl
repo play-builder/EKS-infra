@@ -3,13 +3,13 @@ mock_provider "aws" {}
 variables {
   vpc_flow_log_kms_key_arn       = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555"
   vpc_flow_log_retention_in_days = 90
-  name                           = "prod-course"
+  name                           = "prod-mini-commerce"
   environment                    = "prod"
   vpc_cidr                       = "10.1.0.0/16"
   availability_zones             = ["ap-northeast-2a", "ap-northeast-2b", "ap-northeast-2c"]
   public_subnet_cidrs            = ["10.1.1.0/24", "10.1.2.0/24", "10.1.3.0/24"]
   private_subnet_cidrs           = ["10.1.11.0/24", "10.1.12.0/24", "10.1.13.0/24"]
-  eks_cluster_name               = "prod-course-eks"
+  eks_cluster_name               = "prod-mini-commerce-eks"
   tags = {
     PlatformInstanceId = "platform-123"
     Owner              = "platform-sre"

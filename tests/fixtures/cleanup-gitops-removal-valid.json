@@ -1,5 +1,5 @@
 {
-  "schemaVersion":"course.gitops-removal/v1",
+  "schemaVersion":"playbuilder.gitops-removal/v1",
   "evidenceGrade":"CLOUD_RUNTIME",
   "status":"REMOVED",
   "gitopsRevision":"6666666666666666666666666666666666666666",

@@ -1,6 +1,5 @@
 aws_region   = "ap-northeast-2"
 project_name = "mini-commerce"
-course_id    = "replace-with-unique-course-id"
 org_id       = "o-replaceme"
 
 # Fork identity. Numeric IDs never change even if names do.

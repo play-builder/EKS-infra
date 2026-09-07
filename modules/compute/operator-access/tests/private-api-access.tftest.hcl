@@ -1,13 +1,13 @@
 mock_provider "aws" {}
 
 variables {
-  name                      = "prod-course"
+  name                      = "prod-mini-commerce"
   vpc_id                    = "vpc-0123456789abcdef0"
   subnet_id                 = "subnet-0123456789abcdef0"
-  cluster_arn               = "arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-course-eks"
+  cluster_arn               = "arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-mini-commerce-eks"
   cluster_security_group_id = "sg-0fedcba9876543210"
   trusted_sso_principal_arn = "arn:aws:iam::123456789012:role/aws-reserved/sso.amazonaws.com/ap-northeast-2/AWSReservedSSO_PlatformOperator_abc123"
-  cluster_name              = "prod-course-eks"
+  cluster_name              = "prod-mini-commerce-eks"
   ami_id                    = "ami-0123456789abcdef0"
   tags = {
     PlatformInstanceId = "platform-123"

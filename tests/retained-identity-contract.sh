@@ -6,12 +6,12 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 
 jq '
-  .resources |= map(if .kind == "SecretsManagerSecret" then .decision = "RETAIN" | .owner = "course" else . end) |
+  .resources |= map(if .kind == "SecretsManagerSecret" then .decision = "RETAIN" | .owner = "platform" else . end) |
   .resources += [
-    {kind:"PersistentVolumeClaim",id:"app-dev/data",environment:"dev",classification:"source-pvc",owner:"course",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
-    {kind:"VolumeSnapshot",id:"app-dev/data-snapshot",environment:"dev",classification:"source-snapshot",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
-    {kind:"VolumeSnapshotContent",id:"data-content",environment:"dev",classification:"source-snapshot-content",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
-    {kind:"Namespace",id:"app-dev",environment:"dev",classification:"application-namespace",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"namespace cleanup review",followUpAction:"delete after approval"}
+    {kind:"PersistentVolumeClaim",id:"app-dev/data",environment:"dev",classification:"source-pvc",owner:"platform",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
+    {kind:"VolumeSnapshot",id:"app-dev/data-snapshot",environment:"dev",classification:"source-snapshot",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
+    {kind:"VolumeSnapshotContent",id:"data-content",environment:"dev",classification:"source-snapshot-content",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
+    {kind:"Namespace",id:"app-dev",environment:"dev",classification:"application-namespace",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"namespace cleanup review",followUpAction:"delete after approval"}
   ] |
   .resources |= sort_by(.kind,.id)
 ' "$root/tests/fixtures/cleanup-ownership-valid.json" >"$tmp_dir/inventory.json"
@@ -27,7 +27,7 @@ jq --arg provider_sha "$provider_sha" '
   ] | .providerSecrets.inventorySha256 = $provider_sha
 ' "$root/tests/fixtures/cleanup-gitops-removal-valid.json" >"$tmp_dir/removal.json"
 
-export COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2
+export OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2
 source "$root/scripts/lib/evidence-common.sh"
 source "$root/scripts/lib/cleanup-evidence.sh"
 

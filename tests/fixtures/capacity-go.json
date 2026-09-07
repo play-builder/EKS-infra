@@ -1,8 +1,8 @@
 {
-  "schemaVersion": "course.capacity-input/v1",
+  "schemaVersion": "playbuilder.capacity-input/v1",
   "evidenceGrade": "STATIC",
   "mode": "design",
-  "courseId": "course-2026",
+  "ownerId": "playbuilder",
   "accountId": "123456789012",
   "region": "ap-northeast-2",
   "nodes": {

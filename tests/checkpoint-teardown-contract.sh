@@ -15,21 +15,21 @@ cat >"$tmp_dir/bin/terraform" <<'EOF'
 set -Eeuo pipefail
 chdir=''
 for argument in "$@"; do case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac; done
-layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
+layer=${chdir#"$PLATFORM_FAKE_REPO_ROOT/"}
 if [[ " $* " == *" show -json "* ]]; then
-  if [[ -n "${COURSE_FAKE_PLAN_JSON_OVERRIDE:-}" ]]; then
-    cat "$COURSE_FAKE_PLAN_JSON_OVERRIDE"
+  if [[ -n "${PLATFORM_FAKE_PLAN_JSON_OVERRIDE:-}" ]]; then
+    cat "$PLATFORM_FAKE_PLAN_JSON_OVERRIDE"
   else
-    cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
+    cat "$PLATFORM_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
   fi
   exit 0
 fi
-printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_MUTATION_LOG"
 EOF
 cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_AWS_LOG"
 printf '{"Account":"123456789012"}\n'
 EOF
 chmod +x "$tmp_dir/bin/terraform" "$tmp_dir/bin/aws"
@@ -54,10 +54,10 @@ expect_timestamp_rejected_before_mutation() {
   : >"$tmp_dir/aws.log"
   rm -f -- "$tmp_dir/resume.json"
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-  AWS_PROFILE=course \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  AWS_PROFILE=mini-commerce \
     bash "$root/scripts/checkpoint-teardown.sh" --approval "$candidate" "${common_without_approval[@]}" --execute \
-      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 \
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder \
       >/dev/null 2>&1
   status=$?
   set -e
@@ -77,19 +77,19 @@ expect_timestamp_rejected_before_mutation expires-offset expiresAt '2099-03-01T0
 : >"$tmp_dir/mutations.log"
 : >"$tmp_dir/aws.log"
 
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-  bash "$root/scripts/course-check.sh" ch26 --checkpoint-teardown "${common[@]}"
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  bash "$root/scripts/platform-check.sh" ch26 --checkpoint-teardown "${common[@]}"
 [[ ! -s "$tmp_dir/mutations.log" && ! -e "$tmp_dir/resume.json" ]]
 
 set +e
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-AWS_PROFILE=course \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+AWS_PROFILE=mini-commerce \
   bash "$root/scripts/checkpoint-teardown.sh" "${common[@]}" --execute \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 >/dev/null 2>&1
 status=$?
 set -e
 if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" ]]; then
-  echo 'missing course confirmation must fail before mutation' >&2
+  echo 'missing owner confirmation must fail before mutation' >&2
   exit 1
 fi
 
@@ -97,11 +97,11 @@ non_destroy_plan="$tmp_dir/non-destroy.json"
 jq '.resource_changes[0].change.actions=["update"]' \
   "$tmp_dir/plan-json/environments__prod__04-workloads__argocd.json" >"$non_destroy_plan"
 set +e
-output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" COURSE_FAKE_REPO_ROOT="$root" \
-  COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" COURSE_FAKE_PLAN_JSON_OVERRIDE="$non_destroy_plan" \
-  AWS_PROFILE=course bash "$root/scripts/checkpoint-teardown.sh" "${common[@]}" --execute \
-    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 2>&1)
+output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" PLATFORM_FAKE_REPO_ROOT="$root" \
+  PLATFORM_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" PLATFORM_FAKE_PLAN_JSON_OVERRIDE="$non_destroy_plan" \
+  AWS_PROFILE=mini-commerce bash "$root/scripts/checkpoint-teardown.sh" "${common[@]}" --execute \
+    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder 2>&1)
 status=$?
 set -e
 if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" ]] || \
@@ -110,15 +110,15 @@ if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" ]] || \
   exit 1
 fi
 
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-COURSE_FAKE_REPO_ROOT="$root" COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" \
-AWS_PROFILE=course \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+PLATFORM_FAKE_REPO_ROOT="$root" PLATFORM_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" \
+AWS_PROFILE=mini-commerce \
   bash "$root/scripts/checkpoint-teardown.sh" "${common[@]}" --execute \
-    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026
+    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder
 
 jq -e '
-  keys == ["accountId","courseId","dependencyOrder","evidenceGrade","flags","observedAt","region","retained","schemaVersion","stateKeys","status","versions"] and
-  .schemaVersion == "course.checkpoint-resume/v1" and .status == "PARTIAL_TEARDOWN" and
+  keys == ["accountId","dependencyOrder","evidenceGrade","flags","observedAt","ownerId","region","retained","schemaVersion","stateKeys","status","versions"] and
+  .schemaVersion == "playbuilder.checkpoint-resume/v1" and .status == "PARTIAL_TEARDOWN" and
   (.retained | length == 3) and all(.retained[]; .decision? == null and (.owner | length > 0) and (.followUpAction | length > 0))
 ' "$tmp_dir/resume.json" >/dev/null
 [[ $(wc -l <"$tmp_dir/mutations.log" | tr -d ' ') -eq 8 ]]

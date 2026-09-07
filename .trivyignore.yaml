@@ -9,11 +9,11 @@ misconfigurations:
     expired_at: 2026-12-05
   - id: AWS-0039
     paths: ["modules/eks/cluster/main.tf"]
-    statement: "EKS 1.36 encrypts Kubernetes API data at rest by default; a customer-managed KMS key is outside the course cost boundary."
+    statement: "EKS 1.36 encrypts Kubernetes API data at rest by default; a customer-managed KMS key is outside the platform cost boundary."
     expired_at: 2027-09-02
   - id: AWS-0040
     paths: ["modules/eks/cluster/main.tf"]
-    statement: "The course uses a public API endpoint restricted by public_access_cidrs for student workstations."
+    statement: "The platform uses a public API endpoint restricted by public_access_cidrs for operator workstations."
     expired_at: 2027-09-02
   - id: AWS-0164
     paths: ["modules/networking/vpc/main.tf"]
@@ -21,7 +21,7 @@ misconfigurations:
     expired_at: 2027-09-02
   - id: AWS-0132
     paths: ["modules/bootstrap/state-backend/main.tf"]
-    statement: "The disposable course backend uses SSE-S3 to avoid a persistent KMS key charge."
+    statement: "The disposable platform backend uses SSE-S3 to avoid a persistent KMS key charge."
     expired_at: 2027-09-02
   - id: AWS-0032
     paths: ["environments/network/02-registry/main.tf"]
@@ -29,7 +29,7 @@ misconfigurations:
     expired_at: 2027-09-07
   - id: GIT-0001
     paths: ["environments/network/03-github-governance/main.tf"]
-    statement: "The public visibility is intentional because students fork this course repository; delivery controls and secret scanning remain independently enforced."
+    statement: "The public visibility is intentional because teams fork this platform repository; delivery controls and secret scanning remain independently enforced."
     expired_at: 2027-09-03
   - id: GIT-0003
     paths: ["environments/network/03-github-governance/main.tf"]

@@ -18,22 +18,22 @@ cat >"$tmp_dir/bin/terraform" <<'EOF'
 set -Eeuo pipefail
 chdir=''
 for argument in "$@"; do case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac; done
-layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
+layer=${chdir#"$PLATFORM_FAKE_REPO_ROOT/"}
 if [[ " $* " == *" show -json "* ]]; then
-  cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
+  cat "$PLATFORM_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
   exit 0
 fi
 [[ " $* " == *" apply "* ]] || exit 97
-printf '%s\n' "$layer" >>"$COURSE_FAKE_MUTATION_LOG"
+printf '%s\n' "$layer" >>"$PLATFORM_FAKE_MUTATION_LOG"
 EOF
 chmod +x "$tmp_dir/bin/terraform"
 : >"$tmp_dir/mutations.log"
 
 export PATH="$tmp_dir/bin:$PATH"
-export COURSE_FAKE_REPO_ROOT="$root"
-export COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json"
-export COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log"
-export COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2
+export PLATFORM_FAKE_REPO_ROOT="$root"
+export PLATFORM_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json"
+export PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log"
+export OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2
 
 progress="$tmp_dir/evidence/saved-plan-progress.json"
 manifest="$tmp_dir/saved-plans.json"

@@ -5,7 +5,7 @@ variable "enable_k6_operator" {
 
   validation {
     condition     = !var.enable_k6_operator || var.environment == "dev"
-    error_message = "K6_OPERATOR_DEV_ONLY: the course load controller may be enabled only in dev."
+    error_message = "K6_OPERATOR_DEV_ONLY: the platform load controller may be enabled only in dev."
   }
 }
 

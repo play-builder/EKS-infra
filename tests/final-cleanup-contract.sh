@@ -81,16 +81,16 @@ plan_manifest="$tmp_dir/saved-plans.json"
 plan_sha=$(raw_sha256 "$plan_manifest")
 inventory_sha=$(raw_sha256 "$tmp_dir/evidence/inventory.json")
 jq -n --arg plan "$plan_sha" --arg inventory "$inventory_sha" '
-  {schemaVersion:"course.cleanup-preflight/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
-   courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",project:"playdevops",
+  {schemaVersion:"playbuilder.cleanup-preflight/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
+   ownerId:"playbuilder",accountId:"123456789012",region:"ap-northeast-2",project:"playdevops",
    planSha256:$plan,inventorySha256:$inventory,observedAt:"2026-09-03T00:05:00Z",expiresAt:"2099-09-03T01:00:00Z"}
 ' >"$tmp_dir/evidence/preflight.json"
 jq -n '
-  {schemaVersion:"course.in-flight-zero/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
-   courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",
+  {schemaVersion:"playbuilder.in-flight-zero/v1",evidenceGrade:"CLOUD_RUNTIME",status:"PASS",
+   ownerId:"playbuilder",accountId:"123456789012",region:"ap-northeast-2",
    clusters:[
-     {environment:"dev",context:"course-dev",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks"},
-     {environment:"prod",context:"course-prod",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks"}],
+     {environment:"dev",context:"mini-commerce-dev",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/dev-playdevops-eks"},
+     {environment:"prod",context:"mini-commerce-prod",clusterArn:"arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-playdevops-eks"}],
    remainingWriters:{loadGenerators:0,chaosResources:0,recoveryJobs:0,migrationJobs:0},
    observedAt:"2026-09-03T00:09:00Z",expiresAt:"2099-09-03T01:00:00Z"}
 ' >"$tmp_dir/evidence/in-flight.json"
@@ -100,26 +100,26 @@ cat >"$tmp_dir/bin/terraform" <<'EOF'
 set -Eeuo pipefail
 chdir=''
 for argument in "$@"; do case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac; done
-layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
+layer=${chdir#"$PLATFORM_FAKE_REPO_ROOT/"}
 if [[ " $* " == *" show -json "* ]]; then
-  cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
+  cat "$PLATFORM_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
   exit 0
 fi
-printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
-if [[ "$*" == *"/02-eks apply"* ]]; then : >"$COURSE_EKS_DELETED_SENTINEL"; fi
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_MUTATION_LOG"
+if [[ "$*" == *"/02-eks apply"* ]]; then : >"$PLATFORM_EKS_DELETED_SENTINEL"; fi
 EOF
 cat >"$tmp_dir/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-[[ ! -e "$COURSE_EKS_DELETED_SENTINEL" ]] || { echo 'kubectl called after EKS deletion' >&2; exit 99; }
-[[ "${COURSE_FAKE_KUBECTL_FAIL:-false}" != true ]] || { echo 'simulated Kubernetes API failure' >&2; exit 96; }
-printf '%s\n' "$*" >>"$COURSE_FAKE_KUBECTL_LOG"
+[[ ! -e "$PLATFORM_EKS_DELETED_SENTINEL" ]] || { echo 'kubectl called after EKS deletion' >&2; exit 99; }
+[[ "${PLATFORM_FAKE_KUBECTL_FAIL:-false}" != true ]] || { echo 'simulated Kubernetes API failure' >&2; exit 96; }
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_KUBECTL_LOG"
 printf '{"apiVersion":"v1","items":[]}\n'
 EOF
 cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_AWS_LOG"
 if [[ "$1 $2" == "resourcegroupstaggingapi get-resources" ]]; then echo '{"ResourceTagMappingList":[]}'; exit 0; fi
 case "$1 $2" in
   'sts get-caller-identity') printf '{"Account":"123456789012"}\n' ;;
@@ -130,7 +130,7 @@ case "$1 $2" in
   'ec2 describe-snapshots') printf '{"Snapshots":[{"SnapshotId":"snap-retained-001"}]}\n' ;;
   'amp list-workspaces') printf '{"workspaces":[]}\n' ;;
   'sns list-topics') printf '{"Topics":[]}\n' ;;
-  'ecr describe-repositories') printf '{"repositories":[{"repositoryArn":"arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app"}]}\n' ;;
+  'ecr describe-repositories') printf '{"repositories":[{"repositoryArn":"arn:aws:ecr:ap-northeast-2:123456789012:repository/mini-commerce"}]}\n' ;;
   'secretsmanager describe-secret') printf '{"ARN":"arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:shared-provider"}\n' ;;
   *) echo "unexpected aws: $*" >&2; exit 97 ;;
 esac
@@ -149,7 +149,7 @@ common=(
   --in-flight-evidence "$tmp_dir/evidence/in-flight.json"
   --gitops-freeze-evidence "$tmp_dir/evidence/freeze.json"
   --gitops-removal-evidence "$tmp_dir/evidence/removal.json"
-  --dev-context course-dev --prod-context course-prod
+  --dev-context mini-commerce-dev --prod-context mini-commerce-prod
   --kubernetes-pre-destroy-output "$tmp_dir/evidence/generated-pre-destroy.json"
   --residual-output "$tmp_dir/evidence/generated-residual.json"
 )
@@ -164,11 +164,11 @@ assert_preflight_timestamp_rejected_before_cloud_calls() {
   : >"$tmp_dir/aws.log"
   rm -f "$tmp_dir/eks-deleted"
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-  COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  PLATFORM_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 OWNER_ID=playbuilder \
     bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
-      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 \
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder \
       >/dev/null 2>&1
   status=$?
   set -e
@@ -198,11 +198,11 @@ assert_in_flight_rejected_before_cloud_calls() {
   : >"$tmp_dir/kubectl.log"
   : >"$tmp_dir/aws.log"
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-  COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  PLATFORM_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 OWNER_ID=playbuilder \
     bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
-      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 \
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder \
       >/dev/null 2>&1
   status=$?
   set -e
@@ -213,10 +213,10 @@ assert_in_flight_rejected_before_cloud_calls() {
 }
 
 assert_in_flight_rejected_before_cloud_calls stale '.expiresAt="2020-09-03T01:00:00Z"'
-assert_in_flight_rejected_before_cloud_calls old-schema '.schemaVersion="course.in-flight-zero/v0"'
+assert_in_flight_rejected_before_cloud_calls old-schema '.schemaVersion="playbuilder.in-flight-zero/v0"'
 assert_in_flight_rejected_before_cloud_calls wrong-cluster \
   '.clusters[1].clusterArn="arn:aws:eks:ap-northeast-2:123456789012:cluster/other-prod"'
-assert_in_flight_rejected_before_cloud_calls wrong-context '.clusters[1].context="not-course-prod"'
+assert_in_flight_rejected_before_cloud_calls wrong-context '.clusters[1].context="not-mini-commerce-prod"'
 cp "$tmp_dir/evidence/in-flight-valid.json" "$tmp_dir/evidence/in-flight.json"
 
 : >"$tmp_dir/mutations.log"
@@ -224,13 +224,13 @@ cp "$tmp_dir/evidence/in-flight-valid.json" "$tmp_dir/evidence/in-flight.json"
 : >"$tmp_dir/aws.log"
 rm -f "$tmp_dir/eks-deleted" "$tmp_dir/evidence/runtime-pre-destroy.json" "$tmp_dir/evidence/runtime-residual.json"
 set +e
-output=$(PATH="$tmp_dir/bin:$PATH" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-  COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
+output=$(PATH="$tmp_dir/bin:$PATH" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  PLATFORM_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 OWNER_ID=playbuilder \
     bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
       --kubernetes-pre-destroy-output "$tmp_dir/evidence/runtime-pre-destroy.json" \
       --residual-output "$tmp_dir/evidence/runtime-residual.json" \
-      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 2>&1)
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder 2>&1)
 status=$?
 set -e
 if [[ "$status" -eq 0 ]] || ! grep -Fq 'NONCANONICAL_RUNTIME_OUTPUT' <<<"$output"; then
@@ -245,12 +245,12 @@ fi
 : >"$tmp_dir/aws.log"
 rm -f "$tmp_dir/eks-deleted"
 set +e
-output=$(COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-  COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
+output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+  PLATFORM_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 OWNER_ID=playbuilder \
     bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
       --kubernetes-pre-destroy-output "$root/evidence/cleanup/../cleanup/kubernetes-pre-destroy.json" \
-      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 2>&1)
+      --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder 2>&1)
 status=$?
 set -e
 if [[ "$status" -eq 0 ]] || ! grep -Fq 'FIXTURE_RUNTIME_OUTPUT_BLOCKED' <<<"$output"; then
@@ -259,13 +259,13 @@ if [[ "$status" -eq 0 ]] || ! grep -Fq 'FIXTURE_RUNTIME_OUTPUT_BLOCKED' <<<"$out
 fi
 [[ ! -s "$tmp_dir/mutations.log" && ! -s "$tmp_dir/kubectl.log" && ! -s "$tmp_dir/aws.log" ]]
 
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  bash "$root/scripts/course-check.sh" ch26 --final-cleanup "${common[@]}"
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  bash "$root/scripts/platform-check.sh" ch26 --final-cleanup "${common[@]}"
 [[ ! -s "$tmp_dir/mutations.log" && ! -e "$tmp_dir/evidence/generated-residual.json" ]]
 
 set +e
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  bash "$root/scripts/course-check.sh" ch26 --execute "${common[@]}" \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  bash "$root/scripts/platform-check.sh" ch26 --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 >/dev/null 2>&1
 status=$?
 set -e
@@ -275,12 +275,12 @@ if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" ]]; then
 fi
 
 set +e
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" COURSE_FAKE_KUBECTL_FAIL=true \
-AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
-  bash "$root/scripts/course-check.sh" ch26 --execute "${common[@]}" \
-    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026 \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+PLATFORM_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" PLATFORM_FAKE_KUBECTL_FAIL=true \
+AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 OWNER_ID=playbuilder \
+  bash "$root/scripts/platform-check.sh" ch26 --execute "${common[@]}" \
+    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder \
     >/dev/null 2>&1
 status=$?
 set -e
@@ -290,15 +290,15 @@ if [[ "$status" -eq 0 || -s "$tmp_dir/mutations.log" ]]; then
 fi
 rm -f "$tmp_dir/stages.log" "$tmp_dir/evidence/generated-pre-destroy.json"
 
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-COURSE_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" COURSE_CLEANUP_STAGE_LOG="$tmp_dir/stages.log" \
-COURSE_FAKE_REPO_ROOT="$root" COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" \
-AWS_PROFILE=course AWS_REGION=ap-northeast-2 COURSE_ID=course-2026 \
-  bash "$root/scripts/course-check.sh" ch26 --execute "${common[@]}" \
-    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-course-id course-2026
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
+PLATFORM_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" PLATFORM_CLEANUP_STAGE_LOG="$tmp_dir/stages.log" \
+PLATFORM_FAKE_REPO_ROOT="$root" PLATFORM_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" \
+AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 OWNER_ID=playbuilder \
+  bash "$root/scripts/platform-check.sh" ch26 --execute "${common[@]}" \
+    --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder
 
-jq -e '.evidenceGrade == "STATIC" and .status == "PASS" and .unapprovedCourseOwned.total == 0' \
+jq -e '.evidenceGrade == "STATIC" and .status == "PASS" and .unapprovedPlatformOwned.total == 0' \
   "$tmp_dir/evidence/generated-residual.json" >/dev/null
 [[ $(paste -sd',' "$tmp_dir/stages.log") == '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15' ]]
 [[ -s "$tmp_dir/kubectl.log" ]]

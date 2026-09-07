@@ -55,7 +55,7 @@ printf '{"Account":"123456789012"}\\n'
                     'PLAN_RUN_ID': '123', 'FINOPS_CONTRACT_JSON': str(self.contract),
                     'FINOPS_CONTRACT_SHA256': 'sha256:' + hashlib.sha256(self.contract.read_bytes()).hexdigest(),
                     'PLATFORM_INSTANCE_ID': 'commerce-123', 'FINOPS_GATE_POLICY': 'configuration-only',
-                    'COURSE_CHECK_BIN_DIR': str(self.bin), 'FINOPS_FIXTURE_JSON': str(self.observations)}
+                    'PLATFORM_CHECK_BIN_DIR': str(self.bin), 'FINOPS_FIXTURE_JSON': str(self.observations)}
         for k in ('GITHUB_ACTIONS', 'FINOPS_BILLING_PROFILE', 'FINOPS_BILLING_ROLE_ARN'):
             self.env.pop(k, None)
         self.run_ok(['git','init','-q'])
@@ -156,7 +156,7 @@ printf '{"Account":"123456789012"}\\n'
 
     def test_runtime_lane_rejects_fixture_artifact_without_runtime_calls(self):
         self.approved()
-        env={k:v for k,v in self.env.items() if k not in ('FINOPS_FIXTURE_JSON','COURSE_CHECK_BIN_DIR')}
+        env={k:v for k,v in self.env.items() if k not in ('FINOPS_FIXTURE_JSON','PLATFORM_CHECK_BIN_DIR')}
         env.update(GITHUB_ACTIONS='true',FINOPS_BILLING_ROLE_ARN='arn:aws:iam::123456789012:role/Billing')
         result=self.verify(env)
         self.assertNotEqual(result.returncode,0)

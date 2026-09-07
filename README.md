@@ -39,7 +39,7 @@ GitHub OIDC + ECR
 | shared | GitHub OIDC, ECR, GitHub Actions IAM role | EKS cluster |
 | 01-network | VPC, subnet, NAT, route | EKS |
 | 02-eks | EKS 1.36, node group, Access Entry, OIDC provider | platform chart |
-| 03-platform | Gateway CRD, AWS LBC, External Secrets, AMP/ADOT, IRSA, `course-gp3`, snapshot add-on (opt-in) | application/PVC |
+| 03-platform | Gateway CRD, AWS LBC, External Secrets, AMP/ADOT, IRSA, `mini-commerce-gp3`, snapshot add-on (opt-in) | application/PVC |
 | 04-workloads | HA Argo CD, Argo Rollouts native Istio RBAC, bootstrap Application | app manifest 원본 |
 
 ## 전제 도구
@@ -145,7 +145,7 @@ terraform -chdir=environments/dev/<downstream-layer> plan \
 `04-workloads/argocd`는 처음에 `enable_bootstrap=false`로 적용합니다. GitOps 저장소의
 placeholder, secret value, repository 접근을 준비한 뒤 `true`로 바꾸고 다시 적용합니다.
 
-`03-platform`은 EBS CSI Driver와 non-default `course-gp3` StorageClass도 만듭니다. StorageClass는
+`03-platform`은 EBS CSI Driver와 non-default `mini-commerce-gp3` StorageClass도 만듭니다. StorageClass는
 encrypted gp3, volume expansion, `WaitForFirstConsumer`를 사용합니다. StorageClass 생성만으로는
 EBS volume이 생성되지 않습니다. PVC를 소비하는 Pod가 스케줄링될 때 volume이 provisioning됩니다.
 
@@ -179,7 +179,7 @@ Phase A에서 automated sync와 resources finalizer를 제거한 runtime handoff
 ```bash
 bash scripts/external-secrets-owner-handoff.sh validate-handoff handoff.json
 bash scripts/external-secrets-owner-handoff.sh adopt \
-  environments/dev/03-platform handoff.json adoption.json course-dev
+  environments/dev/03-platform handoff.json adoption.json mini-commerce-dev
 ```
 
 저장된 plan이 no-op이고 UID가 유지된 adoption evidence가 승인된 뒤에만 GitOps Phase B에서 비활성
@@ -216,7 +216,7 @@ kubectl -n app-dev get deploy,pod,hpa,externalsecret,gateway,httproute
 
 DEV_READY의 workflow identity는 sample-app의 canonical `ci` workflow에 결속합니다. `runId`는
 숫자로 파싱하지 않고 digit string으로 보존하며, `runUrl`의 마지막 run ID와 일치해야 합니다.
-`runUrl`은 `https://github.com/<owner>/cicd-course-sample-app/actions/runs/<runId>` 형식이어야
+`runUrl`은 `https://github.com/<owner>/mini-commerce/actions/runs/<runId>` 형식이어야
 합니다. `githubId`도 digit string이며 attestation URL은 같은 repository의 `attestations/<digits>`로
 결속합니다. multi-architecture image는 두 platform을 모두 포함해야 합니다.
 
@@ -227,14 +227,14 @@ DEV_READY의 workflow identity는 sample-app의 canonical `ci` workflow에 결�
     "event": "push",
     "runId": "<digits>",
     "runAttempt": 1,
-    "runUrl": "https://github.com/play-builder/cicd-course-sample-app/actions/runs/<digits>"
+    "runUrl": "https://github.com/play-builder/mini-commerce/actions/runs/<digits>"
   },
   "image": {
     "platforms": ["linux/amd64", "linux/arm64"]
   },
   "attestation": {
     "githubId": "<digits>",
-    "githubUrl": "https://github.com/<owner>/cicd-course-sample-app/attestations/<digits>"
+    "githubUrl": "https://github.com/<owner>/mini-commerce/attestations/<digits>"
   }
 }
 ```
@@ -244,19 +244,19 @@ Dev 배포 및 SLO runtime evidence는 EKS-infra가 호출자가 지정한 임�
 fixture/fake CLI가 활성화된 실행은 항상 `STATIC`이고 promotion input으로 사용할 수 없습니다.
 
 ```bash
-bash scripts/course-check.sh ch15 <context> <namespace> <application> \
+bash scripts/platform-check.sh ch15 <context> <namespace> <application> \
   <source-repository> <source-sha> <image-repository> <image-digest> \
   <gitops-revision> <cluster-arn> <region> --output <temporary-path>
 
 ALERT_DELIVERY_EVIDENCE=<firing-and-resolved.json> \
-bash scripts/course-check.sh ch16 <ch15-evidence> <context> <k6-namespace> \
+bash scripts/platform-check.sh ch16 <ch15-evidence> <context> <k6-namespace> \
   <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <temporary-path>
 ```
 
 배포 evidence는 Stateless deployment 상태만 증명합니다. DB endpoint, DB query span,
 PostgreSQL PVC는 별도 Stateful evidence에서 다룹니다. SLO evidence는 배포 evidence와 동일한 source/image/GitOps/cluster/Region,
 k6 controller와 bounded TestRun, AMP query, confirmed SNS subscription, Firing/Resolved 전달을 모두
-확인해야 `course.dev-slo/v1`을 생성합니다.
+확인해야 `playbuilder.dev-slo/v1`을 생성합니다.
 
 ## 3. prod 클러스터
 
@@ -273,14 +273,14 @@ kubectl -n app-prod get virtualservice
 ```
 
 기존 배포용 baseline assertion은 namespace를 caller에게 받지 않고 항상 `app-prod`의
-`sample-app` Rollout을 조회하며, 필요하면 내부 record `course.prod-rollout-baseline/v1`을 씁니다.
+`sample-app` Rollout을 조회하며, 필요하면 내부 record `playbuilder.prod-rollout-baseline/v1`을 씁니다.
 이 record는 infrastructure gate일 뿐 promotion evidence가 아닙니다.
 
 ```bash
-bash scripts/prod-baseline-check.sh course-prod sample-app /secure/path/prod-rollout-baseline.json
+bash scripts/prod-baseline-check.sh mini-commerce-prod sample-app /secure/path/prod-rollout-baseline.json
 ```
 
-승격용 canonical `course.prod-baseline/v1`의 유일한 producer는
+승격용 canonical `playbuilder.prod-baseline/v1`의 유일한 producer는
 `argocd-gitops/scripts/capture-prod-baseline-evidence.sh`입니다. 이 Argo-side producer가 image,
 GitOps revision, stable Rollout revision/hash, 100% route, EKS ARN/Region을 결속해
 `argocd-gitops/evidence/prod/baseline.json`에 기록합니다. 두 schema나 output을 서로 대신 사용하지
@@ -293,7 +293,7 @@ GitOps의 해당 `stateful-values.yaml`을 활성화하고 Argo CD 동기화가 
 StorageClass, PVC, PostgreSQL, migration Job, application Pod, 상품·재고·멱등 주문 API를 함께 확인합니다.
 
 ```bash
-bash scripts/course-check.sh stateful course-dev app-dev https://sample-app.dev.example.com
+bash scripts/platform-check.sh stateful mini-commerce-dev app-dev https://sample-app.dev.example.com
 ```
 
 정상 종료는 `PASS: Stateful Mini Commerce...`이고, 상품 수와 첫 SKU, 상품 1번의 재고가 함께
@@ -321,10 +321,10 @@ repository import와 위 설정 외의 예상하지 않은 변경이 없는지 �
 리소스 제거는 개별 Kubernetes 리소스를 직접 삭제하지 않고, digest로 결속된 ownership·GitOps
 증거를 `final-cleanup.sh`가 검증한 뒤에만 수행합니다. 각 allowlisted root에서 `terraform plan
 -destroy -out=<absolute-path>`로 binary plan을 저장하고 `terraform show <absolute-path>`를 사람이
-검토한 뒤, exact layer·absolute path·SHA-256을 `course.saved-destroy-plans/v1` 형식의
+검토한 뒤, exact layer·absolute path·SHA-256을 `playbuilder.saved-destroy-plans/v1` 형식의
 `SAVED_DESTROY_PLAN_MANIFEST`에 기록합니다. raw plan JSON은 보관하지 않습니다. 현재 cloud
-inventory와 함께 preflight를 실행하며 `COURSE_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`,
-`COURSE_PROJECT`가 설정되어 있어야 합니다.
+inventory와 함께 preflight를 실행하며 `OWNER_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`,
+`PROJECT_NAME`가 설정되어 있어야 합니다.
 
 ```bash
 bash scripts/cleanup-preflight.sh \
@@ -344,7 +344,7 @@ canonical UTC seconds 값으로 바꾸고 파일 권한 `0600`을 유지합니�
 `argocd-gitops`에서 optional load·Chaos·recovery 입력을 끄고 해당 removal을 기다린 뒤 Auto-Sync를
 끕니다. 이어 두 cluster에서 active load, Chaos, recovery, migration writer가 모두 0인지 live API로
 다시 확인합니다.
-이 producer는 EKS ARN·account·Region·CourseId tag와 각 kube context의 API endpoint를 교차 검증하고
+이 producer는 EKS ARN·account·Region·OwnerId tag와 각 kube context의 API endpoint를 교차 검증하고
 `evidence/cleanup/in-flight-zero.json`에만 `CLOUD_RUNTIME` 증거를 원자적으로 기록합니다.
 
 ```bash
@@ -401,12 +401,12 @@ bash scripts/final-cleanup.sh "${cleanup_args[@]}"
 bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
   --confirm-account-id "$AWS_ACCOUNT_ID" \
   --confirm-region "$AWS_REGION" \
-  --confirm-course-id "$COURSE_ID"
+  --confirm-owner-id "$OWNER_ID"
 ```
 
 실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist의 digest-bound saved plan을
 `terraform apply <saved-plan>`으로 적용합니다. 성공한 layer/digest는 권한 `0600`인
-`course.saved-destroy-progress/v2` progress에 원자적으로 기록한 뒤 해당 binary plan을 즉시 삭제합니다.
+`playbuilder.saved-destroy-progress/v2` progress에 원자적으로 기록한 뒤 해당 binary plan을 즉시 삭제합니다.
 progress는 원본과 교체 plan의 path/digest를 모두 등록합니다. 중간 실패 시 성공 prefix만 건너뛰며,
 결과가 불확실한 in-flight layer는 현재 state로 새 plan을 만들고 다시 review해야 합니다. 새 plan이
 delete-only이면 그 plan을 적용하고, no-change이면 `RECOVERED_NO_CHANGES`로 완료 처리합니다. 전체
@@ -430,7 +430,7 @@ provider-side handle은 승인된 retain 결정에 따라 검증되므로 PVC �
 보호 경계로 유지됩니다.
 
 운영 비용이 발생하는 핵심 항목은 NAT Gateway, EKS control plane, EC2 node, ALB, AMP입니다.
-최종 PASS는 `evidence/cleanup/residual.json`의 미승인 course-owned billable residual이 0이고
+최종 PASS는 `evidence/cleanup/residual.json`의 미승인 platform-owned billable residual이 0이고
 승인된 retained/external handle이 inventory와 일치할 때만 성립합니다.
 
 ## 검증 범위

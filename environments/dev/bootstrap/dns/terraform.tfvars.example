@@ -1,5 +1,4 @@
 aws_region   = "ap-northeast-2"
 environment  = "dev"
 project_name = "mini-commerce"
-course_id    = "replace-with-unique-course-id"
 root_domain  = "replace-with-your-domain"

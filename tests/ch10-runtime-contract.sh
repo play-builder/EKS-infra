@@ -40,14 +40,14 @@ run_ch10() {
   : >"$tmp_dir/kubectl.log"
   CH10_COMMAND_LOG="$tmp_dir/kubectl.log" \
     CH10_EXPECTED_CONTEXT="$expected_context" CH10_EXPECTED_NAMESPACE="$expected_namespace" \
-    COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
-    bash "$root/scripts/course-check.sh" ch10 "$@" >/dev/null
+    PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
+    bash "$root/scripts/platform-check.sh" ch10 "$@" >/dev/null
   grep -Fxq -- "--context $expected_context -n $expected_namespace get externalsecret mini-commerce-runtime -o json" \
     "$tmp_dir/kubectl.log"
   [[ $(wc -l <"$tmp_dir/kubectl.log" | tr -d ' ') -eq 4 ]]
 }
 
-run_ch10 course-dev app-dev
+run_ch10 mini-commerce-dev app-dev
 run_ch10 explicit-context explicit-namespace explicit-context explicit-namespace
 
 echo 'PASS: Ch10 consumes the canonical Dev namespace and ExternalSecret identity'

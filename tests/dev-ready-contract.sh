@@ -82,9 +82,9 @@ jq '.workflow.name="Build and publish"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-workflow.json"
 jq '.workflow.event="workflow_dispatch"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-event.json"
-jq '.workflow.runUrl="https://github.com/play-builder/cicd-course-sample-app/actions/runs/999"' \
+jq '.workflow.runUrl="https://github.com/play-builder/mini-commerce/actions/runs/999"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-run-url.json"
-jq '.workflow.runUrl="https://github.com/other-owner/cicd-course-sample-app/actions/runs/101"' \
+jq '.workflow.runUrl="https://github.com/other-owner/mini-commerce/actions/runs/101"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-workflow-repository.json"
 jq '.workflow.runId=101' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-numeric-run-id.json"
@@ -94,29 +94,29 @@ jq '.workflow.runAttempt=0' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-zero-run-attempt.json"
 jq '.image.platforms=["linux/amd64"]' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-missing-arm64.json"
-jq '.attestation.githubUrl="https://github.com/play-builder/cicd-course-sample-app/attestations/other-id"' \
+jq '.attestation.githubUrl="https://github.com/play-builder/mini-commerce/attestations/other-id"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-attestation-id.json"
-jq '.attestation.githubUrl="https://github.com/other-owner/cicd-course-sample-app/attestations/101"' \
+jq '.attestation.githubUrl="https://github.com/other-owner/mini-commerce/attestations/101"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-wrong-attestation-repository.json"
 jq '.attestation.githubId=""' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-empty-attestation-id.json"
 jq '
   .attestation.githubId="alpha" |
-  .attestation.githubUrl="https://github.com/play-builder/cicd-course-sample-app/attestations/alpha"
+  .attestation.githubUrl="https://github.com/play-builder/mini-commerce/attestations/alpha"
 ' "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-nondigit-attestation-id.json"
-jq '.source.repository="attacker/cicd-course-sample-app"' \
+jq '.source.repository="attacker/mini-commerce"' \
   "$deployment" >"$tmp_dir/deployment-wrong-source-repository.json"
-jq '.source.repository="attacker/cicd-course-sample-app"' \
+jq '.source.repository="attacker/mini-commerce"' \
   "$slo" >"$tmp_dir/slo-wrong-source-repository.json"
 jq '
-  .workflow.runUrl="https://github.com/play builder/cicd-course-sample-app/actions/runs/101" |
-  .attestation.githubUrl="https://github.com/play builder/cicd-course-sample-app/attestations/101"
+  .workflow.runUrl="https://github.com/play builder/mini-commerce/actions/runs/101" |
+  .attestation.githubUrl="https://github.com/play builder/mini-commerce/attestations/101"
 ' "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-whitespace-owner.json"
 make_dev_handoff "$tmp_dir/dev-ready-whitespace-owner.json" \
   "$tmp_dir/deployment-whitespace-owner-base.json" "$tmp_dir/slo-whitespace-owner-base.json"
-jq '.source.repository="play builder/cicd-course-sample-app"' \
+jq '.source.repository="play builder/mini-commerce"' \
   "$tmp_dir/deployment-whitespace-owner-base.json" >"$tmp_dir/deployment-whitespace-owner.json"
-jq '.source.repository="play builder/cicd-course-sample-app"' \
+jq '.source.repository="play builder/mini-commerce"' \
   "$tmp_dir/slo-whitespace-owner-base.json" >"$tmp_dir/slo-whitespace-owner.json"
 jq '.image.repository="123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/"' \
   "$root/tests/fixtures/dev-ready-ap-northeast-2.json" >"$tmp_dir/dev-ready-registry-root-only.json"
@@ -129,8 +129,8 @@ jq '.image.repository="not-an-ecr-repository"' \
 ecr_prefix='123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/'
 long_repository_name=$(printf 'a%.0s' {1..257})
 invalid_repositories=(
-  "${ecr_prefix}course//sample-app"
-  "${ecr_prefix}course/-sample-app"
+  "${ecr_prefix}mini-commerce//sample-app"
+  "${ecr_prefix}mini-commerce/-sample-app"
   "${ecr_prefix}${long_repository_name}"
 )
 for index in "${!invalid_repositories[@]}"; do

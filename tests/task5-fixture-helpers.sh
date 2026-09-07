@@ -7,10 +7,10 @@ sha256_file() {
 make_dev_handoff() {
   local ready=$1 deployment=$2 slo=$3
   jq '{
-    schemaVersion:"course.dev-deployment/v1",
+    schemaVersion:"playbuilder.dev-deployment/v1",
     evidenceGrade:"CLOUD_RUNTIME",
     status:{sync:"Synced",health:"Healthy"},
-    source:{repository:"play-builder/cicd-course-sample-app",sha:.sourceSha},
+    source:{repository:"play-builder/mini-commerce",sha:.sourceSha},
     image:{repository:.image.repository,indexDigest:.image.indexDigest},
     gitopsRevision:.gitops.devRevision,
     clusterArn:.cluster.arn,
@@ -18,10 +18,10 @@ make_dev_handoff() {
     observedAt:.issuedAt
   }' "$ready" >"$deployment"
   jq '{
-    schemaVersion:"course.dev-slo/v1",
+    schemaVersion:"playbuilder.dev-slo/v1",
     evidenceGrade:"CLOUD_RUNTIME",
     status:"PASS",
-    source:{repository:"play-builder/cicd-course-sample-app",sha:.sourceSha},
+    source:{repository:"play-builder/mini-commerce",sha:.sourceSha},
     image:{repository:.image.repository,indexDigest:.image.indexDigest},
     gitopsRevision:.gitops.devRevision,
     clusterArn:.cluster.arn,

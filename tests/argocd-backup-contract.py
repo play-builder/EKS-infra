@@ -77,12 +77,12 @@ class BackupContract(unittest.TestCase):
             if args[:3]==['argocd','version','--client']: return b'argocd: v3.5.2+abc\n'
             if 'config' in args: return __import__('json').dumps(config).encode()
             return __import__('json').dumps(deploy).encode()
-        self.assertEqual(backup.cluster_identity(eks,run,'course-prod',arn,'argocd'),'3.5.2')
+        self.assertEqual(backup.cluster_identity(eks,run,'mini-commerce-prod',arn,'argocd'),'3.5.2')
         for mutate in [lambda:config['clusters'][0]['cluster'].update(server='https://other.example.com'),lambda:deploy['status'].update(readyReplicas=0)]:
             config['clusters'][0]['cluster']['server']='https://eks.example.com'
             deploy['status']['readyReplicas']=2
             mutate()
-            with self.assertRaises(backup.Denied): backup.cluster_identity(eks,run,'course-prod',arn,'argocd')
+            with self.assertRaises(backup.Denied): backup.cluster_identity(eks,run,'mini-commerce-prod',arn,'argocd')
     def test_export_upload_is_secret_free_nonclobber_and_reads_exact_version(self):
         contract={'bucket':'commerce-backup','accountId':'123456789012','kmsKeyArn':'arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012'}
         source={'clusterArn':'arn:aws:eks:us-east-1:123456789012:cluster/prod','argocdVersion':'3.5.2','namespace':'argocd','gitopsRevision':'a'*40}

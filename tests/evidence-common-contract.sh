@@ -18,12 +18,12 @@ if [[ "$#" -ne 4 || "$1" != -c || "$2" != '%a' || "$3" != -- ]]; then
   exit 64
 fi
 
-printf '%s\n' "$*" >>"$COURSE_FAKE_STAT_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_STAT_LOG"
 file=$4
-if mode=$("$COURSE_REAL_STAT" -c '%a' -- "$file" 2>/dev/null); then
+if mode=$("$PLATFORM_REAL_STAT" -c '%a' -- "$file" 2>/dev/null); then
   printf '%s\n' "$mode"
 else
-  "$COURSE_REAL_STAT" -f '%Lp' -- "$file"
+  "$PLATFORM_REAL_STAT" -f '%Lp' -- "$file"
 fi
 EOF
 chmod +x "$tmp_dir/bin/stat"
@@ -35,12 +35,12 @@ overpermissive_file="$tmp_dir/overpermissive.json"
 chmod 600 "$secure_file"
 chmod 640 "$overpermissive_file"
 
-COURSE_REAL_STAT="$real_stat" COURSE_FAKE_STAT_LOG="$tmp_dir/stat.log" PATH="$tmp_dir/bin:$PATH" \
-  course_assert_file_mode "$secure_file" 600
+PLATFORM_REAL_STAT="$real_stat" PLATFORM_FAKE_STAT_LOG="$tmp_dir/stat.log" PATH="$tmp_dir/bin:$PATH" \
+  pb_assert_file_mode "$secure_file" 600
 
 set +e
-output=$(COURSE_REAL_STAT="$real_stat" COURSE_FAKE_STAT_LOG="$tmp_dir/stat.log" PATH="$tmp_dir/bin:$PATH" \
-  course_assert_file_mode "$overpermissive_file" 600 2>&1)
+output=$(PLATFORM_REAL_STAT="$real_stat" PLATFORM_FAKE_STAT_LOG="$tmp_dir/stat.log" PATH="$tmp_dir/bin:$PATH" \
+  pb_assert_file_mode "$overpermissive_file" 600 2>&1)
 status=$?
 set -e
 if [[ "$status" -eq 0 ]] || ! grep -Fq 'expected 600, got 640' <<<"$output"; then

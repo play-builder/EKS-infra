@@ -111,7 +111,7 @@ variable "sns_email_endpoint" {
 variable "name" {
   description = "Resource name prefix"
   type        = string
-  default     = "course-dev"
+  default     = "mini-commerce-dev"
 }
 
 variable "tags" {

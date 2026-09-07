@@ -18,27 +18,27 @@ while [[ $# -gt 0 ]]; do
     --cluster-arn) cluster_arn=${2:-}; shift 2 ;;
     --operator-role-arn) operator_role_arn=${2:-}; shift 2 ;;
     --instance-id) instance_id=${2:-}; shift 2 ;;
-    *) course_fail "unknown argument: $1" 64 ;;
+    *) pb_fail "unknown argument: $1" 64 ;;
   esac
 done
 
 if [[ "$execute" == true ]]; then
   [[ -n "$evidence" && -n "$cluster_arn" && -n "$operator_role_arn" && -n "$instance_id" ]] || \
-    course_fail '--execute requires --evidence, --cluster-arn, --operator-role-arn, and --instance-id' 64
+    pb_fail '--execute requires --evidence, --cluster-arn, --operator-role-arn, and --instance-id' 64
   : "${AWS_PROFILE:?AWS_PROFILE is required for --execute}"
   : "${AWS_REGION:?AWS_REGION is required for --execute}"
   caller=$(aws sts get-caller-identity --profile "$AWS_PROFILE" --region "$AWS_REGION" --output json)
   account_id=$(jq -r '.Account' <<<"$caller")
-  course_validate_account "$account_id"
-  course_validate_region "$AWS_REGION"
-  course_assert_eks_cluster_arn "$cluster_arn" "$AWS_REGION" "$account_id"
+  pb_validate_account "$account_id"
+  pb_validate_region "$AWS_REGION"
+  pb_assert_eks_cluster_arn "$cluster_arn" "$AWS_REGION" "$account_id"
   [[ "$operator_role_arn" =~ ^arn:aws(-[a-z]+)?:iam::${account_id}:role/[A-Za-z0-9+=,.@_/-]+$ ]] || \
-    course_fail OPERATOR_ACCESS_ROLE_ARN_INVALID
-  [[ "$instance_id" =~ ^i-[0-9a-f]{8,17}$ ]] || course_fail OPERATOR_ACCESS_INSTANCE_ID_INVALID
+    pb_fail OPERATOR_ACCESS_ROLE_ARN_INVALID
+  [[ "$instance_id" =~ ^i-[0-9a-f]{8,17}$ ]] || pb_fail OPERATOR_ACCESS_INSTANCE_ID_INVALID
 
   ping_status=$(aws ssm describe-instance-information --profile "$AWS_PROFILE" --region "$AWS_REGION" \
     --filters "Key=InstanceIds,Values=$instance_id" --query 'InstanceInformationList[0].PingStatus' --output text)
-  [[ "$ping_status" == Online ]] || course_fail OPERATOR_ACCESS_INSTANCE_OFFLINE
+  [[ "$ping_status" == Online ]] || pb_fail OPERATOR_ACCESS_INSTANCE_OFFLINE
 
   cluster_name=${cluster_arn##*/}
   role_name=${operator_role_arn##*/}
@@ -59,23 +59,23 @@ EOF
   command_id=$(aws ssm send-command --profile "$AWS_PROFILE" --region "$AWS_REGION" \
     --instance-ids "$instance_id" --document-name AWS-RunShellScript --parameters "$parameters" \
     --query Command.CommandId --output text)
-  [[ "$command_id" =~ ^[A-Za-z0-9-]+$ ]] || course_fail OPERATOR_ACCESS_COMMAND_ID_INVALID
+  [[ "$command_id" =~ ^[A-Za-z0-9-]+$ ]] || pb_fail OPERATOR_ACCESS_COMMAND_ID_INVALID
   aws ssm wait command-executed --profile "$AWS_PROFILE" --region "$AWS_REGION" \
     --command-id "$command_id" --instance-id "$instance_id"
   invocation=$(aws ssm get-command-invocation --profile "$AWS_PROFILE" --region "$AWS_REGION" \
     --command-id "$command_id" --instance-id "$instance_id" --output json)
   status=$(jq -r '.Status // empty' <<<"$invocation")
-  [[ "$status" == Success ]] || course_fail OPERATOR_ACCESS_REMOTE_COMMAND_FAILED
+  [[ "$status" == Success ]] || pb_fail OPERATOR_ACCESS_REMOTE_COMMAND_FAILED
   standard_error=$(jq -r '.StandardErrorContent // empty' <<<"$invocation")
-  [[ -z "$standard_error" ]] || course_fail OPERATOR_ACCESS_REMOTE_STDERR_NOT_EMPTY
+  [[ -z "$standard_error" ]] || pb_fail OPERATOR_ACCESS_REMOTE_STDERR_NOT_EMPTY
   standard_output=$(jq -r '.StandardOutputContent // empty' <<<"$invocation")
   caller_arn=$(awk -F= '/^CALLER_ARN=/{print substr($0,index($0,"=")+1); exit}' <<<"$standard_output")
   observed_cluster_arn=$(awk -F= '/^CLUSTER_ARN=/{print substr($0,index($0,"=")+1); exit}' <<<"$standard_output")
   authorization=$(awk -F= '/^AUTHORIZATION=/{print substr($0,index($0,"=")+1); exit}' <<<"$standard_output")
   [[ "$caller_arn" == "arn:aws:sts::$account_id:assumed-role/$role_name/platform-operator-check" ]] || \
-    course_fail OPERATOR_ACCESS_ROLE_MISMATCH
-  [[ "$observed_cluster_arn" == "$cluster_arn" ]] || course_fail OPERATOR_ACCESS_CLUSTER_MISMATCH
-  [[ "$authorization" == yes ]] || course_fail OPERATOR_ACCESS_AUTHORIZATION_DENIED
+    pb_fail OPERATOR_ACCESS_ROLE_MISMATCH
+  [[ "$observed_cluster_arn" == "$cluster_arn" ]] || pb_fail OPERATOR_ACCESS_CLUSTER_MISMATCH
+  [[ "$authorization" == yes ]] || pb_fail OPERATOR_ACCESS_AUTHORIZATION_DENIED
 
   payload=$(jq -n --arg account "$account_id" --arg region "$AWS_REGION" --arg cluster "$cluster_arn" \
     --arg role "$operator_role_arn" --arg caller "$caller_arn" --arg instance "$instance_id" \
@@ -85,15 +85,15 @@ EOF
        operatorRoleArn:$role,callerArn:$caller,instanceId:$instance,
        commands:{ssmCommandId:$command,ssmCommand:$status,kubectlAuthorization:$authorization},
        observedAt:(now|todateiso8601)}')
-  course_write_json "$evidence" "$payload"
+  pb_write_json "$evidence" "$payload"
 fi
 
-[[ -n "$evidence" ]] || course_fail '--evidence is required' 64
-course_require_file "$evidence"
+[[ -n "$evidence" ]] || pb_fail '--evidence is required' 64
+pb_require_file "$evidence"
 
 mode=$(jq -r '.mode // empty' "$evidence")
-[[ "$mode" == ssm ]] || course_fail 'OPERATOR_ACCESS_MODE_INVALID'
-course_assert_json "$evidence" '
+[[ "$mode" == ssm ]] || pb_fail 'OPERATOR_ACCESS_MODE_INVALID'
+pb_assert_json "$evidence" '
   def nonblank: type == "string" and test("[^[:space:]]");
   .schemaVersion == "platform.operator-access/v1" and
   .evidenceGrade == "CLOUD_RUNTIME" and
@@ -112,4 +112,4 @@ if [[ "$validate_only" == true || "$execute" == true ]]; then
   exit 0
 fi
 
-course_fail 'OPERATOR_ACCESS_RUNTIME_CAPTURE_REQUIRED: use --execute or validate captured evidence.' 64
+pb_fail 'OPERATOR_ACCESS_RUNTIME_CAPTURE_REQUIRED: use --execute or validate captured evidence.' 64

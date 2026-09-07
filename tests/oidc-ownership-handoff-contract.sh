@@ -9,7 +9,7 @@ mkdir -p "$tmp_dir/bin"
 for command in aws terraform; do
   cat >"$tmp_dir/bin/$command" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "$*" >>"$COURSE_FAKE_MUTATION_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_MUTATION_LOG"
 exit 97
 EOF
   chmod +x "$tmp_dir/bin/$command"
@@ -17,13 +17,13 @@ done
 : >"$tmp_dir/mutations.log"
 
 run_oidc_handoff() {
-  COURSE_CHECK_NOW=2099-01-01T00:30:00Z COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+  PLATFORM_CHECK_NOW=2099-01-01T00:30:00Z PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
     PATH="$tmp_dir/bin:$PATH" bash "$root/scripts/oidc-ownership-handoff.sh" "$@"
 }
 
 output=$(run_oidc_handoff --evidence "$valid" --validate-only)
-grep -Fq 'VALID: course.oidc-ownership-handoff/v1' <<<"$output"
-if COURSE_CHECK_NOW=2099-02-30T00:30:00Z COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
+grep -Fq 'VALID: playbuilder.oidc-ownership-handoff/v1' <<<"$output"
+if PLATFORM_CHECK_NOW=2099-02-30T00:30:00Z PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
   PATH="$tmp_dir/bin:$PATH" bash "$root/scripts/oidc-ownership-handoff.sh" \
     --evidence "$valid" --validate-only >/dev/null 2>&1; then
   echo 'noncanonical OIDC evaluation time must be rejected' >&2

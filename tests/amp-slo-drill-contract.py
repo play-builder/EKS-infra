@@ -23,7 +23,7 @@ def fixture():
             "identity":{"Account":ACCOUNT},"workspace":{"workspace":{"arn":WORKSPACE,"workspaceId":"ws-test","status":{"statusCode":"ACTIVE"}}},"cluster":{"cluster":{"arn":CLUSTER,"status":"ACTIVE"}},
             "query":{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[NOW.timestamp()-500,"1"]}]}},
             "longQuery":{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":[NOW.timestamp()-500,"1"]}]}},
-            "rules":{"status":"success","data":{"groups":[{"name":"course-release-slo","file":"course-release-slo","interval":60,"lastEvaluation":stamp(-500),"evaluationTime":0.01,"rules":[{"type":"alerting","name":"MiniCommerceSuccessBurn","health":"ok","state":"firing","lastError":"","lastEvaluation":stamp(-500),"evaluationTime":0.01,"labels":{k:v for k,v in LABELS.items() if k!="alertname"},"annotations":{},"alerts":[]}]}]}},
+            "rules":{"status":"success","data":{"groups":[{"name":"mini-commerce-release-slo","file":"mini-commerce-release-slo","interval":60,"lastEvaluation":stamp(-500),"evaluationTime":0.01,"rules":[{"type":"alerting","name":"MiniCommerceSuccessBurn","health":"ok","state":"firing","lastError":"","lastEvaluation":stamp(-500),"evaluationTime":0.01,"labels":{k:v for k,v in LABELS.items() if k!="alertname"},"annotations":{},"alerts":[]}]}]}},
             "firing":[{"fingerprint":"0123456789abcdef","labels":LABELS,"startsAt":stamp(-600),"endsAt":stamp(600),"updatedAt":stamp(-500),"annotations":{},"receivers":[{"name":"platform-sns"}],"status":{"state":"active","inhibitedBy":[],"silencedBy":[]}}],
             "resolved":[],
             "deliveryReceipt":{"firing":receipt("firing",-500),"resolved":receipt("resolved",-90)}}}

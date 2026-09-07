@@ -44,10 +44,10 @@ class Cleanup(unittest.TestCase):
 
     def test_unknown_tagged_resource_is_not_zero(self):
         with self.assertRaises(ValueError):
-            cleanup.discover({"courseId": "fixture", "resources": []}, lambda *a: {"ResourceTagMappingList": [{"ResourceARN": "arn:aws:rds:us-east-1:123456789012:db:forgotten"}]})
-        cleanup.discover({"courseId": "fixture", "resources": [{"id": "arn:db"}]}, lambda *a: {"ResourceTagMappingList": [{"ResourceARN": "arn:db"}]})
+            cleanup.discover({"ownerId": "fixture", "resources": []}, lambda *a: {"ResourceTagMappingList": [{"ResourceARN": "arn:aws:rds:us-east-1:123456789012:db:forgotten"}]})
+        cleanup.discover({"ownerId": "fixture", "resources": [{"id": "arn:db"}]}, lambda *a: {"ResourceTagMappingList": [{"ResourceARN": "arn:db"}]})
         with self.assertRaises(ValueError):
-            cleanup.discover({"courseId": "fixture", "resources": []}, lambda *a: {})
+            cleanup.discover({"ownerId": "fixture", "resources": []}, lambda *a: {})
 
     def test_actual_api_response_shapes(self):
         cases = [

@@ -15,7 +15,7 @@ Kubernetes 리소스 삭제가 아니라 아래 Ch26 guarded cleanup만 사용�
 
 ```bash
 export AWS_REGION="ap-northeast-2"
-export AWS_PROFILE="course"
+export AWS_PROFILE="mini-commerce"
 ```
 
 ## 안전 확인
@@ -47,12 +47,12 @@ aws eks update-kubeconfig \
   --region "$AWS_REGION" \
   --profile "$AWS_PROFILE" \
   --name dev-playdevops-eks \
-  --alias course-dev
+  --alias mini-commerce-dev
 
-kubectl --context course-dev get nodes
+kubectl --context mini-commerce-dev get nodes
 ```
 
-prod는 cluster name과 alias를 각각 `prod-playdevops-eks`, `course-prod`로 바꿉니다.
+prod는 cluster name과 alias를 각각 `prod-playdevops-eks`, `mini-commerce-prod`로 바꿉니다.
 
 ## 계층 상태 확인
 
@@ -83,10 +83,10 @@ the customer-managed role on the instance, checks the exact cluster ARN, and rec
 `kubectl auth can-i get pods -n platform-system` result before an operator change.
 
 ```bash
-kubectl --context course-dev -n kube-system get pods
-kubectl --context course-dev -n argocd get application
-kubectl --context course-dev get gateway,httproute -A
-kubectl --context course-dev get externalsecret -A
+kubectl --context mini-commerce-dev -n kube-system get pods
+kubectl --context mini-commerce-dev -n argocd get application
+kubectl --context mini-commerce-dev get gateway,httproute -A
+kubectl --context mini-commerce-dev get externalsecret -A
 ```
 
 ## Nodes가 join하지 못할 때
@@ -109,9 +109,9 @@ aws eks describe-nodegroup \
 ## Gateway가 Programmed되지 않을 때
 
 ```bash
-kubectl --context course-dev describe gateway sample-app -n app-dev
-kubectl --context course-dev describe httproute sample-app -n app-dev
-kubectl --context course-dev -n kube-system logs \
+kubectl --context mini-commerce-dev describe gateway sample-app -n app-dev
+kubectl --context mini-commerce-dev describe httproute sample-app -n app-dev
+kubectl --context mini-commerce-dev -n kube-system logs \
   deploy/aws-load-balancer-controller --since=15m
 ```
 
@@ -122,11 +122,11 @@ kubectl --context course-dev -n kube-system logs \
 ## AMP 수집 또는 분석이 실패할 때
 
 ```bash
-kubectl --context course-prod -n opentelemetry-operator-system get opentelemetrycollector
-kubectl --context course-prod -n opentelemetry-operator-system logs \
+kubectl --context mini-commerce-prod -n opentelemetry-operator-system get opentelemetrycollector
+kubectl --context mini-commerce-prod -n opentelemetry-operator-system logs \
   -l app.kubernetes.io/name=adot-collector-prometheus --since=15m
-kubectl --context course-prod -n argo-rollouts logs deploy/argo-rollouts --since=15m
-kubectl --context course-prod -n app-prod get analysisrun
+kubectl --context mini-commerce-prod -n argo-rollouts logs deploy/argo-rollouts --since=15m
+kubectl --context mini-commerce-prod -n app-prod get analysisrun
 ```
 
 - ADOT: `aps:RemoteWrite` IRSA와 workspace endpoint 확인
@@ -148,8 +148,8 @@ HPA가 활성화된 chart는 `spec.replicas`를 렌더하지 않습니다. prod 
 
 ```bash
 argocd app diff sample-app-prod
-kubectl --context course-prod -n app-prod get httproute sample-app -o yaml
-kubectl --context course-prod -n app-prod get rollout sample-app -o yaml
+kubectl --context mini-commerce-prod -n app-prod get httproute sample-app -o yaml
+kubectl --context mini-commerce-prod -n app-prod get rollout sample-app -o yaml
 ```
 
 ## 안전한 rollback
@@ -179,9 +179,9 @@ EKS는 한 minor씩 올리고 control plane → add-on compatibility → node gr
 ## 제거와 비용
 
 Ch26 cleanup은 개별 Application, Gateway, PVC를 직접 삭제하거나 각 Terraform root에서 raw
-destroy하지 않습니다. `COURSE_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`,
-`COURSE_PROJECT`를 설정합니다. 각 allowlisted root의 binary `terraform plan -destroy -out` 결과를
-`terraform show`로 검토하고 exact path와 SHA-256을 `course.saved-destroy-plans/v1` manifest에
+destroy하지 않습니다. `OWNER_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`,
+`PROJECT_NAME`를 설정합니다. 각 allowlisted root의 binary `terraform plan -destroy -out` 결과를
+`terraform show`로 검토하고 exact path와 SHA-256을 `playbuilder.saved-destroy-plans/v1` manifest에
 결속합니다. raw plan JSON은 보관하지 않으며 이 `SAVED_DESTROY_PLAN_MANIFEST`와 cloud inventory로
 preflight를 먼저 실행합니다.
 
@@ -257,12 +257,12 @@ bash scripts/final-cleanup.sh "${cleanup_args[@]}"
 bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
   --confirm-account-id "$AWS_ACCOUNT_ID" \
   --confirm-region "$AWS_REGION" \
-  --confirm-course-id "$COURSE_ID"
+  --confirm-owner-id "$OWNER_ID"
 ```
 
 `final-cleanup.sh`는 모든 identity, time, digest 검증과 Kubernetes pre-destroy 관찰을 첫 mutation
 전에 끝낸 뒤 다음 allowlist의 검토된 saved plan만 `terraform apply <saved-plan>`으로 실행합니다.
-각 성공 layer/path/digest는 권한 `0600`의 `course.saved-destroy-progress/v2`에 먼저 기록되고 적용된
+각 성공 layer/path/digest는 권한 `0600`의 `playbuilder.saved-destroy-progress/v2`에 먼저 기록되고 적용된
 binary plan은 즉시 삭제됩니다. progress는 원본과 모든 reviewed replacement path/digest를 등록합니다.
 중간 실패 후에는 기록된 성공 prefix만 skip합니다. in-flight 결과가 불확실하면 같은 plan을 자동
 재시도하지 않으며, 현재 state에서 새 plan을 생성·review해야 합니다. replacement가 delete-only이면

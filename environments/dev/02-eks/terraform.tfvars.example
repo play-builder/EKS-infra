@@ -2,7 +2,6 @@
 aws_region   = "ap-northeast-2"
 project_name = "mini-commerce"
 state_bucket_name = "replace-with-your-dev-state-bucket"
-course_id    = "replace-with-unique-course-id"
 environment  = "dev"
 
 # Resolve this value with aws eks describe-addon-versions for EKS 1.36 in the selected Region.

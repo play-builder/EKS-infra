@@ -165,7 +165,7 @@ variable "vpc_cni_network_policy_enforcing_mode" {
 }
 
 variable "vpc_cni_strict_gate_evidence_file" {
-  description = "Current course.network-policy-strict-gate/v1 record required for strict mode"
+  description = "Current playbuilder.network-policy-strict-gate/v1 record required for strict mode"
   type        = string
   default     = null
   nullable    = true

@@ -118,11 +118,11 @@ cat >"$tmp_dir/bin/helm" <<'EOF'
 set -Eeuo pipefail
 printf '%s\n' "$*" >>"$OWNER_FAKE_COMMAND_LOG"
 case "$*" in
-  "--kube-context course-dev -n external-secrets status external-secrets -o json")
+  "--kube-context mini-commerce-dev -n external-secrets status external-secrets -o json")
     jq -n '{name:"external-secrets",namespace:"external-secrets",version:1,
       info:{status:"deployed"},chart:{metadata:{name:"external-secrets",version:"2.10.0"}}}'
     ;;
-  "--kube-context course-dev -n external-secrets get values external-secrets -a -o json")
+  "--kube-context mini-commerce-dev -n external-secrets get values external-secrets -a -o json")
     jq -n '{}'
     ;;
   *)
@@ -137,24 +137,24 @@ cat >"$tmp_dir/bin/kubectl" <<'EOF'
 set -Eeuo pipefail
 printf '%s\n' "$*" >>"$OWNER_FAKE_COMMAND_LOG"
 case "$*" in
-  "--context course-dev -n argocd get application external-secrets-dev -o json")
+  "--context mini-commerce-dev -n argocd get application external-secrets-dev -o json")
     jq -n '{metadata:{uid:"app-uid-1",finalizers:[]},spec:{syncPolicy:{}},status:{}}'
     ;;
-  "--context course-dev -n external-secrets get secret -l owner=helm,name=external-secrets,status=deployed,version=1 -o json")
+  "--context mini-commerce-dev -n external-secrets get secret -l owner=helm,name=external-secrets,status=deployed,version=1 -o json")
     uid=helm-storage-uid-1
     if [[ -f "$OWNER_FAKE_IMPORTED_MARKER" && "${OWNER_FAKE_CHANGE_AFTER:-}" == storage ]]; then
       uid=replacement-storage-uid
     fi
     jq -n --arg uid "$uid" '{items:[{metadata:{uid:$uid}}]}'
     ;;
-  "--context course-dev -n external-secrets get Deployment external-secrets -o json")
+  "--context mini-commerce-dev -n external-secrets get Deployment external-secrets -o json")
     uid=deployment-uid-1
     if [[ -f "$OWNER_FAKE_IMPORTED_MARKER" && "${OWNER_FAKE_CHANGE_AFTER:-}" == workload ]]; then
       uid=replacement-workload-uid
     fi
     jq -n --arg uid "$uid" '{metadata:{uid:$uid}}'
     ;;
-  "--context course-dev get crd externalsecrets.external-secrets.io -o json")
+  "--context mini-commerce-dev get crd externalsecrets.external-secrets.io -o json")
     uid=crd-uid-1
     if [[ -f "$OWNER_FAKE_IMPORTED_MARKER" && "${OWNER_FAKE_CHANGE_AFTER:-}" == crd ]]; then
       uid=replacement-crd-uid
@@ -212,7 +212,7 @@ run_runtime_adoption() {
   PATH="$tmp_dir/bin:$PATH" OWNER_FAKE_COMMAND_LOG="$tmp_dir/commands.log" \
     OWNER_FAKE_IMPORTED_MARKER="$tmp_dir/imported" "$@" \
     bash "$root/scripts/external-secrets-owner-handoff.sh" adopt \
-      "$tmp_dir/terraform-root" "$runtime_handoff" "$output" course-dev
+      "$tmp_dir/terraform-root" "$runtime_handoff" "$output" mini-commerce-dev
 }
 
 invalid_runtime_handoff="$tmp_dir/runtime-handoff-invalid-time.json"
@@ -224,7 +224,7 @@ PATH="$tmp_dir/bin:$PATH" OWNER_FAKE_COMMAND_LOG="$tmp_dir/commands.log" \
   OWNER_FAKE_IMPORTED_MARKER="$tmp_dir/imported" \
   bash "$root/scripts/external-secrets-owner-handoff.sh" adopt \
     "$tmp_dir/terraform-root" "$invalid_runtime_handoff" \
-    "$tmp_dir/output/rejected-invalid-time.json" course-dev >/dev/null 2>&1
+    "$tmp_dir/output/rejected-invalid-time.json" mini-commerce-dev >/dev/null 2>&1
 invalid_time_status=$?
 set -e
 if [[ "$invalid_time_status" -eq 0 || -s "$tmp_dir/commands.log" || \
@@ -245,8 +245,8 @@ jq -e --arg handoffSha "$runtime_handoff_sha" --slurpfile handoff "$runtime_hand
   .terraform == {address:"module.external_secrets[0].helm_release.this",imported:true,
     planActions:[],stateLineage:"22222222-2222-4222-8222-222222222222",stateSerial:5}
 ' "$runtime_adoption" >/dev/null
-course_assert_file_mode "$runtime_adoption" 600
-[[ $(grep -Fc -- '--kube-context course-dev -n external-secrets status external-secrets -o json' \
+pb_assert_file_mode "$runtime_adoption" 600
+[[ $(grep -Fc -- '--kube-context mini-commerce-dev -n external-secrets status external-secrets -o json' \
   "$tmp_dir/commands.log") -eq 2 ]]
 grep -Fq -- '-chdir=' "$tmp_dir/commands.log"
 

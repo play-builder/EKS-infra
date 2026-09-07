@@ -14,7 +14,6 @@ locals {
   common_tags = merge(
     var.tags,
     {
-      CourseId           = var.course_id
       Environment        = var.environment
       PlatformInstanceId = var.platform_instance_id
       Owner              = var.owner

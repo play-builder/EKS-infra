@@ -8,10 +8,10 @@ mkdir -p "$tmp_dir/bin"
 
 jq '
   .resources += [
-    {kind:"PersistentVolumeClaim",id:"app-dev/data",environment:"dev",classification:"source-pvc",owner:"course",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
-    {kind:"VolumeSnapshot",id:"app-dev/data-snapshot",environment:"dev",classification:"source-snapshot",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
-    {kind:"VolumeSnapshotContent",id:"data-content",environment:"dev",classification:"source-snapshot-content",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
-    {kind:"Namespace",id:"app-dev",environment:"dev",classification:"application-namespace",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"namespace cleanup review",followUpAction:"delete after approval"}
+    {kind:"PersistentVolumeClaim",id:"app-dev/data",environment:"dev",classification:"source-pvc",owner:"platform",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
+    {kind:"VolumeSnapshot",id:"app-dev/data-snapshot",environment:"dev",classification:"source-snapshot",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
+    {kind:"VolumeSnapshotContent",id:"data-content",environment:"dev",classification:"source-snapshot-content",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after approval"},
+    {kind:"Namespace",id:"app-dev",environment:"dev",classification:"application-namespace",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"namespace cleanup review",followUpAction:"delete after approval"}
   ] | .resources |= sort_by(.kind,.id)
 ' "$root/tests/fixtures/cleanup-ownership-valid.json" >"$tmp_dir/inventory.json"
 provider_sha=$(jq -cS '[.resources[] | select(.kind == "SecretsManagerSecret")] | sort_by(.environment,.id)' \
@@ -31,24 +31,24 @@ set -Eeuo pipefail
 printf '%s\n' "$*" >>"$FAKE_KUBECTL_LOG"
 context=''
 for arg in "$@"; do
-  [[ "$arg" == course-dev || "$arg" == course-prod ]] && context=$arg
+  [[ "$arg" == mini-commerce-dev || "$arg" == mini-commerce-prod ]] && context=$arg
 done
 if [[ "$*" == *'get persistentvolumeclaims '* ]]; then
-  if [[ "$context" == course-dev && "${FAKE_EXTRA:-false}" == true ]]; then
+  if [[ "$context" == mini-commerce-dev && "${FAKE_EXTRA:-false}" == true ]]; then
     printf '%s\n' '{"items":[{"kind":"PersistentVolumeClaim","metadata":{"namespace":"app-dev","name":"data","uid":"pvc-uid"}},{"kind":"PersistentVolumeClaim","metadata":{"namespace":"app-dev","name":"unexpected","uid":"unexpected-uid"}}]}'
-  elif [[ "$context" == course-dev ]]; then
+  elif [[ "$context" == mini-commerce-dev ]]; then
     printf '%s\n' '{"items":[{"kind":"PersistentVolumeClaim","metadata":{"namespace":"app-dev","name":"data","uid":"pvc-uid"}}]}'
   else
     printf '%s\n' '{"items":[]}'
   fi
 elif [[ "$*" == *'get volumesnapshots.snapshot.storage.k8s.io '* ]]; then
-  [[ "$context" == course-dev ]] && printf '%s\n' '{"items":[{"kind":"VolumeSnapshot","metadata":{"namespace":"app-dev","name":"data-snapshot","uid":"snapshot-uid"}}]}' || printf '%s\n' '{"items":[]}'
+  [[ "$context" == mini-commerce-dev ]] && printf '%s\n' '{"items":[{"kind":"VolumeSnapshot","metadata":{"namespace":"app-dev","name":"data-snapshot","uid":"snapshot-uid"}}]}' || printf '%s\n' '{"items":[]}'
 elif [[ "$*" == *'get volumesnapshotcontents.snapshot.storage.k8s.io '* ]]; then
-  [[ "$context" == course-dev ]] && printf '%s\n' '{"items":[{"kind":"VolumeSnapshotContent","metadata":{"name":"data-content","uid":"content-uid"}}]}' || printf '%s\n' '{"items":[]}'
+  [[ "$context" == mini-commerce-dev ]] && printf '%s\n' '{"items":[{"kind":"VolumeSnapshotContent","metadata":{"name":"data-content","uid":"content-uid"}}]}' || printf '%s\n' '{"items":[]}'
 elif [[ "$*" == *'get podchaos.chaos-mesh.org,networkchaos.chaos-mesh.org '* ]]; then
-  [[ "$context" == course-dev && "${FAKE_CHAOS:-false}" == true ]] && printf '%s\n' '{"items":[{"kind":"PodChaos","metadata":{"namespace":"app-dev","name":"active-fault"}}]}' || printf '%s\n' '{"items":[]}'
+  [[ "$context" == mini-commerce-dev && "${FAKE_CHAOS:-false}" == true ]] && printf '%s\n' '{"items":[{"kind":"PodChaos","metadata":{"namespace":"app-dev","name":"active-fault"}}]}' || printf '%s\n' '{"items":[]}'
 elif [[ "$*" == *'get namespaces '* ]]; then
-  [[ "$context" == course-dev ]] && printf '%s\n' '{"items":[{"kind":"Namespace","metadata":{"name":"app-dev","uid":"namespace-uid"}}]}' || printf '%s\n' '{"items":[]}'
+  [[ "$context" == mini-commerce-dev ]] && printf '%s\n' '{"items":[{"kind":"Namespace","metadata":{"name":"app-dev","uid":"namespace-uid"}}]}' || printf '%s\n' '{"items":[]}'
 else
   printf '%s\n' '{"items":[]}'
 fi
@@ -57,11 +57,11 @@ chmod +x "$tmp_dir/bin/kubectl"
 
 : >"$tmp_dir/kubectl.log"
 set +e
-output=$(PATH="$tmp_dir/bin:$PATH" FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_ID=course-2026 \
+output=$(PATH="$tmp_dir/bin:$PATH" FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" OWNER_ID=playbuilder \
   AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
     bash "$root/scripts/kubernetes-pre-destroy-scan.sh" \
       --inventory "$tmp_dir/inventory.json" --gitops-removal "$tmp_dir/removal.json" \
-      --dev-context course-dev --prod-context course-prod --output "$tmp_dir/runtime-pre-destroy.json" 2>&1)
+      --dev-context mini-commerce-dev --prod-context mini-commerce-prod --output "$tmp_dir/runtime-pre-destroy.json" 2>&1)
 status=$?
 set -e
 if [[ "$status" -eq 0 ]] || ! grep -Fq 'NONCANONICAL_RUNTIME_OUTPUT' <<<"$output"; then
@@ -72,11 +72,11 @@ fi
 
 : >"$tmp_dir/kubectl.log"
 set +e
-output=$(FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_ID=course-2026 \
+output=$(FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" OWNER_ID=playbuilder \
   AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
     bash "$root/scripts/kubernetes-pre-destroy-scan.sh" \
       --inventory "$tmp_dir/inventory.json" --gitops-removal "$tmp_dir/removal.json" \
-      --dev-context course-dev --prod-context course-prod \
+      --dev-context mini-commerce-dev --prod-context mini-commerce-prod \
       --output "$root/evidence/cleanup/../cleanup/kubernetes-pre-destroy.json" 2>&1)
 status=$?
 set -e
@@ -86,10 +86,10 @@ if [[ "$status" -eq 0 ]] || ! grep -Fq 'FIXTURE_RUNTIME_OUTPUT_BLOCKED' <<<"$out
 fi
 [[ ! -s "$tmp_dir/kubectl.log" ]]
 
-FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
+FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
   bash "$root/scripts/kubernetes-pre-destroy-scan.sh" \
     --inventory "$tmp_dir/inventory.json" --gitops-removal "$tmp_dir/removal.json" \
-    --dev-context course-dev --prod-context course-prod --output "$tmp_dir/pre-destroy.json"
+    --dev-context mini-commerce-dev --prod-context mini-commerce-prod --output "$tmp_dir/pre-destroy.json"
 
 grep -Fq 'get volumesnapshotcontents.snapshot.storage.k8s.io' "$tmp_dir/kubectl.log"
 
@@ -97,10 +97,10 @@ jq -e '[.retainedStorage[] | .kind] | sort == ["Namespace","PersistentVolumeClai
   "$tmp_dir/pre-destroy.json" >/dev/null
 
 set +e
-FAKE_EXTRA=true FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
+FAKE_EXTRA=true FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
   bash "$root/scripts/kubernetes-pre-destroy-scan.sh" \
     --inventory "$tmp_dir/inventory.json" --gitops-removal "$tmp_dir/removal.json" \
-    --dev-context course-dev --prod-context course-prod --output "$tmp_dir/pre-destroy-extra.json" >/dev/null 2>&1
+    --dev-context mini-commerce-dev --prod-context mini-commerce-prod --output "$tmp_dir/pre-destroy-extra.json" >/dev/null 2>&1
 status=$?
 set -e
 [[ "$status" -ne 0 ]] || {
@@ -109,10 +109,10 @@ set -e
 }
 
 set +e
-FAKE_CHAOS=true FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_ID=course-2026 AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
+FAKE_CHAOS=true FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 \
   bash "$root/scripts/kubernetes-pre-destroy-scan.sh" \
     --inventory "$tmp_dir/inventory.json" --gitops-removal "$tmp_dir/removal.json" \
-    --dev-context course-dev --prod-context course-prod --output "$tmp_dir/pre-destroy-chaos.json" >/dev/null 2>&1
+    --dev-context mini-commerce-dev --prod-context mini-commerce-prod --output "$tmp_dir/pre-destroy-chaos.json" >/dev/null 2>&1
 status=$?
 set -e
 [[ "$status" -ne 0 ]] || {

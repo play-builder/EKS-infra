@@ -14,16 +14,6 @@ variable "project_name" {
   default     = "mini-commerce"
 }
 
-variable "course_id" {
-  description = "Ownership identifier used by cleanup evidence. Same value in every account."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
-    error_message = "course_id must be an 8-63 character lowercase identifier."
-  }
-}
-
 variable "force_destroy" {
   description = "Allow deleting the bucket with objects inside. Enable only in disposable accounts."
   type        = bool

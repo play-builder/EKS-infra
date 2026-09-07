@@ -20,17 +20,6 @@ variable "environment" {
   }
 }
 
-variable "course_id" {
-  description = "CourseId ownership binding for the controller and fault resources"
-  type        = string
-  default     = "course-2026"
-
-  validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
-    error_message = "course_id must be a unique 8-63 character lowercase identifier."
-  }
-}
-
 variable "namespace" {
   description = "Dedicated namespace for the Chaos Mesh control plane"
   type        = string

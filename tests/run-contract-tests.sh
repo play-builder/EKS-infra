@@ -32,7 +32,7 @@ tests=(
   platform-telemetry-output-contract.sh
   workflow-supply-chain-contract.sh
   workflow-supply-chain-contract.test.sh
-  course-check-contract.sh
+  platform-check-contract.sh
   evidence-common-contract.sh
   ch10-runtime-contract.sh
   stateful-contract.sh

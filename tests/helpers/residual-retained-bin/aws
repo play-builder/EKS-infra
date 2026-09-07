@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-: "${COURSE_FAKE_AWS_LOG:?COURSE_FAKE_AWS_LOG is required}"
-printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+: "${PLATFORM_FAKE_AWS_LOG:?PLATFORM_FAKE_AWS_LOG is required}"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_AWS_LOG"
 
 case "$1 $2" in
   'resourcegroupstaggingapi get-resources') printf '{"ResourceTagMappingList":[]}\n' ;;
@@ -11,7 +11,7 @@ case "$1 $2" in
   'eks list-clusters') printf '{"clusters":[]}\n' ;;
   'ec2 describe-volumes') printf '{"Volumes":[]}\n' ;;
   'ec2 describe-snapshots')
-    if [[ ${COURSE_FAKE_MISSING_RETAINED_AWS:-false} == true ]]; then
+    if [[ ${PLATFORM_FAKE_MISSING_RETAINED_AWS:-false} == true ]]; then
       printf '{"Snapshots":[]}\n'
     else
       printf '{"Snapshots":[{"SnapshotId":"snap-retained-001"}]}\n'
@@ -20,7 +20,7 @@ case "$1 $2" in
   'amp list-workspaces') printf '{"workspaces":[]}\n' ;;
   'sns list-topics') printf '{"Topics":[]}\n' ;;
   'ecr describe-repositories')
-    printf '{"repositories":[{"repositoryArn":"arn:aws:ecr:ap-northeast-2:123456789012:repository/course/sample-app"}]}\n'
+    printf '{"repositories":[{"repositoryArn":"arn:aws:ecr:ap-northeast-2:123456789012:repository/mini-commerce"}]}\n'
     ;;
   'secretsmanager describe-secret')
     printf '{"ARN":"arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:shared-provider"}\n'

@@ -14,10 +14,10 @@ operation=${4:-apply}
 : "${BACKEND_BUCKET:?BACKEND_BUCKET is required}"
 : "${PLAN_REQUEST_IDENTITY:?PLAN_REQUEST_IDENTITY is required}"
 : "${PLAN_RUN_ID:?PLAN_RUN_ID is required}"
-course_validate_region "$AWS_REGION"
+pb_validate_region "$AWS_REGION"
 caller_identity=$(aws sts get-caller-identity --region "$AWS_REGION" --output json)
 account_id=$(jq -r '.Account' <<<"$caller_identity")
-course_validate_account "$account_id"
+pb_validate_account "$account_id"
 [[ "$PLAN_REQUEST_IDENTITY" =~ [^[:space:]] && "$PLAN_REQUEST_IDENTITY" != pending ]] || \
   terraform_plan_fail REQUEST_IDENTITY_INVALID
 [[ "$PLAN_RUN_ID" =~ ^[1-9][0-9]*$ ]] || terraform_plan_fail RUN_ID_INVALID
@@ -57,11 +57,11 @@ terraform -chdir="$terraform_root" show -json "$staging_dir/tfplan" >"$staging_d
 jq -e '.format_version | type == "string"' "$staging_dir/tfplan.json" >/dev/null || \
   terraform_plan_fail PLAN_JSON_INVALID
 
-plan_sha=$(course_raw_sha256_file "$staging_dir/tfplan")
-plan_json_sha=$(course_raw_sha256_file "$staging_dir/tfplan.json")
+plan_sha=$(pb_raw_sha256_file "$staging_dir/tfplan")
+plan_json_sha=$(pb_raw_sha256_file "$staging_dir/tfplan.json")
 terraform_binary=$(terraform_plan_binary_path)
-terraform_sha=$(course_raw_sha256_file "$terraform_binary")
-lock_sha=$(course_raw_sha256_file "$lock_file")
+terraform_sha=$(pb_raw_sha256_file "$terraform_binary")
+lock_sha=$(pb_raw_sha256_file "$lock_file")
 terraform_version=$("$terraform_binary" version -json | jq -er '.terraform_version | select(type == "string" and length > 0)')
 
 jq -n --arg account "$account_id" --arg region "$AWS_REGION" --arg root "$relative_root" \

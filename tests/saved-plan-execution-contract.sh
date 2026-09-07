@@ -20,23 +20,23 @@ chdir=''
 for argument in "$@"; do
   case "$argument" in -chdir=*) chdir=${argument#-chdir=} ;; esac
 done
-layer=${chdir#"$COURSE_FAKE_REPO_ROOT/"}
+layer=${chdir#"$PLATFORM_FAKE_REPO_ROOT/"}
 if [[ " $* " == *" show -json "* ]]; then
   plan_path=${!#}
-  if [[ -n "${COURSE_FAKE_INVALID_NOOP_PLAN_PATH:-}" && "$plan_path" == "$COURSE_FAKE_INVALID_NOOP_PLAN_PATH" ]]; then
+  if [[ -n "${PLATFORM_FAKE_INVALID_NOOP_PLAN_PATH:-}" && "$plan_path" == "$PLATFORM_FAKE_INVALID_NOOP_PLAN_PATH" ]]; then
     printf '%s\n' '{"resource_changes":[]}'
     exit 0
   fi
-  if [[ -n "${COURSE_FAKE_NOOP_PLAN_PATH:-}" && "$plan_path" == "$COURSE_FAKE_NOOP_PLAN_PATH" ]]; then
-    cat "$COURSE_FAKE_GENUINE_NOOP_JSON"
+  if [[ -n "${PLATFORM_FAKE_NOOP_PLAN_PATH:-}" && "$plan_path" == "$PLATFORM_FAKE_NOOP_PLAN_PATH" ]]; then
+    cat "$PLATFORM_FAKE_GENUINE_NOOP_JSON"
     exit 0
   fi
-  cat "$COURSE_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
+  cat "$PLATFORM_FAKE_PLAN_JSON_DIR/${layer//\//__}.json"
   exit 0
 fi
 [[ " $* " == *" apply "* ]] || { echo "unexpected terraform command: $*" >&2; exit 97; }
-printf '%s\n' "$layer" >>"$COURSE_FAKE_MUTATION_LOG"
-if [[ -n "${COURSE_FAKE_FAIL_LAYER:-}" && "$layer" == "$COURSE_FAKE_FAIL_LAYER" ]]; then
+printf '%s\n' "$layer" >>"$PLATFORM_FAKE_MUTATION_LOG"
+if [[ -n "${PLATFORM_FAKE_FAIL_LAYER:-}" && "$layer" == "$PLATFORM_FAKE_FAIL_LAYER" ]]; then
   exit 42
 fi
 EOF
@@ -44,14 +44,14 @@ chmod +x "$tmp_dir/bin/terraform"
 : >"$tmp_dir/mutations.log"
 
 export PATH="$tmp_dir/bin:$PATH"
-export COURSE_FAKE_REPO_ROOT="$root"
-export COURSE_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json"
-export COURSE_FAKE_GENUINE_NOOP_JSON="$root/tests/fixtures/terraform-plan-noop-valid.json"
-export COURSE_FAKE_MUTATION_LOG="$tmp_dir/mutations.log"
-export COURSE_ID=course-2026
+export PLATFORM_FAKE_REPO_ROOT="$root"
+export PLATFORM_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json"
+export PLATFORM_FAKE_GENUINE_NOOP_JSON="$root/tests/fixtures/terraform-plan-noop-valid.json"
+export PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log"
+export OWNER_ID=playbuilder
 export AWS_ACCOUNT_ID=123456789012
 export AWS_REGION=ap-northeast-2
-export COURSE_PROJECT=playdevops
+export PROJECT_NAME=playdevops
 
 progress="$tmp_dir/evidence/saved-plan-progress.json"
 manifest="$tmp_dir/saved-plans.json"
@@ -59,7 +59,7 @@ inventory="$tmp_dir/evidence/inventory.json"
 
 set +e
 output=$({
-  export COURSE_FAKE_FAIL_LAYER=environments/dev/04-workloads/argocd
+  export PLATFORM_FAKE_FAIL_LAYER=environments/dev/04-workloads/argocd
   cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevops
 } 2>&1)
 status=$?
@@ -70,10 +70,10 @@ first_plan=$(jq -r '.plans[0].path' "$manifest")
 failed_plan=$(jq -r '.plans[1].path' "$manifest")
 [[ ! -e "$first_plan" ]] || { printf '%s\n' "$output" >&2; echo 'successfully applied binary plan was not deleted promptly' >&2; exit 1; }
 [[ -f "$failed_plan" ]] || { echo 'failed binary plan was not preserved for reviewed recovery' >&2; exit 1; }
-course_assert_file_mode "$failed_plan" 600
-course_assert_file_mode "$progress" 600
+pb_assert_file_mode "$failed_plan" 600
+pb_assert_file_mode "$progress" 600
 jq -e '
-  .schemaVersion == "course.saved-destroy-progress/v2" and .status == "IN_PROGRESS" and
+  .schemaVersion == "playbuilder.saved-destroy-progress/v2" and .status == "IN_PROGRESS" and
   [.completed[].layer] == ["environments/prod/04-workloads/argocd"] and
   .inFlight.layer == "environments/dev/04-workloads/argocd"
 ' "$progress" >/dev/null
@@ -105,7 +105,7 @@ mv "$later_plan_json.tmp" "$later_plan_json"
 authorization_before_failed_recovery=$(jq -c '{manifestSha256,status,completed,inFlight}' "$progress")
 mutations_before=$(wc -l <"$tmp_dir/mutations.log" | tr -d ' ')
 set +e
-output=$(COURSE_FAKE_NOOP_PLAN_PATH="$replacement_a" \
+output=$(PLATFORM_FAKE_NOOP_PLAN_PATH="$replacement_a" \
   cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevops 2>&1)
 status=$?
 set -e
@@ -134,7 +134,7 @@ mv "$manifest.tmp" "$manifest"
 progress_before_invalid_noop=$(raw_sha256 "$progress")
 mutations_before=$(wc -l <"$tmp_dir/mutations.log" | tr -d ' ')
 set +e
-(COURSE_FAKE_INVALID_NOOP_PLAN_PATH="$replacement_b" \
+(PLATFORM_FAKE_INVALID_NOOP_PLAN_PATH="$replacement_b" \
   cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevops) >/dev/null 2>&1
 status=$?
 set -e
@@ -142,11 +142,11 @@ set -e
 [[ $(raw_sha256 "$progress") == "$progress_before_invalid_noop" ]]
 [[ $(wc -l <"$tmp_dir/mutations.log" | tr -d ' ') -eq "$mutations_before" ]]
 
-COURSE_FAKE_NOOP_PLAN_PATH="$replacement_b" \
+PLATFORM_FAKE_NOOP_PLAN_PATH="$replacement_b" \
   cleanup_apply_saved_plans "$manifest" "$root" "$inventory" "$progress" playdevops
 
 jq -e '
-  .schemaVersion == "course.saved-destroy-progress/v2" and .status == "COMPLETE" and
+  .schemaVersion == "playbuilder.saved-destroy-progress/v2" and .status == "COMPLETE" and
   (.completed | length == 8) and .completed[1].outcome == "RECOVERED_NO_CHANGES" and .inFlight == null
 ' "$progress" >/dev/null
 [[ $(wc -l <"$tmp_dir/mutations.log" | tr -d ' ') -eq 8 ]]

@@ -153,7 +153,7 @@ output "recovery_namespace" {
 
 output "recovery_cleanup_label" {
   description = "Label used to identify disposable recovery workloads"
-  value       = var.enable_recovery_secret_reader ? "course.playdevops.io/recovery-cleanup=true" : null
+  value       = var.enable_recovery_secret_reader ? "playbuilder.playdevops.io/recovery-cleanup=true" : null
 }
 
 output "recovery_db_secret_reader_role_arn" {

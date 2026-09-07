@@ -1,7 +1,6 @@
 # Supported Regions: ap-northeast-2 or us-east-1. Same value as the profile region.
 aws_region   = "ap-northeast-2"
 project_name = "mini-commerce"
-course_id    = "replace-with-unique-course-id"
 
 # Enable only in disposable accounts. Production accounts keep false.
 force_destroy = true

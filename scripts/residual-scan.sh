@@ -6,9 +6,9 @@ REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
 
-if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
-  [[ -d "$COURSE_CHECK_BIN_DIR" ]] || course_fail 'COURSE_CHECK_BIN_DIR is not a directory' 64
-  PATH="$COURSE_CHECK_BIN_DIR:$PATH"
+if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
+  [[ -d "$PLATFORM_CHECK_BIN_DIR" ]] || pb_fail 'PLATFORM_CHECK_BIN_DIR is not a directory' 64
+  PATH="$PLATFORM_CHECK_BIN_DIR:$PATH"
 fi
 
 validate_only=false
@@ -27,11 +27,11 @@ while [[ $# -gt 0 ]]; do
     --gitops-removal) removal=${2:-}; shift 2 ;;
     --residual) residual=${2:-}; shift 2 ;;
     --output) output=${2:-}; shift 2 ;;
-    *) course_fail "unknown argument: $1" 64 ;;
+    *) pb_fail "unknown argument: $1" 64 ;;
   esac
 done
 for name in inventory decisions pre_destroy removal; do
-  [[ -n "${!name}" ]] || course_fail "--${name//_/-} is required" 64
+  [[ -n "${!name}" ]] || pb_fail "--${name//_/-} is required" 64
 done
 
 cleanup_validate_removal "$inventory" "$removal"
@@ -39,22 +39,22 @@ cleanup_validate_decisions "$inventory" "$decisions"
 cleanup_validate_pre_destroy "$inventory" "$removal" "$pre_destroy"
 
 if [[ "$validate_only" == true ]]; then
-  [[ -n "$residual" ]] || course_fail '--residual is required with --validate-only' 64
+  [[ -n "$residual" ]] || pb_fail '--residual is required with --validate-only' 64
   cleanup_validate_residual "$inventory" "$decisions" "$pre_destroy" "$removal" "$residual"
   echo 'PASS: [STATIC] canonical cleanup residual evidence validated without cloud calls.'
   exit 0
 fi
 
-[[ -n "$output" ]] || course_fail '--output is required' 64
+[[ -n "$output" ]] || pb_fail '--output is required' 64
 : "${AWS_PROFILE:?AWS_PROFILE is required}"
 : "${AWS_REGION:?AWS_REGION is required}"
 : "${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID is required}"
-: "${COURSE_ID:?COURSE_ID is required}"
-course_validate_region "$AWS_REGION"
-course_validate_account "$AWS_ACCOUNT_ID"
-[[ "$COURSE_ID" == "$(jq -r '.courseId' "$inventory")" ]] || course_fail 'residual CourseId mismatch'
-[[ "$AWS_ACCOUNT_ID" == "$(jq -r '.accountId' "$inventory")" ]] || course_fail 'residual account mismatch'
-[[ "$AWS_REGION" == "$(jq -r '.region' "$inventory")" ]] || course_fail 'residual Region mismatch'
+: "${OWNER_ID:?OWNER_ID is required}"
+pb_validate_region "$AWS_REGION"
+pb_validate_account "$AWS_ACCOUNT_ID"
+[[ "$OWNER_ID" == "$(jq -r '.ownerId' "$inventory")" ]] || pb_fail 'residual OwnerId mismatch'
+[[ "$AWS_ACCOUNT_ID" == "$(jq -r '.accountId' "$inventory")" ]] || pb_fail 'residual account mismatch'
+[[ "$AWS_REGION" == "$(jq -r '.region' "$inventory")" ]] || pb_fail 'residual Region mismatch'
 cleanup_require_canonical_runtime_output "$output" "$REPO_ROOT" residual.json
 
 tmp_dir=$(mktemp -d)
@@ -81,7 +81,7 @@ resource_present() {
     SecretsManagerSecret)
       python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" present "$kind" "$id"
       ;;
-    RdsInstance|RdsSnapshot|RdsAutomatedBackup|RdsSubnetGroup|RdsParameterGroup|KmsKey|LogGroup|WafWebAcl|S3BackupBucket|S3StateBucket|TerraformState|CourseEvidence|IamOidcProvider|Budget|CostAnomalyMonitor|CostAnomalySubscription|CostAllocationTag|BillingSnsTopic)
+    RdsInstance|RdsSnapshot|RdsAutomatedBackup|RdsSubnetGroup|RdsParameterGroup|KmsKey|LogGroup|WafWebAcl|S3BackupBucket|S3StateBucket|TerraformState|PlatformEvidence|IamOidcProvider|Budget|CostAnomalyMonitor|CostAnomalySubscription|CostAllocationTag|BillingSnsTopic)
       python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" present "$kind" "$id"
       ;;
     *) return 2 ;;
@@ -89,7 +89,7 @@ resource_present() {
 }
 
 scan_once() {
-  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" discover "$inventory" || course_fail 'ENTERPRISE_DISCOVERY_INCOMPLETE'
+  python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" discover "$inventory" || pb_fail 'ENTERPRISE_DISCOVERY_INCOMPLETE'
   aws_scan elbv2 describe-load-balancers >"$tmp_dir/load-balancers.json"
   aws_scan ec2 describe-nat-gateways --filter Name=state,Values=pending,available,deleting >"$tmp_dir/nat-gateways.json"
   aws_scan eks list-clusters >"$tmp_dir/eks-clusters.json"
@@ -101,7 +101,7 @@ scan_once() {
   for file in "$tmp_dir/load-balancers.json" "$tmp_dir/nat-gateways.json" "$tmp_dir/eks-clusters.json" \
     "$tmp_dir/ebs-volumes.json" "$tmp_dir/ebs-snapshots.json" "$tmp_dir/amp-workspaces.json" \
     "$tmp_dir/sns-topics.json" "$tmp_dir/ecr-repositories.json"; do
-    jq -e . "$file" >/dev/null || course_fail "invalid AWS residual response: $file"
+    jq -e . "$file" >/dev/null || pb_fail "invalid AWS residual response: $file"
   done
 
   load_balancers=0
@@ -124,7 +124,7 @@ scan_once() {
     status=0
     case "$kind:$decision" in
       KmsLogKey:DELETE)
-        scheduled=$(python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" scheduled-log-key "$id" "$inventory") || course_fail 'LOG_KEY_SCHEDULED_HANDLE_NOT_VERIFIED'
+        scheduled=$(python3 "$SCRIPT_DIR/lib/enterprise-cleanup.py" scheduled-log-key "$id" "$inventory") || pb_fail 'LOG_KEY_SCHEDULED_HANDLE_NOT_VERIFIED'
         scheduled_keys=$(jq --argjson entry "$scheduled" '. + [$entry] | sort_by(.keyArn)' <<<"$scheduled_keys")
         # PendingDeletion is immediately unusable, but still physically retained.
         # This is recorded separately, never represented as physical absence.
@@ -140,7 +140,7 @@ scan_once() {
           present=true
         else
           status=$?
-          [[ "$status" -le 1 ]] || course_fail "RESIDUAL_QUERY_FAILED_OR_UNSUPPORTED_KIND: $kind"
+          [[ "$status" -le 1 ]] || pb_fail "RESIDUAL_QUERY_FAILED_OR_UNSUPPORTED_KIND: $kind"
         fi
         ;;
     esac
@@ -155,7 +155,7 @@ scan_once() {
         SnsTopic) ((sns_topics+=1)) ;;
         EcrRepository) ((ecr_repositories+=1)) ;;
         RdsInstance|RdsSnapshot|RdsSubnetGroup|RdsParameterGroup|LogGroup|WafWebAcl|SecretsManagerSecret) ((enterprise_resources+=1)) ;;
-        *) course_fail "UNSUPPORTED_DELETE_KIND: $kind" ;;
+        *) pb_fail "UNSUPPORTED_DELETE_KIND: $kind" ;;
       esac
     elif [[ "$decision" != DELETE && "$present" != true ]]; then
       ((missing_protected+=1))
@@ -167,24 +167,24 @@ scan_once() {
 
 attempts=${RESIDUAL_SCAN_ATTEMPTS:-12}
 delay=${RESIDUAL_SCAN_DELAY_SECONDS:-10}
-if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
   attempts=${RESIDUAL_SCAN_ATTEMPTS:-1}
   delay=${RESIDUAL_SCAN_DELAY_SECONDS:-0}
 fi
-[[ "$attempts" =~ ^[1-9][0-9]*$ ]] || course_fail 'RESIDUAL_SCAN_ATTEMPTS must be a positive integer' 64
-[[ "$delay" =~ ^[0-9]+$ ]] || course_fail 'RESIDUAL_SCAN_DELAY_SECONDS must be a non-negative integer' 64
+[[ "$attempts" =~ ^[1-9][0-9]*$ ]] || pb_fail 'RESIDUAL_SCAN_ATTEMPTS must be a positive integer' 64
+[[ "$delay" =~ ^[0-9]+$ ]] || pb_fail 'RESIDUAL_SCAN_DELAY_SECONDS must be a non-negative integer' 64
 
 for ((attempt=1; attempt<=attempts; attempt++)); do
   scan_once
   if [[ "$total" -eq 0 && "$missing_protected" -eq 0 ]]; then break; fi
   if [[ "$attempt" -eq "$attempts" ]]; then
-    course_fail "RESIDUAL_SCAN_TIMEOUT: unapproved=$total missingProtected=$missing_protected"
+    pb_fail "RESIDUAL_SCAN_TIMEOUT: unapproved=$total missingProtected=$missing_protected"
   fi
   sleep "$delay"
 done
 
-grade=$(course_runtime_grade)
-observed=$(course_now)
+grade=$(pb_runtime_grade)
+observed=$(pb_now)
 external=$(jq '[.resources[] | select(.decision == "EXTERNAL_SHARED") |
   {kind,id,owner,deletePlanned:false,presentAfterCleanup:true}] | sort_by(.kind,.id)' "$inventory")
 retained=$(jq -n --argjson inventory "$(jq -c . "$inventory")" --argjson decisions "$(jq -c . "$decisions")" '
@@ -193,21 +193,21 @@ retained=$(jq -n --argjson inventory "$(jq -c . "$inventory")" --argjson decisio
     {kind:$d.kind,id:$d.id,owner:$i.owner,reason:$d.reason,followUpAction:$d.followUpAction,presentAfterCleanup:true}]
   | sort_by(.kind,.id)
 ')
-payload=$(jq -n --arg grade "$grade" --arg course "$COURSE_ID" --arg account "$AWS_ACCOUNT_ID" \
-  --arg region "$AWS_REGION" --arg inventory_sha "$(course_raw_sha256_file "$inventory")" \
-  --arg decisions_sha "$(course_raw_sha256_file "$decisions")" \
-  --arg pre_sha "$(course_raw_sha256_file "$pre_destroy")" --arg removal_sha "$(course_raw_sha256_file "$removal")" \
+payload=$(jq -n --arg grade "$grade" --arg owner "$OWNER_ID" --arg account "$AWS_ACCOUNT_ID" \
+  --arg region "$AWS_REGION" --arg inventory_sha "$(pb_raw_sha256_file "$inventory")" \
+  --arg decisions_sha "$(pb_raw_sha256_file "$decisions")" \
+  --arg pre_sha "$(pb_raw_sha256_file "$pre_destroy")" --arg removal_sha "$(pb_raw_sha256_file "$removal")" \
   --arg observed "$observed" --argjson external "$external" --argjson retained "$retained" --argjson scheduled_keys "$scheduled_keys" \
   --argjson load_balancers "$load_balancers" --argjson nat_gateways "$nat_gateways" \
   --argjson eks_clusters "$eks_clusters" --argjson ebs_volumes "$ebs_volumes" \
   --argjson ebs_snapshots "$ebs_snapshots" --argjson amp_workspaces "$amp_workspaces" \
   --argjson sns_topics "$sns_topics" --argjson ecr_repositories "$ecr_repositories" --argjson enterprise_resources "$enterprise_resources" '
   {
-    schemaVersion:"course.cleanup-residual/v1",evidenceGrade:$grade,status:"PASS",
-    courseId:$course,accountId:$account,region:$region,
+    schemaVersion:"playbuilder.cleanup-residual/v1",evidenceGrade:$grade,status:"PASS",
+    ownerId:$owner,accountId:$account,region:$region,
     inventorySha256:$inventory_sha,retainDecisionsSha256:$decisions_sha,
     kubernetesPreDestroySha256:$pre_sha,gitopsRemovalSha256:$removal_sha,
-    unapprovedCourseOwned:{loadBalancers:$load_balancers,natGateways:$nat_gateways,
+    unapprovedPlatformOwned:{loadBalancers:$load_balancers,natGateways:$nat_gateways,
       eksClusters:$eks_clusters,ebsVolumes:$ebs_volumes,ebsSnapshots:$ebs_snapshots,
       ampWorkspaces:$amp_workspaces,snsTopics:$sns_topics,ecrRepositories:$ecr_repositories,
       enterpriseResources:$enterprise_resources,
@@ -215,9 +215,9 @@ payload=$(jq -n --arg grade "$grade" --arg course "$COURSE_ID" --arg account "$A
     externalShared:$external,retained:$retained,scheduledKeyDeletions:$scheduled_keys,observedAt:$observed
   }
 ')
-course_write_json "$output" "$payload"
+pb_write_json "$output" "$payload"
 cleanup_validate_residual "$inventory" "$decisions" "$pre_destroy" "$removal" "$output"
-if [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" != true ]]; then
+if [[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" != true ]]; then
   if [[ "$grade" == STATIC ]]; then
     echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT cleanup residual scan passed.'
   else

@@ -25,17 +25,6 @@ variable "state_bucket_name" {
   type        = string
 }
 
-variable "course_id" {
-  description = "Unique CourseId binding all course-owned resources and cleanup evidence"
-  type        = string
-  default     = "course-2026"
-
-  validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
-    error_message = "course_id must be a unique 8-63 character lowercase identifier."
-  }
-}
-
 variable "division" {
   description = "Organizational or technical division"
   type        = string
@@ -76,7 +65,7 @@ variable "ebs_csi_driver_use_aws_managed_policy" {
   default     = true
 }
 
-variable "enable_course_storage_class" {
+variable "enable_pb_storage_class" {
   description = "Create the non-default encrypted gp3 StorageClass for stateful workloads"
   type        = bool
   default     = true
@@ -244,7 +233,7 @@ variable "external_secrets_ownership_mode" {
 }
 
 variable "external_secrets_adoption_evidence_path" {
-  description = "Path to course.platform-release-adoption/v1 evidence for an existing release"
+  description = "Path to playbuilder.platform-release-adoption/v1 evidence for an existing release"
   type        = string
   default     = null
   nullable    = true
@@ -348,7 +337,7 @@ variable "enable_k6_operator" {
 
   validation {
     condition     = !var.enable_k6_operator
-    error_message = "K6_OPERATOR_DEV_ONLY: Prod must not install the course load controller."
+    error_message = "K6_OPERATOR_DEV_ONLY: Prod must not install the platform load controller."
   }
 }
 
@@ -436,7 +425,7 @@ variable "snapshot_controller_addon_version" {
 variable "volume_snapshot_class_name" {
   description = "Platform-owned VolumeSnapshotClass name"
   type        = string
-  default     = "course-ebs-snapshots"
+  default     = "mini-commerce-ebs-snapshots"
 }
 
 variable "snapshot_driver" {

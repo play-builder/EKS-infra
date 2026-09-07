@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
-  PATH="$COURSE_CHECK_BIN_DIR:$PATH"
+if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
+  PATH="$PLATFORM_CHECK_BIN_DIR:$PATH"
 fi
 
 fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
@@ -32,9 +32,9 @@ for digest in "$@"; do
   fi
 done
 
-if [[ "${COURSE_CHECK_DETAIL_ONLY:-false}" == true ]]; then
+if [[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]]; then
   echo 'DETAIL: GO: retained rollback indexes survive preview.'
-elif [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
+elif [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
   echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT GO: retained rollback indexes survive preview.'
 else
   echo 'PASS: [CLOUD_RUNTIME] GO: retained rollback indexes survive preview.'

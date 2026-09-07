@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "course.dev-ready/v1",
+  "schemaVersion": "playbuilder.dev-ready/v1",
   "environment": "dev",
   "region": "us-east-1",
   "sourceSha": "3333333333333333333333333333333333333333",
@@ -8,16 +8,16 @@
     "event": "push",
     "runId": "202",
     "runAttempt": 1,
-    "runUrl": "https://github.com/play-builder/cicd-course-sample-app/actions/runs/202"
+    "runUrl": "https://github.com/play-builder/mini-commerce/actions/runs/202"
   },
   "image": {
-    "repository": "123456789012.dkr.ecr.us-east-1.amazonaws.com/course/sample-app",
+    "repository": "123456789012.dkr.ecr.us-east-1.amazonaws.com/mini-commerce",
     "indexDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     "platforms": ["linux/amd64", "linux/arm64"]
   },
   "attestation": {
     "githubId": "202",
-    "githubUrl": "https://github.com/play-builder/cicd-course-sample-app/attestations/202",
+    "githubUrl": "https://github.com/play-builder/mini-commerce/attestations/202",
     "ociSbomDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "ociProvenanceDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
   },

@@ -15,14 +15,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -f "$evidence" ]] || fail 'evidence file is required'
-now=${COURSE_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
-course_assert_canonical_utc_seconds_value "$now" 'OIDC ownership handoff evaluation time'
-course_assert_canonical_utc_seconds "$evidence" 'OIDC ownership handoff timestamps' \
+now=${PLATFORM_CHECK_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+pb_assert_canonical_utc_seconds_value "$now" 'OIDC ownership handoff evaluation time'
+pb_assert_canonical_utc_seconds "$evidence" 'OIDC ownership handoff timestamps' \
   '["approval","approvedAt"]' '["observedAt"]' '["expiresAt"]'
 
 jq -e --arg now "$now" '
   (keys | sort) == (["approval","destinationState","evidenceGrade","expiresAt","observedAt","provider","schemaVersion","sourceState","transition"] | sort) and
-  .schemaVersion == "course.oidc-ownership-handoff/v1" and
+  .schemaVersion == "playbuilder.oidc-ownership-handoff/v1" and
   .evidenceGrade == "CLOUD_RUNTIME" and
   (.provider | keys | sort) == (["accountId","arn","audiences","issuerUrl"] | sort) and
   (.transition | keys | sort) == (["fromMode","fromOwner","toMode","toOwner"] | sort) and
@@ -43,7 +43,7 @@ jq -e --arg now "$now" '
 ' "$evidence" >/dev/null || fail 'OIDC_OWNERSHIP_HANDOFF_INVALID'
 
 if [[ "$validate_only" == true ]]; then
-  echo 'VALID: course.oidc-ownership-handoff/v1'
+  echo 'VALID: playbuilder.oidc-ownership-handoff/v1'
   exit 0
 fi
 

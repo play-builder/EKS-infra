@@ -2,7 +2,7 @@ mock_provider "aws" {
   mock_resource "aws_iam_role" {
     override_during = plan
     defaults = {
-      arn = "arn:aws:iam::123456789012:role/course-dev-adot-collector-role"
+      arn = "arn:aws:iam::123456789012:role/mini-commerce-dev-adot-collector-role"
     }
   }
 }
@@ -10,7 +10,7 @@ mock_provider "helm" {}
 mock_provider "kubernetes" {}
 
 variables {
-  eks_cluster_name       = "course-dev"
+  eks_cluster_name       = "mini-commerce-dev"
   aws_region             = "ap-northeast-2"
   oidc_provider_arn      = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.ap-northeast-2.amazonaws.com/id/EXAMPLE"
   oidc_provider          = "oidc.eks.ap-northeast-2.amazonaws.com/id/EXAMPLE"

@@ -20,13 +20,13 @@ with tempfile.TemporaryDirectory(prefix="enterprise-resume-") as directory:
         layer=f"environments/{env}/03-database"
         arn=f"arn:aws:rds:ap-northeast-2:123456789012:db:{env}-commerce"
         snapshot=f"{env}-commerce-final"
-        entry={"kind":"RdsInstance","id":arn,"decision":"DELETE","environment":env,"owner":"course","managedBy":"terraform","classification":"database","billable":True,"reason":"","followUpAction":""}
+        entry={"kind":"RdsInstance","id":arn,"decision":"DELETE","environment":env,"owner":"platform","managedBy":"terraform","classification":"database","billable":True,"reason":"","followUpAction":""}
         inventory["resources"].append(entry)
         inventory["resources"].append({**entry,"kind":"RdsSnapshot","id":f"arn:aws:rds:ap-northeast-2:123456789012:snapshot:{snapshot}","decision":"RETAIN","reason":"approved final snapshot","followUpAction":"operator retention review"})
         binary=work/"plans"/(layer.replace("/","__")+".tfplan")
         binary.write_bytes(("fixture binary "+layer).encode())
         added.append({"layer":layer,"path":str(binary),"sha256":hashlib.sha256(binary.read_bytes()).hexdigest()})
-        plan={"format_version":"1.2","resource_changes":[{"address":"module.database.aws_db_instance.this","mode":"managed","type":"aws_db_instance","change":{"actions":["delete"],"before":{"arn":arn,"deletion_protection":False,"skip_final_snapshot":False,"final_snapshot_identifier":snapshot,"tags_all":{"CourseId":"course-2026","Project":"playdevops","Environment":"prod","Layer":"recovery-database" if env=="recovery" else "database","ManagedBy":"Terraform"}}}}]}
+        plan={"format_version":"1.2","resource_changes":[{"address":"module.database.aws_db_instance.this","mode":"managed","type":"aws_db_instance","change":{"actions":["delete"],"before":{"arn":arn,"deletion_protection":False,"skip_final_snapshot":False,"final_snapshot_identifier":snapshot,"tags_all":{"OwnerId":"playbuilder","Project":"playdevops","Environment":"prod","Layer":"recovery-database" if env=="recovery" else "database","ManagedBy":"Terraform"}}}}]}
         (work/"json"/(layer.replace("/","__")+".json")).write_text(json.dumps(plan))
     inventory["resources"].sort(key=lambda x:(x["kind"],x["id"]))
     (work/"evidence/inventory.json").write_text(json.dumps(inventory))
@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix="enterprise-resume-") as directory:
     fake=work/"bin/terraform"
     fake.write_text('#!/usr/bin/env python3\nimport os,pathlib,sys\nlayer=sys.argv[1].split(os.environ["TEST_REPO"]+"/",1)[1]\nif sys.argv[2:4]==["show","-json"]: print((pathlib.Path(os.environ["TEST_WORK"])/"json"/(layer.replace("/","__")+".json")).read_text())\nelif sys.argv[2]=="apply": pass\nelse: raise SystemExit(97)\n')
     fake.chmod(0o755)
-    env={**os.environ,"PATH":str(work/"bin")+":"+os.environ["PATH"],"TEST_WORK":str(work),"TEST_REPO":str(root),"COURSE_CHECK_BIN_DIR":str(work/"bin")}
+    env={**os.environ,"PATH":str(work/"bin")+":"+os.environ["PATH"],"TEST_WORK":str(work),"TEST_REPO":str(root),"PLATFORM_CHECK_BIN_DIR":str(work/"bin")}
     script='source "$1/scripts/lib/evidence-common.sh"; source "$1/scripts/lib/cleanup-evidence.sh"; cleanup_apply_saved_plans "$2/manifest.json" "$1" "$2/evidence/inventory.json" "$2/progress.json" playdevops'
     # A retained live DB must reject the whole sequence before any progress is created.
     inventory["resources"][next(i for i,x in enumerate(inventory["resources"]) if x["kind"]=="RdsInstance")]["decision"]="RETAIN"
@@ -66,12 +66,12 @@ with tempfile.TemporaryDirectory(prefix="enterprise-addresses-") as directory:
     env = {**os.environ, "PATH": str(work / "bin") + ":" + os.environ["PATH"], "ADDRESS_PLAN": str(work / "plan.json")}
     inventory = json.loads((root / "tests/fixtures/cleanup-ownership-valid.json").read_text())
     (work / "inventory.json").write_text(json.dumps(inventory))
-    script = 'set -euo pipefail; source "$1/scripts/lib/evidence-common.sh"; source "$1/scripts/lib/cleanup-evidence.sh"; cleanup_inspect_saved_destroy_plan "$3" "$2/binary.tfplan" "$2/inventory.json" "$1" course-2026 123456789012 ap-northeast-2 playdevops'
+    script = 'set -euo pipefail; source "$1/scripts/lib/evidence-common.sh"; source "$1/scripts/lib/cleanup-evidence.sh"; cleanup_inspect_saved_destroy_plan "$3" "$2/binary.tfplan" "$2/inventory.json" "$1" playbuilder 123456789012 ap-northeast-2 playdevops'
 
     def inspect(layer, address, resource_type, before=None):
         environment = layer.split("/")[1]
         semantic = "eks" if layer.endswith("02-eks") else "platform" if layer.endswith("03-platform") else "workloads"
-        values = {"id": "fixture-resource", "tags_all": {"CourseId": "course-2026", "Project": "playdevops", "Environment": environment, "Layer": semantic, "ManagedBy": "Terraform"}} if before is None else before
+        values = {"id": "fixture-resource", "tags_all": {"OwnerId": "playbuilder", "Project": "playdevops", "Environment": environment, "Layer": semantic, "ManagedBy": "Terraform"}} if before is None else before
         plan = {"format_version": "1.2", "resource_changes": [{"address": address, "mode": "managed", "type": resource_type, "change": {"actions": ["delete"], "before": values}}]}
         (work / "plan.json").write_text(json.dumps(plan))
         return subprocess.run(["bash", "-c", script, "fixture", str(root), str(work), layer], env=env, capture_output=True, text=True)
@@ -118,9 +118,9 @@ with tempfile.TemporaryDirectory(prefix="enterprise-addresses-") as directory:
     ]:
         result = inspect(layer, address, resource_type)
         assert result.returncode != 0, (layer, address, "unexpected DELETE")
-    wrong_owner = {"id": "fixture-resource", "tags_all": {"CourseId": "foreign", "Project": "playdevops", "Environment": "prod", "Layer": "eks", "ManagedBy": "Terraform"}}
+    wrong_owner = {"id": "fixture-resource", "tags_all": {"OwnerId": "foreign", "Project": "playdevops", "Environment": "prod", "Layer": "eks", "ManagedBy": "Terraform"}}
     assert inspect("environments/prod/02-eks", "module.managed_addons.aws_eks_addon.coredns", "aws_eks_addon", wrong_owner).returncode != 0
-    inventory["resources"].append({"kind": "EksCluster", "id": "fixture-resource", "environment": "prod", "decision": "RETAIN", "owner": "course", "managedBy": "terraform"})
+    inventory["resources"].append({"kind": "EksCluster", "id": "fixture-resource", "environment": "prod", "decision": "RETAIN", "owner": "playbuilder", "managedBy": "terraform"})
     (work / "inventory.json").write_text(json.dumps(inventory))
     assert inspect("environments/prod/02-eks", "module.managed_addons.aws_eks_addon.coredns", "aws_eks_addon").returncode != 0
     print(f"PASS: {tested} declared EKS module resources, root markers and adjacent enterprise addresses; unknown scope/type and foreign ownership rejected")

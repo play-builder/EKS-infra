@@ -7,16 +7,16 @@ import tempfile
 root = pathlib.Path(__file__).resolve().parents[1]
 for env in ("dev", "prod"):
     source = (root / f"environments/{env}/04-workloads/argocd/main.tf").read_text()
-    start = source.index('resource "terraform_data" "course_ownership"')
+    start = source.index('resource "terraform_data" "workload_ownership"')
     end = source.index("\n}\n", start) + 3
-    block = source[start:end].replace("local.course_ownership", '"fixture"')
+    block = source[start:end].replace("local.workload_ownership", '"fixture"')
     with tempfile.TemporaryDirectory(prefix="ownership-destroy-") as directory:
         work = pathlib.Path(directory)
         (work / "main.tf").write_text(block)
         (work / "terraform.tfstate").write_text(json.dumps({
             "version": 4, "terraform_version": "1.16.0", "serial": 1,
             "lineage": "00000000-0000-0000-0000-000000000001", "outputs": {},
-            "resources": [{"mode": "managed", "type": "terraform_data", "name": "course_ownership",
+            "resources": [{"mode": "managed", "type": "terraform_data", "name": "workload_ownership",
                 "provider": 'provider["terraform.io/builtin/terraform"]',
                 "instances": [{"schema_version": 0, "attributes": {"id": "fixture",
                     "input": {"value": "fixture", "type": "string"},

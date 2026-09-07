@@ -1,7 +1,7 @@
 {
-  "schemaVersion": "course.prod-eks-plan/v1",
+  "schemaVersion": "playbuilder.prod-eks-plan/v1",
   "evidenceGrade": "STATIC",
-  "courseId": "course-2026",
+  "ownerId": "playbuilder",
   "accountId": "123456789012",
   "environment": "prod",
   "region": "ap-northeast-2",

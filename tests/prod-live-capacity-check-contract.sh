@@ -9,11 +9,11 @@ mkdir -p "$tmp_dir/bin"
 cat >"$tmp_dir/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" >>"$COURSE_FAKE_KUBECTL_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_KUBECTL_LOG"
 if [[ "$*" == *"get nodes"* ]]; then
-  jq '.nodes' "$COURSE_LIVE_FIXTURE"
+  jq '.nodes' "$PLATFORM_LIVE_FIXTURE"
 elif [[ "$*" == *"get daemonsets"* ]]; then
-  jq '.daemonSets' "$COURSE_LIVE_FIXTURE"
+  jq '.daemonSets' "$PLATFORM_LIVE_FIXTURE"
 else
   exit 97
 fi
@@ -21,8 +21,8 @@ EOF
 cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
-jq '.subnets' "$COURSE_LIVE_FIXTURE"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_AWS_LOG"
+jq '.subnets' "$PLATFORM_LIVE_FIXTURE"
 EOF
 chmod +x "$tmp_dir/bin/kubectl" "$tmp_dir/bin/aws"
 
@@ -31,10 +31,10 @@ jq '.profile.expiresAt="2099-02-31T00:00:00Z"' \
 jq '.profile' "$tmp_dir/invalid-time-live.json" >"$tmp_dir/invalid-time-profile.json"
 : >"$tmp_dir/invalid-time-aws.log"
 : >"$tmp_dir/invalid-time-kube.log"
-if COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$tmp_dir/invalid-time-live.json" \
-  COURSE_FAKE_AWS_LOG="$tmp_dir/invalid-time-aws.log" COURSE_FAKE_KUBECTL_LOG="$tmp_dir/invalid-time-kube.log" \
-  AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
-    bash "$root/scripts/prod-live-capacity-check.sh" course-prod "$tmp_dir/invalid-time-profile.json" \
+if PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_LIVE_FIXTURE="$tmp_dir/invalid-time-live.json" \
+  PLATFORM_FAKE_AWS_LOG="$tmp_dir/invalid-time-aws.log" PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/invalid-time-kube.log" \
+  AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
+    bash "$root/scripts/prod-live-capacity-check.sh" mini-commerce-prod "$tmp_dir/invalid-time-profile.json" \
       "$tmp_dir/invalid-time-result.json" >/dev/null 2>&1; then
   echo 'expected invalid-calendar live capacity profile expiry to fail' >&2
   exit 1
@@ -50,15 +50,15 @@ for region in ap-northeast-2 us-east-1; do
     .profile.clusterArn=("arn:aws:eks:"+$region+":123456789012:cluster/prod-playdevops-eks")
   ' "$root/tests/fixtures/prod-live-capacity-go.json" >"$tmp_dir/live-$region.json"
   jq '.profile' "$tmp_dir/live-$region.json" >"$tmp_dir/profile-$region.json"
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$tmp_dir/live-$region.json" \
-  COURSE_FAKE_AWS_LOG="$tmp_dir/aws-$region.log" COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kube-$region.log" \
-  AWS_PROFILE=course AWS_REGION="$region" \
-    bash "$root/scripts/prod-live-capacity-check.sh" course-prod "$tmp_dir/profile-$region.json" \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_LIVE_FIXTURE="$tmp_dir/live-$region.json" \
+  PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws-$region.log" PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kube-$region.log" \
+  AWS_PROFILE=mini-commerce AWS_REGION="$region" \
+    bash "$root/scripts/prod-live-capacity-check.sh" mini-commerce-prod "$tmp_dir/profile-$region.json" \
       "$tmp_dir/result-$region.json"
   jq -e '.decision == "GO" and .evidenceGrade == "STATIC" and .region == $region' \
     --arg region "$region" "$tmp_dir/result-$region.json" >/dev/null
   grep -Fq -- "--region $region" "$tmp_dir/aws-$region.log"
-  grep -Fq -- '--context course-prod' "$tmp_dir/kube-$region.log"
+  grep -Fq -- '--context mini-commerce-prod' "$tmp_dir/kube-$region.log"
 done
 
 ! grep -R -Fq '[CLOUD_RUNTIME]' "$tmp_dir"/result-*.json
@@ -72,11 +72,11 @@ run_cluster_boundary() {
     "$root/tests/fixtures/prod-live-capacity-go.json" >"$live"
   jq '.profile' "$live" >"$profile"
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$live" \
-  COURSE_FAKE_AWS_LOG="$tmp_dir/cluster-$label-aws.log" \
-  COURSE_FAKE_KUBECTL_LOG="$tmp_dir/cluster-$label-kube.log" \
-  AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
-    bash "$root/scripts/prod-live-capacity-check.sh" course-prod "$profile" "$result" >/dev/null 2>&1
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_LIVE_FIXTURE="$live" \
+  PLATFORM_FAKE_AWS_LOG="$tmp_dir/cluster-$label-aws.log" \
+  PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/cluster-$label-kube.log" \
+  AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
+    bash "$root/scripts/prod-live-capacity-check.sh" mini-commerce-prod "$profile" "$result" >/dev/null 2>&1
   status=$?
   set -e
   if [[ "$expectation" == accept ]]; then
@@ -100,10 +100,10 @@ run_cluster_boundary trailing-path \
 jq '.subnets.Subnets[].AvailableIpAddressCount=0' "$root/tests/fixtures/prod-live-capacity-go.json" >"$tmp_dir/live-no-ip.json"
 jq '.profile' "$tmp_dir/live-no-ip.json" >"$tmp_dir/profile-no-ip.json"
 set +e
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$tmp_dir/live-no-ip.json" \
-COURSE_FAKE_AWS_LOG="$tmp_dir/aws-no-ip.log" COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kube-no-ip.log" \
-AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
-  bash "$root/scripts/prod-live-capacity-check.sh" course-prod "$tmp_dir/profile-no-ip.json" \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_LIVE_FIXTURE="$tmp_dir/live-no-ip.json" \
+PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws-no-ip.log" PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kube-no-ip.log" \
+AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
+  bash "$root/scripts/prod-live-capacity-check.sh" mini-commerce-prod "$tmp_dir/profile-no-ip.json" \
     "$tmp_dir/rejected.json" >/dev/null 2>&1
 status=$?
 set -e

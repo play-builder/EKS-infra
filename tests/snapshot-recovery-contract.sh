@@ -6,7 +6,7 @@ fixtures="$root/tests/fixtures"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 
-output=$(COURSE_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" \
+output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" \
   "$fixtures/snapshot-recovery-valid.json" "$fixtures/snapshot-quiesce-valid.json")
 grep -Fq 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT' <<<"$output"
 
@@ -14,7 +14,7 @@ reject_mutation() {
   local expression=$1 output_file=$2 status
   jq "$expression" "$fixtures/snapshot-recovery-valid.json" >"$output_file"
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$output_file" "$fixtures/snapshot-quiesce-valid.json" >/dev/null 2>&1
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$output_file" "$fixtures/snapshot-quiesce-valid.json" >/dev/null 2>&1
   status=$?
   set -e
   [[ "$status" -ne 0 ]] || { echo "expected recovery rejection: $expression" >&2; exit 1; }
@@ -35,7 +35,7 @@ reject_timestamp() {
     setpath($path; $value)
   ' "$fixtures/snapshot-recovery-valid.json" >"$candidate"
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$candidate" >/dev/null 2>&1
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$candidate" >/dev/null 2>&1
   status=$?
   set -e
   [[ "$status" -ne 0 ]] || { echo "expected recovery timestamp rejection: $label" >&2; exit 1; }
@@ -53,7 +53,7 @@ for cluster_length in 1 100; do
   candidate="$tmp_dir/cluster-$cluster_length.json"
   jq --arg arn "arn:aws:eks:ap-northeast-2:123456789012:cluster/$cluster_name" \
     '.clusterArn = $arn' "$fixtures/snapshot-recovery-valid.json" >"$candidate"
-  COURSE_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$candidate" >/dev/null
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$candidate" >/dev/null
 done
 
 reject_standalone_cluster() {
@@ -61,7 +61,7 @@ reject_standalone_cluster() {
   candidate="$tmp_dir/recovery-cluster-$label.json"
   jq "$expression" "$fixtures/snapshot-recovery-valid.json" >"$candidate"
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$candidate" >/dev/null 2>&1
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir" bash "$root/scripts/snapshot-recovery-check.sh" "$candidate" >/dev/null 2>&1
   status=$?
   set -e
   [[ "$status" -ne 0 ]] || { echo "expected recovery rejection: $label" >&2; exit 1; }

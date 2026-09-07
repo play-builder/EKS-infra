@@ -9,19 +9,19 @@ mkdir -p "$tmp_dir/bin"
 cat >"$tmp_dir/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" >>"$COURSE_FAKE_KUBECTL_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_KUBECTL_LOG"
 case "$*" in
-  *"get nodes"*) jq '.nodes' "$COURSE_LIVE_FIXTURE" ;;
-  *"get daemonsets"*) jq '.daemonSets' "$COURSE_LIVE_FIXTURE" ;;
+  *"get nodes"*) jq '.nodes' "$PLATFORM_LIVE_FIXTURE" ;;
+  *"get daemonsets"*) jq '.daemonSets' "$PLATFORM_LIVE_FIXTURE" ;;
   *) printf 'unexpected kubectl invocation: %s\n' "$*" >&2; exit 97 ;;
 esac
 EOF
 cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" >>"$COURSE_FAKE_AWS_LOG"
+printf '%s\n' "$*" >>"$PLATFORM_FAKE_AWS_LOG"
 [[ "$*" == *"--region $AWS_REGION"* ]] || { echo 'missing explicit region' >&2; exit 98; }
-jq '.subnets' "$COURSE_LIVE_FIXTURE"
+jq '.subnets' "$PLATFORM_LIVE_FIXTURE"
 EOF
 chmod +x "$tmp_dir/bin/kubectl" "$tmp_dir/bin/aws"
 
@@ -30,9 +30,9 @@ jq '.profile.expiresAt="2099-02-31T00:00:00Z"' \
 jq '.profile' "$tmp_dir/invalid-time-live.json" >"$tmp_dir/invalid-time-profile.json"
 : >"$tmp_dir/invalid-time-aws.log"
 : >"$tmp_dir/invalid-time-kube.log"
-if COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$tmp_dir/invalid-time-live.json" \
-  COURSE_FAKE_AWS_LOG="$tmp_dir/invalid-time-aws.log" COURSE_FAKE_KUBECTL_LOG="$tmp_dir/invalid-time-kube.log" \
-  AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
+if PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_LIVE_FIXTURE="$tmp_dir/invalid-time-live.json" \
+  PLATFORM_FAKE_AWS_LOG="$tmp_dir/invalid-time-aws.log" PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/invalid-time-kube.log" \
+  AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
     bash "$root/scripts/game-day-capacity-check.sh" dev-playdevops-eks "$tmp_dir/invalid-time-profile.json" \
       "$tmp_dir/invalid-time-result.json" >/dev/null 2>&1; then
   echo 'expected invalid-calendar capacity profile expiry to fail' >&2
@@ -49,12 +49,12 @@ for region in ap-northeast-2 us-east-1; do
     "$root/tests/fixtures/game-day-live-capacity-$region.json" >"$tmp_dir/live-$region.json"
   jq '.profile' "$tmp_dir/live-$region.json" >"$tmp_dir/profile-$region.json"
   output="$tmp_dir/result-$region.json"
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$tmp_dir/live-$region.json" \
-    COURSE_FAKE_AWS_LOG="$tmp_dir/aws-$region.log" COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kube-$region.log" \
-    AWS_PROFILE=course AWS_REGION="$region" \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_LIVE_FIXTURE="$tmp_dir/live-$region.json" \
+    PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws-$region.log" PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kube-$region.log" \
+    AWS_PROFILE=mini-commerce AWS_REGION="$region" \
       bash "$root/scripts/game-day-capacity-check.sh" dev-playdevops-eks "$tmp_dir/profile-$region.json" "$output"
   jq -e --arg region "$region" \
-    '.schemaVersion == "course.game-day-capacity/v1" and .evidenceGrade == "STATIC" and .decision == "GO" and .region == $region and .observations.nodes.count > 0' \
+    '.schemaVersion == "playbuilder.game-day-capacity/v1" and .evidenceGrade == "STATIC" and .decision == "GO" and .region == $region and .observations.nodes.count > 0' \
     "$output" >/dev/null
   grep -Fq -- "--context dev-playdevops-eks" "$tmp_dir/kube-$region.log"
   grep -Fq -- "--region $region" "$tmp_dir/aws-$region.log"
@@ -71,10 +71,10 @@ run_cluster_boundary() {
     "$root/tests/fixtures/game-day-live-capacity-ap-northeast-2.json" >"$live"
   jq '.profile' "$live" >"$profile"
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$live" \
-    COURSE_FAKE_AWS_LOG="$tmp_dir/cluster-$label-aws.log" \
-    COURSE_FAKE_KUBECTL_LOG="$tmp_dir/cluster-$label-kube.log" \
-    AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_LIVE_FIXTURE="$live" \
+    PLATFORM_FAKE_AWS_LOG="$tmp_dir/cluster-$label-aws.log" \
+    PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/cluster-$label-kube.log" \
+    AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
       bash "$root/scripts/game-day-capacity-check.sh" dev-playdevops-eks "$profile" "$result" >/dev/null 2>&1
   status=$?
   set -e
@@ -100,9 +100,9 @@ jq '.subnets.Subnets[].AvailableIpAddressCount=0' \
   "$root/tests/fixtures/game-day-live-capacity-ap-northeast-2.json" >"$tmp_dir/live-no-go.json"
 jq '.profile' "$tmp_dir/live-no-go.json" >"$tmp_dir/profile-no-go.json"
 set +e
-COURSE_CHECK_BIN_DIR="$tmp_dir/bin" COURSE_LIVE_FIXTURE="$tmp_dir/live-no-go.json" \
-  COURSE_FAKE_AWS_LOG="$tmp_dir/aws-no-go.log" COURSE_FAKE_KUBECTL_LOG="$tmp_dir/kube-no-go.log" \
-  AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_LIVE_FIXTURE="$tmp_dir/live-no-go.json" \
+  PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws-no-go.log" PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kube-no-go.log" \
+  AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
     bash "$root/scripts/game-day-capacity-check.sh" dev-playdevops-eks "$tmp_dir/profile-no-go.json" "$tmp_dir/rejected.json" >/dev/null 2>&1
 status=$?
 set -e

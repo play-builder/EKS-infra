@@ -2,7 +2,6 @@
 aws_region   = "ap-northeast-2"
 project_name = "mini-commerce"
 state_bucket_name = "replace-with-your-dev-state-bucket"
-course_id    = "replace-with-unique-course-id"
 environment  = "dev"
 
 # dev child zone (environments/dev/bootstrap/dns outputs), not the apex domain.
@@ -23,7 +22,7 @@ enable_reloader                 = false
 enable_k6_operator              = false
 enable_snapshot_controller      = false
 snapshot_controller_addon_version = "v8.2.0-eksbuild.1"
-volume_snapshot_class_name      = "course-ebs-snapshots"
+volume_snapshot_class_name      = "mini-commerce-ebs-snapshots"
 enable_recovery_secret_reader   = false
 # recovery_secret_kms_key_arn   = "arn:aws:kms:<region>:<account>:key/<uuid>"
 enable_chaos_mesh               = false
@@ -49,10 +48,10 @@ enable_sns_alert_delivery       = false
 enable_cluster_autoscaler = false
 enable_amg                = false
 
-enable_course_resources          = true
+enable_platform_resources          = true
 enable_gateway_api               = true
-enable_course_storage_class      = true
-course_application_namespace     = "app-dev"
+enable_pb_storage_class      = true
+pb_application_namespace     = "app-dev"
 secret_recovery_window_in_days   = 7
 # ExternalDNS writes only into the dev child zone; no apex exclusion filter is needed.
 external_dns_domain_filters      = ["dev.example.com"]

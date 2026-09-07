@@ -1,8 +1,8 @@
 {
-  "schemaVersion":"course.cleanup-retain-decisions/v1",
+  "schemaVersion":"playbuilder.cleanup-retain-decisions/v1",
   "evidenceGrade":"LOCAL_RUNTIME",
   "status":"APPROVED",
-  "courseId":"course-2026",
+  "ownerId":"playbuilder",
   "accountId":"123456789012",
   "region":"ap-northeast-2",
   "inventorySha256":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",

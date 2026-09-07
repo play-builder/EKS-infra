@@ -8,7 +8,7 @@ override_data {
     outputs = {
       oidc_provider_arn                  = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.ap-northeast-2.amazonaws.com/id/fixture"
       oidc_provider                      = "oidc.eks.ap-northeast-2.amazonaws.com/id/fixture"
-      cluster_name                       = "prod-course"
+      cluster_name                       = "prod-mini-commerce"
       cluster_endpoint                   = "https://eks.example.invalid"
       cluster_certificate_authority_data = "Y2E="
     }
@@ -28,12 +28,12 @@ run "external_secret_health_is_generation_aware" {
     argocd_platform   = { server_replicas = 2, repo_server_replicas = 2, controller_replicas = 2, applicationset_replicas = 2, redis_ha = true, node_count = 3, az_count = 3, public_url = "https://argocd.example.invalid", oidc_issuer_url = "https://id.example.invalid", oidc_client_id = "argocd", admin_group = "admins", readonly_group = "readers" }
     aws_region        = "ap-northeast-2"
     gitops_repo_url   = "https://github.com/play-builder/argocd-gitops.git"
-    state_bucket_name = "course-prod-state"
+    state_bucket_name = "mini-commerce-prod-state"
   }
 
   assert {
     condition = (
-      module.argocd.helm_values.configs.cm["course.health.external-secret.contract"] == "external-secret-ready-health/v1" &&
+      module.argocd.helm_values.configs.cm["playbuilder.health.external-secret.contract"] == "external-secret-ready-health/v1" &&
       !strcontains(module.argocd.helm_values.configs.cm["resource.customizations.health.external-secrets.io_ExternalSecret"], "observedGeneration") &&
       strcontains(module.argocd.helm_values.configs.cm["resource.customizations.health.external-secrets.io_ExternalSecret"], "syncedResourceVersion") &&
       strcontains(module.argocd.helm_values.configs.cm["resource.customizations.health.external-secrets.io_ExternalSecret"], "condition.status == \"True\"") &&
@@ -44,5 +44,5 @@ run "external_secret_health_is_generation_aware" {
 }
 
 variables {
-  state_bucket_name = "course-state"
+  state_bucket_name = "mini-commerce-state"
 }

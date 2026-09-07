@@ -25,8 +25,8 @@ expected_backend_key=$(terraform_plan_expected_backend_key_for_root "$terraform_
 [[ "$expected_operation" == apply || "$expected_operation" == destroy ]] || fail OPERATION_INVALID
 [[ "$request_identity" =~ [^[:space:]] && "$request_identity" != pending ]] || fail REQUEST_IDENTITY_INVALID
 [[ "$approval_run_id" =~ ^[1-9][0-9]*$ ]] || fail APPROVAL_RUN_ID_INVALID
-course_validate_account "$account_id"
-course_validate_region "$region"
+pb_validate_account "$account_id"
+pb_validate_region "$region"
 
 manifest="$artifact_dir/plan-identity.json"
 plan="$artifact_dir/tfplan"
@@ -59,7 +59,7 @@ request_lower=$(printf '%s' "$request_identity" | tr '[:upper:]' '[:lower:]')
 [[ "$approval_lower" != "$request_lower" ]] || fail SELF_APPROVAL
 [[ $(jq -r '.approvalRunId // empty' "$manifest") == "$approval_run_id" ]] || fail APPROVAL_RUN_ID_MISMATCH
 
-approval_sha="sha256:$(course_raw_sha256_file "$approval_evidence")"
+approval_sha="sha256:$(pb_raw_sha256_file "$approval_evidence")"
 [[ $(jq -r '.approvalEvidenceSha256 // empty' "$manifest") == "$approval_sha" ]] || fail APPROVAL_EVIDENCE_DIGEST_MISMATCH
 jq -e --arg approver "$approval_identity" --arg requester "$request_identity" --arg run "$approval_run_id" '
   .schemaVersion == "platform.saved-plan-approval/v1" and
@@ -78,19 +78,19 @@ python3 -I "$script_dir/lib/finops-plan.py" verify --artifact "$artifact_dir" \
 terraform_binary=$(terraform_plan_binary_path)
 current_version=$("$terraform_binary" version -json | jq -er '.terraform_version | select(type == "string" and length > 0)') || \
   fail TERRAFORM_VERSION_UNAVAILABLE
-current_binary_sha="sha256:$(course_raw_sha256_file "$terraform_binary")"
+current_binary_sha="sha256:$(pb_raw_sha256_file "$terraform_binary")"
 lock_file="$repo_root/$terraform_root/.terraform.lock.hcl"
 [[ -f "$lock_file" && ! -L "$lock_file" ]] || fail PROVIDER_LOCK_MISSING
 git -C "$repo_root" ls-files --error-unmatch "$terraform_root/.terraform.lock.hcl" >/dev/null 2>&1 || \
   fail PROVIDER_LOCK_NOT_TRACKED
-current_lock_sha="sha256:$(course_raw_sha256_file "$lock_file")"
+current_lock_sha="sha256:$(pb_raw_sha256_file "$lock_file")"
 [[ $(jq -r '.terraformVersion' "$manifest") == "$current_version" ]] || fail TERRAFORM_VERSION_MISMATCH
 [[ $(jq -r '.terraformBinarySha256' "$manifest") == "$current_binary_sha" ]] || fail TERRAFORM_BINARY_MISMATCH
 [[ $(jq -r '.providerLockSha256' "$manifest") == "$current_lock_sha" ]] || fail PROVIDER_LOCK_MISMATCH
 [[ $(jq -r '.terraform_version // empty' "$plan_json") == "$current_version" ]] || fail PLAN_JSON_TERRAFORM_VERSION_MISMATCH
 
-plan_sha="sha256:$(course_raw_sha256_file "$plan")"
-plan_json_sha="sha256:$(course_raw_sha256_file "$plan_json")"
+plan_sha="sha256:$(pb_raw_sha256_file "$plan")"
+plan_json_sha="sha256:$(pb_raw_sha256_file "$plan_json")"
 [[ $(jq -r '.planSha256' "$manifest") == "$plan_sha" ]] || fail PLAN_DIGEST_MISMATCH
 [[ $(jq -r '.planJsonSha256' "$manifest") == "$plan_json_sha" ]] || fail PLAN_JSON_DIGEST_MISMATCH
 [[ $(<"$plan_checksum") == "${plan_sha#sha256:}  tfplan" ]] || fail PLAN_CHECKSUM_INVALID

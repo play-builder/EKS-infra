@@ -1,8 +1,8 @@
 mock_provider "aws" {}
 
 variables {
-  name                                 = "dev-course"
-  cluster_name                         = "dev-course-eks"
+  name                                 = "dev-mini-commerce"
+  cluster_name                         = "dev-mini-commerce-eks"
   vpc_id                               = "vpc-12345678"
   public_subnet_ids                    = ["subnet-public"]
   private_subnet_ids                   = ["subnet-private"]

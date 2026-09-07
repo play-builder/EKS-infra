@@ -45,7 +45,7 @@ bash scripts/finops-readiness-check.sh collect \
 
 `AWS_ACCOUNT_ID`와 `AWS_REGION`은 workload 대상이다. billing role 입력을 사용하는 운영자는 `--profile` 대신 `--role-arn`을 사용한다. preflight에서도 `FINOPS_BILLING_PROFILE` 대신 `FINOPS_BILLING_ROLE_ARN`을 설정한다. 이때 기본 AWS 자격증명이 기존 management-account role을 AssumeRole할 수 있어야 한다. collector는 받은 임시 자격증명을 메모리에서만 사용하고 계정 일치를 STS로 다시 확인한다.
 
-Production estimate 명령의 기존 7개 positional 인자는 유지한다. 위 환경변수와 `COURSE_ID`, workload의 `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`을 설정하고 실행한다.
+Production estimate 명령의 기존 7개 positional 인자는 유지한다. 위 환경변수와 `OWNER_ID`, workload의 `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`을 설정하고 실행한다.
 
 ```bash
 bash scripts/prod-preflight.sh \
@@ -69,7 +69,7 @@ bash scripts/prod-preflight.sh \
 
 `platform.finops-readiness/v1`은 workload/billing 계정·Region, 플랫폼 ID, 관측 시각, 계약 파일 SHA-256, 원시 응답 SHA-256, collector 소스 SHA-256을 묶는다. 실제 조회 결과는 `CLOUD_RUNTIME` **구성 관측 범위**이고, 로컬 `fixture` 모드는 항상 `LOCAL_VERIFIED`다. fixture/사용자가 쓴 `true` 플래그는 runtime/delivery 검증으로 승격되지 않는다. runtime 모드는 command double, 임의 endpoint 환경변수, replay observations를 거부한다. JSON 증거 자체는 서명되지 않았으므로 생산 환경에서는 실행 주체·로그·아티팩트 무결성을 별도 신뢰 경계에서 보존해야 한다.
 
-기존 design은 `course.prod-preflight/v1` 그대로다. estimate 생산자와 bootstrap 소비자는 `course.prod-preflight/v2`를 사용하며 v1 estimate를 거부한다. v2는 `finops` 객체와 `bindings.finopsContractSha256`를 추가했다. bootstrap 실행 시 동일 `FINOPS_CONTRACT_JSON`과 `PLATFORM_INSTANCE_ID`를 제공한다. FinOps 증거는 15분 이내 관측이어야 하므로 기존 estimate TTL보다 일찍 재수집이 필요할 수 있다.
+기존 design은 `playbuilder.prod-preflight/v1` 그대로다. estimate 생산자와 bootstrap 소비자는 `playbuilder.prod-preflight/v2`를 사용하며 v1 estimate를 거부한다. v2는 `finops` 객체와 `bindings.finopsContractSha256`를 추가했다. bootstrap 실행 시 동일 `FINOPS_CONTRACT_JSON`과 `PLATFORM_INSTANCE_ID`를 제공한다. FinOps 증거는 15분 이내 관측이어야 하므로 기존 estimate TTL보다 일찍 재수집이 필요할 수 있다.
 
 ## 실패와 운영
 

@@ -19,7 +19,6 @@ run "enabled_only_for_dev_with_bounded_settings" {
 
   variables {
     enable_chaos_mesh          = true
-    course_id                  = "course-2026"
     environment                = "dev"
     namespace                  = "chaos-mesh"
     allowed_namespaces         = ["app-dev"]
@@ -34,9 +33,9 @@ run "enabled_only_for_dev_with_bounded_settings" {
       helm_release.this[0].namespace == "chaos-mesh" &&
       yamldecode(helm_release.this[0].values[0]).controllerManager.enableFilterNamespace == true &&
       yamldecode(helm_release.this[0].values[0]).controllerManager.targetNamespace == "app-dev" &&
-      yamldecode(helm_release.this[0].values[0]).course.courseId == "course-2026" &&
-      yamldecode(helm_release.this[0].values[0]).course.maxFaultDurationSeconds == 60 &&
-      yamldecode(helm_release.this[0].values[0]).course.maxFaults == 1
+      yamldecode(helm_release.this[0].values[0]).playbuilder.ownerId == "playbuilder" &&
+      yamldecode(helm_release.this[0].values[0]).playbuilder.maxFaultDurationSeconds == 60 &&
+      yamldecode(helm_release.this[0].values[0]).playbuilder.maxFaults == 1
     )
     error_message = "Enabled Chaos Mesh must carry namespace filtering and bounded fault metadata."
   }

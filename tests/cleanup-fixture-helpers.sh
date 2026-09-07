@@ -23,7 +23,7 @@ prepare_saved_plan_manifest() {
     environments/dev/01-network
   )
   mkdir -p "$output_dir"
-  jq -n '{schemaVersion:"course.saved-destroy-plans/v1",status:"REVIEWED",reviewedAt:"2026-09-03T00:10:00Z",plans:[]}' >"$manifest"
+  jq -n '{schemaVersion:"playbuilder.saved-destroy-plans/v1",status:"REVIEWED",reviewedAt:"2026-09-03T00:10:00Z",plans:[]}' >"$manifest"
   for layer in "${layers[@]}"; do
     plan_path="$output_dir/${layer//\//__}.tfplan"
     printf 'saved destroy plan for %s\n' "$layer" >"$plan_path"
@@ -53,16 +53,16 @@ prepare_realistic_destroy_plan_jsons() {
     case "$layer" in
       */04-workloads/argocd)
         semantic_layer=workloads
-        address=terraform_data.course_ownership
+        address=terraform_data.workload_ownership
         type=terraform_data
         id="ownership-$environment"
         ownership_input=$(jq -cn --arg env "$environment" '{
-          CourseId:"course-2026", AccountId:"123456789012", Region:"ap-northeast-2",
+          OwnerId:"playbuilder", AccountId:"123456789012", Region:"ap-northeast-2",
           Project:"playdevops", Environment:$env, Layer:"workloads", ManagedBy:"Terraform"
         }')
         jq -n --arg address "$address" --arg type "$type" --arg id "$id" --argjson input "$ownership_input" '{
           format_version:"1.2", resource_changes:[
-            {address:$address,mode:"managed",type:$type,name:"course_ownership",
+            {address:$address,mode:"managed",type:$type,name:"workload_ownership",
              change:{actions:["delete"],before:{id:$id,input:$input,output:$input},after:null}},
             {address:"helm_release.argocd",mode:"managed",type:"helm_release",name:"argocd",
              change:{actions:["delete"],before:{id:"argocd",name:"argocd",namespace:"argocd"},after:null}}
@@ -80,7 +80,7 @@ prepare_realistic_destroy_plan_jsons() {
             {address:"aws_secretsmanager_secret.sample_app_runtime",mode:"managed",type:"aws_secretsmanager_secret",
              name:"sample_app_runtime",change:{actions:["delete"],before:{
                id:("arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:"+$env+"-runtime"),
-               tags_all:{CourseId:"course-2026",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
+               tags_all:{OwnerId:"playbuilder",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
              },after:null}}
           ]
         }' >"$output_dir/${layer//\//__}.json"
@@ -92,7 +92,7 @@ prepare_realistic_destroy_plan_jsons() {
           format_version:"1.2", resource_changes:[{
             address:"module.eks_cluster.aws_eks_cluster.cluster",mode:"managed",type:"aws_eks_cluster",name:"cluster",
             change:{actions:["delete"],before:{id:$id,
-              tags_all:{CourseId:"course-2026",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
+              tags_all:{OwnerId:"playbuilder",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
             },after:null}
           }]
         }' >"$output_dir/${layer//\//__}.json"
@@ -104,7 +104,7 @@ prepare_realistic_destroy_plan_jsons() {
           format_version:"1.2", resource_changes:[{
             address:"module.vpc.aws_nat_gateway.this[0]",mode:"managed",type:"aws_nat_gateway",name:"this",
             change:{actions:["delete"],before:{id:$id,
-              tags_all:{CourseId:"course-2026",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
+              tags_all:{OwnerId:"playbuilder",Project:"playdevops",Environment:$env,Layer:$layer,ManagedBy:"Terraform"}
             },after:null}
           }]
         }' >"$output_dir/${layer//\//__}.json"

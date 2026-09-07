@@ -4,29 +4,29 @@ set -Eeuo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 
-if [[ -n "${COURSE_CHECK_BIN_DIR:-}" ]]; then
-  [[ -d "$COURSE_CHECK_BIN_DIR" ]] || course_fail 'COURSE_CHECK_BIN_DIR is not a directory' 64
-  PATH="$COURSE_CHECK_BIN_DIR:$PATH"
+if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
+  [[ -d "$PLATFORM_CHECK_BIN_DIR" ]] || pb_fail 'PLATFORM_CHECK_BIN_DIR is not a directory' 64
+  PATH="$PLATFORM_CHECK_BIN_DIR:$PATH"
 fi
 
-[[ $# -eq 3 ]] || course_fail 'usage: prod-live-capacity-check.sh <kubectl-context> <profile.json> <output.json>' 64
+[[ $# -eq 3 ]] || pb_fail 'usage: prod-live-capacity-check.sh <kubectl-context> <profile.json> <output.json>' 64
 context=$1
 profile=$2
 output=$3
 : "${AWS_PROFILE:?AWS_PROFILE is required}"
 : "${AWS_REGION:?AWS_REGION is required}"
-course_validate_region "$AWS_REGION"
-course_require_file "$profile"
-course_assert_canonical_utc_seconds "$profile" 'Prod live capacity profile expiresAt' '["expiresAt"]'
-course_assert_eks_cluster_arn \
+pb_validate_region "$AWS_REGION"
+pb_require_file "$profile"
+pb_assert_canonical_utc_seconds "$profile" 'Prod live capacity profile expiresAt' '["expiresAt"]'
+pb_assert_eks_cluster_arn \
   "$(jq -r '.clusterArn // empty' "$profile")" \
   "$AWS_REGION" \
   "$(jq -r '.accountId // empty' "$profile")"
 
-course_assert_json "$profile" '
-  keys == ["accountId","billable","clusterArn","courseId","expiresAt","region","reserve","rollout","schemaVersion","subnetIds","workload"] and
-  .schemaVersion == "course.prod-live-capacity-profile/v1" and
-  (.courseId | type == "string" and length > 0) and (.accountId | test("^[0-9]{12}$")) and
+pb_assert_json "$profile" '
+  keys == ["accountId","billable","clusterArn","expiresAt","ownerId","region","reserve","rollout","schemaVersion","subnetIds","workload"] and
+  .schemaVersion == "playbuilder.prod-live-capacity-profile/v1" and
+  (.ownerId | type == "string" and length > 0) and (.accountId | test("^[0-9]{12}$")) and
   .region == $ENV.AWS_REGION and
   (.subnetIds | type == "array" and length >= 2 and all(test("^subnet-"))) and
   (.reserve | keys == ["cpuMilli","memoryMiB","pods"]) and
@@ -62,7 +62,7 @@ node_shape=$(jq '
     totalPodSlots:([.items[].status.allocatable.pods | tonumber] | add),
     minMaxPodsPerNode:([.items[].status.allocatable.pods | tonumber] | min)
   } end
-' <<<"$nodes") || course_fail 'invalid node allocatable response'
+' <<<"$nodes") || pb_fail 'invalid node allocatable response'
 
 daemon_shape=$(jq '
   def cpu_m:
@@ -80,21 +80,21 @@ daemon_shape=$(jq '
     .memoryMiB += ($count * ([$ds.spec.template.spec.containers[]? | (.resources.requests.memory // null) | mem_mib] | add // 0)) |
     .pods += $count
   ) | .memoryMiB |= floor
-' <<<"$daemonsets") || course_fail 'invalid DaemonSet resource response'
+' <<<"$daemonsets") || pb_fail 'invalid DaemonSet resource response'
 
 subnet_available=$(jq -r --argjson expected "$(jq '.subnetIds' "$profile")" '
   . as $response |
   if ($expected | all(. as $id | any($response.Subnets[]; .SubnetId == $id)))
   then ([$response.Subnets[] | select(.SubnetId as $id | $expected | index($id)) | .AvailableIpAddressCount] | add)
   else error("missing subnet") end
-' <<<"$subnets") || course_fail 'invalid subnet capacity response'
+' <<<"$subnets") || pb_fail 'invalid subnet capacity response'
 
-observed_at=$(course_now)
+observed_at=$(pb_now)
 capacity_input=$(jq -n --argjson profile "$(jq -c . "$profile")" --argjson nodes "$node_shape" \
   --argjson daemon "$daemon_shape" --argjson subnet "$subnet_available" --arg observed "$observed_at" '
   {
-    schemaVersion:"course.capacity-input/v1", evidenceGrade:"STATIC", mode:"live",
-    courseId:$profile.courseId, accountId:$profile.accountId, region:$profile.region,
+    schemaVersion:"playbuilder.capacity-input/v1", evidenceGrade:"STATIC", mode:"live",
+    ownerId:$profile.ownerId, accountId:$profile.accountId, region:$profile.region,
     nodes:$nodes, reserve:$profile.reserve, daemonSets:$daemon,
     workload:$profile.workload, rollout:$profile.rollout,
     network:{subnetAvailableIps:$subnet}, billable:$profile.billable,
@@ -105,25 +105,25 @@ capacity_input=$(jq -n --argjson profile "$(jq -c . "$profile")" --argjson nodes
 tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 printf '%s\n' "$capacity_input" >"$tmp_dir/capacity-input.json"
-COURSE_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/capacity-check.sh" --mode live \
+PLATFORM_CHECK_DETAIL_ONLY=true bash "$SCRIPT_DIR/capacity-check.sh" --mode live \
   --input "$tmp_dir/capacity-input.json" --output "$tmp_dir/capacity-decision.json" >/dev/null
 
-grade=$(course_runtime_grade)
+grade=$(pb_runtime_grade)
 payload=$(jq -n --arg grade "$grade" --arg context "$context" --arg observed "$observed_at" \
-  --arg profile_sha "$(course_sha256_file "$profile")" \
-  --arg decision_sha "$(course_sha256_file "$tmp_dir/capacity-decision.json")" \
+  --arg profile_sha "$(pb_sha256_file "$profile")" \
+  --arg decision_sha "$(pb_sha256_file "$tmp_dir/capacity-decision.json")" \
   --argjson profile "$(jq -c . "$profile")" --argjson nodes "$node_shape" --argjson daemon "$daemon_shape" \
   --argjson subnet "$subnet_available" '
   {
-    schemaVersion:"course.prod-live-capacity/v1", evidenceGrade:$grade, decision:"GO",
-    courseId:$profile.courseId, accountId:$profile.accountId, region:$profile.region,
+    schemaVersion:"playbuilder.prod-live-capacity/v1", evidenceGrade:$grade, decision:"GO",
+    ownerId:$profile.ownerId, accountId:$profile.accountId, region:$profile.region,
     clusterArn:$profile.clusterArn, kubectlContext:$context,
     bindings:{profileSha256:$profile_sha,capacityDecisionSha256:$decision_sha},
     observations:{nodes:$nodes,daemonSets:$daemon,subnetAvailableIps:$subnet},
     observedAt:$observed, expiresAt:$profile.expiresAt
   }
 ')
-course_write_json "$output" "$payload"
+pb_write_json "$output" "$payload"
 if [[ "$grade" == STATIC ]]; then
   echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT Prod live capacity arithmetic is GO.'
 else

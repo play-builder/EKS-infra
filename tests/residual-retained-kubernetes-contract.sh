@@ -10,10 +10,10 @@ mkdir -p "$work/evidence"
 prepare_cleanup_fixtures "$root" "$work/evidence" ap-northeast-2
 
 kubernetes_resources=$(jq -n '[
-  {kind:"Namespace",id:"app-recovery",environment:"dev",classification:"recovery-namespace",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after explicit approval"},
-  {kind:"PersistentVolumeClaim",id:"app-dev/data-postgresql-0",environment:"dev",classification:"source-pvc",owner:"course",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after explicit approval"},
-  {kind:"VolumeSnapshot",id:"app-dev/data-snapshot",environment:"dev",classification:"source-snapshot",owner:"course",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after explicit approval"},
-  {kind:"VolumeSnapshotContent",id:"data-content",environment:"dev",classification:"source-snapshot-content",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after explicit approval"}
+  {kind:"Namespace",id:"app-recovery",environment:"dev",classification:"recovery-namespace",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after explicit approval"},
+  {kind:"PersistentVolumeClaim",id:"app-dev/data-postgresql-0",environment:"dev",classification:"source-pvc",owner:"platform",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after explicit approval"},
+  {kind:"VolumeSnapshot",id:"app-dev/data-snapshot",environment:"dev",classification:"source-snapshot",owner:"platform",managedBy:"terraform",billable:true,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after explicit approval"},
+  {kind:"VolumeSnapshotContent",id:"data-content",environment:"dev",classification:"source-snapshot-content",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"recovery evidence",followUpAction:"delete after explicit approval"}
 ]')
 kubernetes_decisions=$(jq -n --argjson resources "$kubernetes_resources" '[
   $resources[] | {kind,id,decision,reason,followUpAction}
@@ -57,17 +57,17 @@ common=(
 
 run_scan() {
   local output=$1
-  COURSE_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
-    COURSE_FAKE_AWS_LOG="$work/aws.log" AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
-    AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+  PLATFORM_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
+    PLATFORM_FAKE_AWS_LOG="$work/aws.log" AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
+    AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
     RESIDUAL_SCAN_ATTEMPTS=1 RESIDUAL_SCAN_DELAY_SECONDS=0 \
     bash "$root/scripts/residual-scan.sh" "${common[@]}" --output "$output"
 }
 
 : >"$work/aws.log"
 set +e
-output=$(PATH="$root/tests/helpers/residual-retained-bin:$PATH" COURSE_FAKE_AWS_LOG="$work/aws.log" \
-  AWS_PROFILE=course AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+output=$(PATH="$root/tests/helpers/residual-retained-bin:$PATH" PLATFORM_FAKE_AWS_LOG="$work/aws.log" \
+  AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
   RESIDUAL_SCAN_ATTEMPTS=1 RESIDUAL_SCAN_DELAY_SECONDS=0 \
     bash "$root/scripts/residual-scan.sh" "${common[@]}" --output "$work/evidence/runtime-residual.json" 2>&1)
 status=$?
@@ -80,8 +80,8 @@ fi
 
 : >"$work/aws.log"
 set +e
-output=$(COURSE_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" COURSE_FAKE_AWS_LOG="$work/aws.log" \
-  AWS_PROFILE=course AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+output=$(PLATFORM_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" PLATFORM_FAKE_AWS_LOG="$work/aws.log" \
+  AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
   RESIDUAL_SCAN_ATTEMPTS=1 RESIDUAL_SCAN_DELAY_SECONDS=0 \
     bash "$root/scripts/residual-scan.sh" "${common[@]}" \
       --output "$root/evidence/cleanup/../cleanup/residual.json" 2>&1)
@@ -125,9 +125,9 @@ jq --arg removal "$invalid_removal_sha" '
   )
 ' "$work/evidence/pre-destroy.json" >"$work/evidence/pre-destroy-invalid-cluster-scope.json"
 : >"$work/aws.log"
-if COURSE_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
-  COURSE_FAKE_AWS_LOG="$work/aws.log" AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
-  AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+if PLATFORM_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
+  PLATFORM_FAKE_AWS_LOG="$work/aws.log" AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
+  AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
   RESIDUAL_SCAN_ATTEMPTS=1 RESIDUAL_SCAN_DELAY_SECONDS=0 \
   bash "$root/scripts/residual-scan.sh" \
     --inventory "$work/evidence/inventory.json" \
@@ -142,7 +142,7 @@ fi
 
 : >"$work/aws.log"
 rm -f "$work/evidence/missing-aws-residual.json"
-if COURSE_FAKE_MISSING_RETAINED_AWS=true run_scan "$work/evidence/missing-aws-residual.json" >/dev/null 2>&1; then
+if PLATFORM_FAKE_MISSING_RETAINED_AWS=true run_scan "$work/evidence/missing-aws-residual.json" >/dev/null 2>&1; then
   echo 'missing retained AWS handles were accepted' >&2
   exit 1
 fi
@@ -152,9 +152,9 @@ grep -Fq 'ec2 describe-snapshots' "$work/aws.log"
 jq '.retainedStorage |= map(select(.kind != "VolumeSnapshotContent"))' \
   "$work/evidence/pre-destroy.json" >"$work/evidence/pre-destroy-missing-content.json"
 : >"$work/aws.log"
-if COURSE_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
-  COURSE_FAKE_AWS_LOG="$work/aws.log" AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
-  AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+if PLATFORM_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
+  PLATFORM_FAKE_AWS_LOG="$work/aws.log" AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
+  AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
   bash "$root/scripts/residual-scan.sh" \
     --inventory "$work/evidence/inventory.json" \
     --retain-decisions "$work/evidence/decisions.json" \
@@ -166,7 +166,7 @@ if COURSE_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
 fi
 [[ ! -s "$work/aws.log" && ! -e "$work/evidence/mismatched-kubernetes-residual.json" ]]
 
-config_map=$(jq -n '{kind:"ConfigMap",id:"app-dev/manual-retain",environment:"dev",classification:"manual",owner:"course",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"manual record",followUpAction:"review"}')
+config_map=$(jq -n '{kind:"ConfigMap",id:"app-dev/manual-retain",environment:"dev",classification:"manual",owner:"platform",managedBy:"terraform",billable:false,decision:"RETAIN",reason:"manual record",followUpAction:"review"}')
 jq --argjson item "$config_map" '.resources += [$item] | .resources |= sort_by(.kind,.id)' \
   "$work/evidence/inventory.json" >"$work/evidence/inventory-unsupported.json"
 unsupported_inventory_sha=$(raw_sha256 "$work/evidence/inventory-unsupported.json")
@@ -176,9 +176,9 @@ jq --arg inventory "$unsupported_inventory_sha" --argjson item "$config_map" '
   .decisions |= sort_by(.kind,.id)
 ' "$work/evidence/decisions.json" >"$work/evidence/decisions-unsupported.json"
 : >"$work/aws.log"
-if COURSE_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
-  COURSE_FAKE_AWS_LOG="$work/aws.log" AWS_PROFILE=course AWS_REGION=ap-northeast-2 \
-  AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+if PLATFORM_CHECK_BIN_DIR="$root/tests/helpers/residual-retained-bin" \
+  PLATFORM_FAKE_AWS_LOG="$work/aws.log" AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 \
+  AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
   RESIDUAL_SCAN_ATTEMPTS=1 RESIDUAL_SCAN_DELAY_SECONDS=0 \
   bash "$root/scripts/residual-scan.sh" \
     --inventory "$work/evidence/inventory-unsupported.json" \

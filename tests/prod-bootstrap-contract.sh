@@ -7,7 +7,7 @@ tmp_dir=$(mktemp -d)
 trap 'rm -rf -- "$tmp_dir"' EXIT
 
 cat >"$tmp_dir/manual.json" <<'JSON'
-{"apiVersion":"argoproj.io/v1alpha1","kind":"Application","metadata":{"name":"course-prod-bootstrap","namespace":"argocd"},"spec":{"project":"default","source":{"repoURL":"https://github.com/play-builder/argocd-gitops.git","targetRevision":"main","path":"argocd/bootstrap/prod"},"destination":{"server":"https://kubernetes.default.svc","namespace":"argocd"},"syncPolicy":{"syncOptions":["CreateNamespace=true","ServerSideApply=true"]}}}
+{"apiVersion":"argoproj.io/v1alpha1","kind":"Application","metadata":{"name":"mini-commerce-prod-bootstrap","namespace":"argocd"},"spec":{"project":"default","source":{"repoURL":"https://github.com/play-builder/argocd-gitops.git","targetRevision":"main","path":"argocd/bootstrap/prod"},"destination":{"server":"https://kubernetes.default.svc","namespace":"argocd"},"syncPolicy":{"syncOptions":["CreateNamespace=true","ServerSideApply=true"]}}}
 JSON
 jq '.spec.syncPolicy.automated={"prune":true,"selfHeal":true}' "$tmp_dir/manual.json" >"$tmp_dir/automated.json"
 
@@ -18,8 +18,8 @@ slo_sha=$(sha256_file "$tmp_dir/slo.json")
 ready_sha=$(sha256_file "$ready")
 jq -n --arg deployment "$deployment_sha" --arg slo "$slo_sha" --arg ready "$ready_sha" '
   {
-    schemaVersion:"course.prod-preflight/v1",evidenceGrade:"STATIC",stage:"design",decision:"GO",
-    courseId:"course-2026",accountId:"123456789012",region:"ap-northeast-2",
+    schemaVersion:"playbuilder.prod-preflight/v1",evidenceGrade:"STATIC",stage:"design",decision:"GO",
+    ownerId:"playbuilder",accountId:"123456789012",region:"ap-northeast-2",
     bindings:{devDeploymentSha256:$deployment,devSloSha256:$slo,devReadySha256:$ready,
       savedPlanSha256:"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       capacityInputSha256:"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -31,7 +31,7 @@ design_sha=$(sha256_file "$tmp_dir/design.json")
 jq --arg previous "$design_sha" '.stage="estimate" | .evidenceGrade="STATIC" | .bindings.previousDecisionSha256=$previous' \
   "$tmp_dir/design.json" >"$tmp_dir/legacy-estimate.json"
 
-if COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+if OWNER_ID=playbuilder AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 PLATFORM_CHECK_BIN_DIR="$tmp_dir" \
   bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
     "$tmp_dir/slo.json" "$ready" "$tmp_dir/design.json" "$tmp_dir/legacy-estimate.json" >/dev/null 2>&1; then
   echo 'FAIL: legacy estimate bypassed FinOps bootstrap gate' >&2
@@ -43,15 +43,15 @@ export FINOPS_CONTRACT_JSON="$tmp_dir/finops.json" PLATFORM_INSTANCE_ID=commerce
 bash "$root/scripts/finops-readiness-check.sh" fixture --contract "$FINOPS_CONTRACT_JSON" \
   --observations "$tmp_dir/observations.json" --account 123456789012 --region ap-northeast-2 \
   --platform-id "$PLATFORM_INSTANCE_ID" --gate-policy configuration-only --output "$tmp_dir/readiness.json" >/dev/null
-jq --slurpfile finops "$tmp_dir/readiness.json" '.schemaVersion="course.prod-preflight/v2" |
+jq --slurpfile finops "$tmp_dir/readiness.json" '.schemaVersion="playbuilder.prod-preflight/v2" |
   .finops=$finops[0] | .bindings.finopsContractSha256=$finops[0].bindings.contractSha256' \
   "$tmp_dir/legacy-estimate.json" >"$tmp_dir/estimate.json"
 
-COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+OWNER_ID=playbuilder AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 PLATFORM_CHECK_BIN_DIR="$tmp_dir" \
   bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
     "$tmp_dir/slo.json" "$ready" "$tmp_dir/design.json" "$tmp_dir/estimate.json"
 set +e
-COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+OWNER_ID=playbuilder AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 PLATFORM_CHECK_BIN_DIR="$tmp_dir" \
   bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/automated.json" "$tmp_dir/deployment.json" \
     "$tmp_dir/slo.json" "$ready" "$tmp_dir/design.json" "$tmp_dir/estimate.json" >/dev/null 2>&1
 status=$?
@@ -76,7 +76,7 @@ expect_decision_timestamp_rejected() {
   else
     jq --arg field "$field" --arg value "$value" '.[$field]=$value' "$tmp_dir/estimate.json" >"$estimate_candidate"
   fi
-  if COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+  if OWNER_ID=playbuilder AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 PLATFORM_CHECK_BIN_DIR="$tmp_dir" \
     bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
       "$tmp_dir/slo.json" "$ready" "$design_candidate" "$estimate_candidate" >/dev/null 2>&1; then
     echo "expected $label decision timestamp to fail" >&2
@@ -93,7 +93,7 @@ for mutation in '.finops.observedAt="2020-01-01T00:00:00Z"' '.finops.region="us-
   '.finops.configurationStatus="PENDING"' '.finops.evidenceGrade="CLOUD_RUNTIME"' \
   '.bindings.finopsContractSha256="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"'; do
   jq "$mutation" "$tmp_dir/estimate.json" >"$tmp_dir/bad-finops-estimate.json"
-  if COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+  if OWNER_ID=playbuilder AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 PLATFORM_CHECK_BIN_DIR="$tmp_dir" \
     bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
       "$tmp_dir/slo.json" "$ready" "$tmp_dir/design.json" "$tmp_dir/bad-finops-estimate.json" >/dev/null 2>&1; then
     echo 'invalid FinOps binding must reject bootstrap' >&2
@@ -103,7 +103,7 @@ done
 
 jq '.expiresAt="2026-01-01T00:00:00Z"' "$tmp_dir/estimate.json" >"$tmp_dir/stale-estimate.json"
 set +e
-COURSE_ID=course-2026 AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_CHECK_BIN_DIR="$tmp_dir" \
+OWNER_ID=playbuilder AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 PLATFORM_CHECK_BIN_DIR="$tmp_dir" \
   bash "$root/scripts/prod-bootstrap-check.sh" "$tmp_dir/manual.json" "$tmp_dir/deployment.json" \
     "$tmp_dir/slo.json" "$ready" "$tmp_dir/design.json" "$tmp_dir/stale-estimate.json" >/dev/null 2>&1
 status=$?

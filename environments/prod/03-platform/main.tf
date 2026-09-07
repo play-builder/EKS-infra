@@ -34,7 +34,7 @@ locals {
 
   external_secrets_adoption_valid = var.external_secrets_ownership_mode == "fresh" || (
     try(toset(keys(local.external_secrets_adoption)) == toset(["schemaVersion", "evidenceGrade", "environment", "region", "clusterArn", "handoffSha256", "release", "terraform", "observedAt", "expiresAt"]), false) &&
-    try(local.external_secrets_adoption.schemaVersion, "") == "course.platform-release-adoption/v1" &&
+    try(local.external_secrets_adoption.schemaVersion, "") == "playbuilder.platform-release-adoption/v1" &&
     try(local.external_secrets_adoption.evidenceGrade, "") == "CLOUD_RUNTIME" &&
     try(local.external_secrets_adoption.environment, "") == var.environment &&
     try(local.external_secrets_adoption.region, "") == var.aws_region &&
@@ -93,7 +93,6 @@ locals {
     var.tags,
     data.terraform_remote_state.network.outputs.logging_contract.platform_tags,
     {
-      CourseId    = var.course_id
       Environment = var.environment
       Project     = var.project_name
       division    = var.division
@@ -147,7 +146,6 @@ module "chaos_mesh" {
   count  = var.enable_chaos_mesh ? 1 : 0
 
   enable_chaos_mesh             = var.enable_chaos_mesh
-  course_id                     = var.course_id
   environment                   = var.environment
   namespace                     = var.chaos_mesh_namespace
   allowed_namespaces            = var.chaos_mesh_allowed_namespaces

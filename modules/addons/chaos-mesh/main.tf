@@ -28,20 +28,18 @@ resource "helm_release" "this" {
         apiVersion = "v1"
         kind       = "ConfigMap"
         metadata = {
-          name      = "chaos-mesh-course-contract"
+          name      = "chaos-mesh-fault-contract"
           namespace = var.namespace
         }
         data = {
-          courseId                = var.course_id
           allowedNamespaces       = join(",", var.allowed_namespaces)
           maxFaultDurationSeconds = tostring(var.max_fault_duration_seconds)
           maxFaults               = tostring(var.max_faults)
           costBoundary            = "existing-eks-compute"
         }
       }]
-      course = {
-        schemaVersion              = "course.chaos-mesh/v1"
-        courseId                   = var.course_id
+      contract = {
+        schemaVersion              = "playbuilder.chaos-mesh/v1"
         environment                = var.environment
         allowedNamespaces          = var.allowed_namespaces
         maxFaultDurationSeconds    = var.max_fault_duration_seconds

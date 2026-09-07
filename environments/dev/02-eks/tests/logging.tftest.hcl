@@ -18,7 +18,7 @@ mock_provider "aws" {
 }
 
 variables {
-  state_bucket_name                    = "course-state"
+  state_bucket_name                    = "mini-commerce-state"
   aws_region                           = "ap-northeast-2"
   cluster_endpoint_public_access       = false
   cluster_endpoint_public_access_cidrs = []

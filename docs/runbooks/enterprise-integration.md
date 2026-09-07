@@ -90,12 +90,12 @@ Custom names require matching scan filters and GitOps locked mirror evidence.
 핵심 요약: normal cleanup removes approved runtime layers, not protected backup, billing or account
 identity. Zero unapproved residuals does not mean zero retained objects or zero future cost.
 
-1. Inventory actual ARNs (or service-native identifiers), CourseId, account/Region/environment and
+1. Inventory actual ARNs (or service-native identifiers), OwnerId, account/Region/environment and
    explicit DELETE/RETAIN/EXTERNAL_SHARED decisions. New kinds: `RdsInstance` (prod or recovery),
    `RdsSnapshot`, `RdsAutomatedBackup`, `RdsSubnetGroup`, `RdsParameterGroup`, `KmsKey`,
    `LogGroup`, `WafWebAcl`, `S3BackupBucket`, `IamOidcProvider`, `Budget`,
    `CostAnomalyMonitor`, `CostAnomalySubscription`, `CostAllocationTag`, `BillingSnsTopic`.
-   Retain `S3StateBucket`, `TerraformState` and local `CourseEvidence` explicitly as well.
+   Retain `S3StateBucket`, `TerraformState` and local `PlatformEvidence` explicitly as well.
    Existing EcrRepository/SecretsManagerSecret/state/evidence ownership remains.
 2. Disable RDS deletion protection through a separately approved change before creating destroy plans.
    Require skip_final_snapshot=false and a retained exact future final snapshot ARN; the final scanner
@@ -115,7 +115,7 @@ apply approval. The general CI saved-plan identity/source/backend/FinOps gates r
 See the canonical commands in [the cleanup runbook](../runbook.md).
 
 The scanner describes each declared identity, fails on denial/malformed responses, and discovers
-CourseId-tagged RDS/KMS/log/WAF/S3/ECR resources omitted from inventory. Tags do not prove historical
+OwnerId-tagged RDS/KMS/log/WAF/S3/ECR resources omitted from inventory. Tags do not prove historical
 completeness: compare retained state/resource exports and billing evidence, including removed tags.
 External billing SNS/account settings and OIDC must be explicitly declared, not inferred from tags.
 FinOps observations require FINOPS_BILLING_PROFILE and FINOPS_BILLING_ACCOUNT_ID with STS verification

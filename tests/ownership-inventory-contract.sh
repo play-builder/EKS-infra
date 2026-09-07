@@ -11,7 +11,7 @@ trap 'rm -rf -- "$tmp_dir"' EXIT
 for region in ap-northeast-2 us-east-1; do
   mkdir -p "$tmp_dir/$region"
   prepare_cleanup_fixtures "$root" "$tmp_dir/$region" "$region"
-  COURSE_CHECK_BIN_DIR="$tmp_dir" AWS_REGION="$region" AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir" AWS_REGION="$region" AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
     bash "$root/scripts/residual-scan.sh" --validate-only \
       --inventory "$tmp_dir/$region/inventory.json" --retain-decisions "$tmp_dir/$region/decisions.json" \
       --kubernetes-pre-destroy "$tmp_dir/$region/pre-destroy.json" \
@@ -26,8 +26,8 @@ assert_timestamp_rejected() {
   local label=$1 status
   shift
   set +e
-  (COURSE_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 \
-    COURSE_ID=course-2026 "$@") >/dev/null 2>&1
+  (PLATFORM_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 \
+    OWNER_ID=playbuilder "$@") >/dev/null 2>&1
   status=$?
   set -e
   [[ "$status" -ne 0 ]] || {
@@ -89,7 +89,7 @@ jq '.externalShared[0].presentAfterCleanup=false' "$tmp_dir/ap-northeast-2/resid
 assert_rejected() {
   local decisions=$1 pre=$2 residual=$3 status
   set +e
-  COURSE_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
     bash "$root/scripts/residual-scan.sh" --validate-only \
       --inventory "$tmp_dir/ap-northeast-2/inventory.json" --retain-decisions "$decisions" \
       --kubernetes-pre-destroy "$pre" --gitops-removal "$tmp_dir/ap-northeast-2/removal.json" \
@@ -109,7 +109,7 @@ assert_rejected "$tmp_dir/ap-northeast-2/decisions.json" "$tmp_dir/ap-northeast-
 assert_inventory_rejected() {
   local candidate=$1 status
   set +e
-  (COURSE_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+  (PLATFORM_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
     cleanup_validate_inventory "$candidate") >/dev/null 2>&1
   status=$?
   set -e
@@ -148,14 +148,14 @@ jq --arg prefix "$cluster_prefix" --arg name "$hundred_character_name" --arg fre
   .clusters[0].clusterArn=($prefix+"a") |
   .clusters[1].clusterArn=($prefix+$name)
 ' "$tmp_dir/ap-northeast-2/removal.json" >"$tmp_dir/canonical-cluster-removal.json"
-COURSE_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+PLATFORM_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
   cleanup_validate_freeze_removal "$tmp_dir/ap-northeast-2/inventory.json" \
     "$tmp_dir/canonical-cluster-freeze.json" "$tmp_dir/canonical-cluster-removal.json"
 
 assert_cleanup_cluster_rejected() {
   local freeze_file=$1 removal_file=$2 status
   set +e
-  (COURSE_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 COURSE_ID=course-2026 \
+  (PLATFORM_CHECK_BIN_DIR="$tmp_dir" AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 OWNER_ID=playbuilder \
     cleanup_validate_freeze_removal "$tmp_dir/ap-northeast-2/inventory.json" "$freeze_file" "$removal_file") \
     >/dev/null 2>&1
   status=$?

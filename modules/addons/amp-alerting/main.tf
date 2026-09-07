@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 
 locals {
   subscription_enabled = var.enabled && var.enable_sns_delivery
-  topic_arn            = var.enabled ? aws_sns_topic.course_alerts[0].arn : ""
+  topic_arn            = var.enabled ? aws_sns_topic.pb_alerts[0].arn : ""
   namespace            = "app-${var.environment}"
   # Canonical identity spans the Rollout's stable/canary Kubernetes Services.
   selector = "reporter=\"destination\",destination_canonical_service=\"mini-commerce\",destination_workload_namespace=\"${local.namespace}\",environment=\"${var.environment}\""
@@ -25,7 +25,7 @@ locals {
   rule_groups = {
     groups = [
       {
-        name = "course-release-slo"
+        name = "mini-commerce-release-slo"
         rules = concat([for key, window in local.windows : {
           record = "mini_commerce:success_burn:${key}"
           expr   = local.burn[key]
@@ -85,7 +85,7 @@ locals {
   }
 }
 
-resource "aws_sns_topic" "course_alerts" {
+resource "aws_sns_topic" "pb_alerts" {
   count = var.enabled ? 1 : 0
 
   name = "${var.name}-amp-alerts"
@@ -95,7 +95,7 @@ resource "aws_sns_topic" "course_alerts" {
 resource "aws_sns_topic_policy" "amp_publish" {
   count = var.enabled ? 1 : 0
 
-  arn = aws_sns_topic.course_alerts[0].arn
+  arn = aws_sns_topic.pb_alerts[0].arn
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -104,7 +104,7 @@ resource "aws_sns_topic_policy" "amp_publish" {
         Effect    = "Allow"
         Principal = { Service = "aps.amazonaws.com" }
         Action    = "sns:Publish"
-        Resource  = aws_sns_topic.course_alerts[0].arn
+        Resource  = aws_sns_topic.pb_alerts[0].arn
         Condition = {
           StringEquals = {
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -121,15 +121,15 @@ resource "aws_sns_topic_policy" "amp_publish" {
 resource "aws_sns_topic_subscription" "email" {
   count = local.subscription_enabled ? 1 : 0
 
-  topic_arn = aws_sns_topic.course_alerts[0].arn
+  topic_arn = aws_sns_topic.pb_alerts[0].arn
   protocol  = "email"
   endpoint  = var.sns_email_endpoint
 }
 
-resource "aws_prometheus_rule_group_namespace" "course" {
+resource "aws_prometheus_rule_group_namespace" "platform" {
   count = var.enabled ? 1 : 0
 
-  name         = "course-release-slo"
+  name         = "mini-commerce-release-slo"
   workspace_id = var.workspace_id
   data         = yamlencode(local.rule_groups)
   lifecycle {
@@ -140,7 +140,7 @@ resource "aws_prometheus_rule_group_namespace" "course" {
   }
 }
 
-resource "aws_prometheus_alert_manager_definition" "course" {
+resource "aws_prometheus_alert_manager_definition" "platform" {
   count = var.enabled ? 1 : 0
 
   workspace_id = var.workspace_id

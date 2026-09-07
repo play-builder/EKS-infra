@@ -2,7 +2,6 @@
 aws_region   = "ap-northeast-2"
 project_name = "mini-commerce"
 state_bucket_name = "replace-with-your-dev-state-bucket"
-course_id    = "replace-with-unique-course-id"
 environment  = "dev"
 
 gitops_repo_url        = "https://github.com/REPLACE_ME/argocd-gitops.git"

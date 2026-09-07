@@ -20,14 +20,6 @@ variable "project_name" {
   default = "mini-commerce"
 }
 
-variable "course_id" {
-  type = string
-  validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
-    error_message = "course_id must be an 8-63 character lowercase identifier."
-  }
-}
-
 variable "root_domain" {
   description = "Apex domain owned by the network account, e.g. example.com"
   type        = string

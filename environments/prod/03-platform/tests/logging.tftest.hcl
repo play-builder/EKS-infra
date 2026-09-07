@@ -22,11 +22,11 @@ mock_provider "kubernetes" {}
 mock_provider "kubectl" {}
 mock_provider "http" {}
 variables {
-  state_bucket_name            = "course-state"
+  state_bucket_name            = "mini-commerce-state"
   aws_region                   = "ap-northeast-2"
   acm_domain_name              = "example.invalid"
   hosted_zone_id               = "Z1234"
-  enable_course_resources      = false
+  enable_platform_resources      = false
   enable_gateway_api           = false
   enable_container_insights    = true
   enable_cluster_autoscaler    = true

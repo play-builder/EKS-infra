@@ -203,7 +203,7 @@ jobs:
             command -v "$tool" >/dev/null || { echo "CONTRACT_PREREQUISITE_MISSING: $tool" >&2; exit 69; }
           done
 
-      - name: Verify course repository contracts
+      - name: Verify platform repository contracts
         run: bash tests/run-contract-tests.sh
 
   format:

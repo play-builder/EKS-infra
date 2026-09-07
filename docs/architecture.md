@@ -69,14 +69,14 @@ digit string `attestation.githubId`와 `attestation.githubUrl`은 같은 reposit
     "event": "push",
     "runId": "<digits>",
     "runAttempt": 1,
-    "runUrl": "https://github.com/play-builder/cicd-course-sample-app/actions/runs/<digits>"
+    "runUrl": "https://github.com/play-builder/mini-commerce/actions/runs/<digits>"
   },
   "image": {
     "platforms": ["linux/amd64", "linux/arm64"]
   },
   "attestation": {
     "githubId": "<digits>",
-    "githubUrl": "https://github.com/<owner>/cicd-course-sample-app/attestations/<digits>"
+    "githubUrl": "https://github.com/<owner>/mini-commerce/attestations/<digits>"
   }
 }
 ```

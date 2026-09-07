@@ -16,7 +16,6 @@ locals {
     var.tags,
     data.terraform_remote_state.network.outputs.logging_contract.platform_tags,
     {
-      CourseId    = var.course_id
       Environment = var.environment
       Project     = var.project_name
       division    = var.division

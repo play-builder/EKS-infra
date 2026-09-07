@@ -11,14 +11,6 @@ variable "project_name" {
   default = "mini-commerce"
 }
 
-variable "course_id" {
-  type = string
-  validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]{7,62}$", var.course_id))
-    error_message = "course_id must be an 8-63 character lowercase identifier."
-  }
-}
-
 variable "org_id" {
   description = "AWS Organizations ID. Every account in the Organization may pull images."
   type        = string

@@ -3,7 +3,7 @@ mock_provider "aws" {
 }
 
 variables {
-  state_bucket_name                    = "course-state"
+  state_bucket_name                    = "mini-commerce-state"
   aws_region                           = "ap-northeast-2"
   cluster_endpoint_public_access_cidrs = []
   vpc_cni_addon_version                = "v1.20.4-eksbuild.1"
@@ -26,8 +26,8 @@ override_data {
   target = data.terraform_remote_state.network
   values = {
     outputs = {
-      eks_cluster_name   = "prod-course-eks"
-      logging_contract   = { cluster_name = "prod-course-eks", aws_region = "ap-northeast-2", account_id = "123456789012", kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555", log_group_names = { control_plane = "/aws/eks/prod-course-eks/cluster" } }
+      eks_cluster_name   = "prod-mini-commerce-eks"
+      logging_contract   = { cluster_name = "prod-mini-commerce-eks", aws_region = "ap-northeast-2", account_id = "123456789012", kms_key_arn = "arn:aws:kms:ap-northeast-2:123456789012:key/11111111-2222-3333-4444-555555555555", log_group_names = { control_plane = "/aws/eks/prod-mini-commerce-eks/cluster" } }
       audit_log_groups   = {}
       vpc_id             = "vpc-0123456789abcdef0"
       public_subnet_ids  = ["subnet-00123456789abcdef"]
@@ -39,9 +39,9 @@ override_data {
 override_module {
   target = module.eks_cluster
   outputs = {
-    cluster_id                            = "prod-course-eks"
-    cluster_name                          = "prod-course-eks"
-    cluster_arn                           = "arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-course-eks"
+    cluster_id                            = "prod-mini-commerce-eks"
+    cluster_name                          = "prod-mini-commerce-eks"
+    cluster_arn                           = "arn:aws:eks:ap-northeast-2:123456789012:cluster/prod-mini-commerce-eks"
     cluster_endpoint                      = "https://eks.example.invalid"
     cluster_version                       = "1.36"
     cluster_certificate_authority_data    = "ZmFrZQ=="

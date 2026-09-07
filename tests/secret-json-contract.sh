@@ -25,7 +25,7 @@ case "$*" in
   *"route53 list-resource-record-sets"*)
     echo '{"ResourceRecordSets":[{"Name":"dev.example.invalid.","Type":"NS","ResourceRecords":[{"Value":"ns-dev-1.example.invalid."},{"Value":"ns-dev-2.example.invalid."}]}]}' ;;
   *"s3api get-bucket-tagging"*)
-    printf '{"TagSet":[{"Key":"ManagedBy","Value":"gitops-course"},{"Key":"Project","Value":"course"},{"Key":"Environment","Value":"%s"}]}\n' "$account_role" ;;
+    printf '{"TagSet":[{"Key":"ManagedBy","Value":"Terraform"},{"Key":"Project","Value":"mini-commerce"},{"Key":"Environment","Value":"%s"}]}\n' "$account_role" ;;
   *"s3api get-bucket-location"*) echo '{"LocationConstraint":"ap-northeast-2"}' ;;
   *"s3api get-bucket-versioning"*) echo '{"Status":"Enabled"}' ;;
   *"s3api get-bucket-encryption"*) echo '{"ServerSideEncryptionConfiguration":{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}}' ;;
@@ -72,13 +72,13 @@ JSON
 
 base_env=(
   NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION=ap-northeast-2
-  LAB_PROJECT_NAME=course ROOT_DOMAIN=example.invalid
+  LAB_PROJECT_NAME=mini-commerce ROOT_DOMAIN=example.invalid
   INFRA_GH_REPO=owner/infra APP_GH_REPO=owner/app GITOPS_GH_REPO=owner/gitops
-  COURSE_CHECK_BIN_DIR="$tmp_dir/bin"
+  PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin"
 )
 
 run_check() {
-  env "${base_env[@]}" "$@" bash "$root/scripts/course-check.sh" ch02
+  env "${base_env[@]}" "$@" bash "$root/scripts/platform-check.sh" ch02
 }
 
 output=$(run_check RUNTIME_SECRET_JSON_FILE="$runtime_file" DB_SECRET_JSON_FILE="$database_file")

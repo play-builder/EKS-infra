@@ -36,7 +36,7 @@ def timestamp(value):
 
 def access():
     fixture = os.environ.get('FINOPS_FIXTURE_JSON')
-    doubles = os.environ.get('COURSE_CHECK_BIN_DIR')
+    doubles = os.environ.get('PLATFORM_CHECK_BIN_DIR')
     profile = os.environ.get('FINOPS_BILLING_PROFILE')
     role = os.environ.get('FINOPS_BILLING_ROLE_ARN')
     if fixture or doubles:

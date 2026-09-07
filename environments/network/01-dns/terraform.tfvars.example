@@ -1,6 +1,5 @@
 aws_region   = "ap-northeast-2"
 project_name = "mini-commerce"
-course_id    = "replace-with-unique-course-id"
 root_domain  = "replace-with-your-domain"
 
 # Add child zones as environments come online, e.g. dev.<root>, prod.<root>.

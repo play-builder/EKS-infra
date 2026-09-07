@@ -11,16 +11,16 @@ mkdir -p "$tmp_dir/bin"
 cat >"$tmp_dir/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-cat "$COURSE_FAKE_PLAN_JSON"
+cat "$PLATFORM_FAKE_PLAN_JSON"
 EOF
 chmod +x "$tmp_dir/bin/terraform"
 export PATH="$tmp_dir/bin:$PATH"
 
 inspect() {
-  COURSE_FAKE_PLAN_JSON=$1 cleanup_inspect_saved_destroy_plan \
+  PLATFORM_FAKE_PLAN_JSON=$1 cleanup_inspect_saved_destroy_plan \
     environments/dev/04-workloads/argocd "$tmp_dir/replacement.tfplan" \
     "$root/tests/fixtures/cleanup-ownership-valid.json" "$root" \
-    course-2026 123456789012 ap-northeast-2 playdevops
+    playbuilder 123456789012 ap-northeast-2 playdevops
 }
 
 run_rejection() {
