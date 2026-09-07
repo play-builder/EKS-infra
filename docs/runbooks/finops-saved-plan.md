@@ -33,16 +33,14 @@ apply에서는 protected-environment approval을 먼저 결합하고 FinOps arti
 
 readiness 유효기간은 `observedAt + 15분`이며 재평가로 기존 증거 TTL을 연장하지 않는다. 승인을 기다리는 동안 만료되면 새 plan과 새 승인이 필요하다. contract를 변경했다면 hash와 plan도 함께 새로 만들어야 한다. 관측 만료·API 거부·member/role/config 불일치에는 override/PASS 문자열 우회가 없다.
 
-workflow 도구 전제는 Terraform `1.16.0` (wrapper 비활성), Python >=3.10 isolated venv와 `scripts/requirements-amp-slo.txt`의 exact boto3/botocore `1.42.59`다. AWS CLI/`gh`는 GitHub runner의 도구를 사용한다. 전체 static job은 별도로 Helm `4.2.4`, promtool `3.14.0`, yq `4.53.6`, pinned Python requirements, hash-locked chart archives 및 `jq/ruby/rg/go`를 요구한다. 실제 SDK serialization test도 여전히 로컬 static 검증이다.
+workflow 도구 전제는 Terraform `1.16.0` (wrapper 비활성), Python >=3.10 isolated venv와 `scripts/requirements-finops.txt`의 exact boto3/botocore `1.42.59`다. AWS CLI/`gh`는 GitHub runner의 도구를 사용한다. 인프라 정적 검사는 `make check`와 `make test-terraform`으로 실행한다. 테스트 전용 chart·Lua·PromQL·SDK 설치는 CI에서 제거했다.
 
 ## 로컬 검증과 한계
 
-테스트는 실제 saved-plan shell scripts와 실제 readiness evaluator를 실행하고 외부 AWS/Terraform I/O만 double로 바꾼다. `PLATFORM_CHECK_BIN_DIR` + `FINOPS_FIXTURE_JSON`은 로컬 테스트에서만 사용하며 manifest grade를 `STATIC`으로 고정한다. GitHub 실행은 fixture를 거부하고 runtime lane은 STATIC/fixture artifact를 거부한다. fixture 결과를 비용 runtime 검증으로 승격하지 않는다.
+공개 핵심 검사는 saved-plan의 identity·hash·승인 오류를 확인한다. FinOps API 실수집은 해당 billing 계정에서 별도 실행해야 한다. `PLATFORM_CHECK_BIN_DIR` + `FINOPS_FIXTURE_JSON`은 로컬 테스트에서만 사용하며 manifest grade를 `STATIC`으로 고정한다. GitHub 실행은 fixture를 거부하고 runtime lane은 STATIC/fixture artifact를 거부한다. fixture 결과를 비용 runtime 검증으로 승격하지 않는다.
 
 ```bash
-python3 -B tests/finops_saved_plan_test.py
-bash tests/saved-plan-apply-workflow-contract.sh
-bash tests/install-trivy-contract.sh
+make check
 ```
 
 Trivy 설치는 승인한 `0.74.0` archive checksum을 **추출·실행 전에** 검증하고 설치된 binary version도 확인한다. pinned `trivy-action` v0.36.0의 `skip-setup-trivy: true`로 재설치를 막는다. [정확한 action 입력](https://github.com/aquasecurity/trivy-action/blob/ed142fd0673e97e23eac54620cfb913e5ce36c25/action.yaml).

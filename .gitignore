@@ -92,3 +92,6 @@ Thumbs.db
 # Python bytecode is generated locally.
 __pycache__/
 *.py[cod]
+
+# Reusable modules do not own provider selections; deployment roots track their locks.
+modules/**/.terraform.lock.hcl

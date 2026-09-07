@@ -32,7 +32,6 @@ flowchart LR
   Proof --> DevGit[GitOps Dev values PR]
   DevGit --> Dev[Dev Argo CD Deployment]
   Dev --> Observe[Deployment and SLO evidence]
-  Observe --> Ready[DEV_READY identity gate]
   Ready --> Approval[Prod promotion review]
   Approval --> ProdGit[GitOps Prod values PR]
   ProdGit --> Prod[Prod Argo CD Rollout]
@@ -84,7 +83,7 @@ Dev의 단일 PostgreSQL chart는 복구·migration 검증을 위한 별도 소�
 | `terraform/platform-backup/` | 별도 보존 정책의 백업 bucket/KMS root |
 | `modules/{networking,eks,addons,security,...}/` | 위 root에서 호출하는 provider resource 구현 |
 | `scripts/`, `scripts/lib/` | 운영 CLI와 재사용 구현; 역할은 아래 표 참고 |
-| `tests/`, root/module의 `tests/` | 동작·SDK·render·정책·Terraform mock 검사 |
+| `tests/`, root/module의 `tests/` | saved-plan·입력 검사 및 native 보안/데이터 보호 검사 |
 | `vendor/`, lock 파일 | 고정한 CRD·chart·image 입력과 검증 hash |
 | `.github/workflows/`, `policy/` | CI 검증, 승인된 apply, drift·image publishing 정책 |
 
@@ -93,13 +92,8 @@ Dev의 단일 PostgreSQL chart는 복구·migration 검증을 위한 별도 소�
 | 목적 | 진입점 | 실제 동작 |
 | --- | --- | --- |
 | 기반 확인 | `scripts/foundation-check.sh` | 계정별 state·DNS·OIDC·GitHub governance 조회 |
-| Dev 상태 | `scripts/dev-ready-check.sh` | core/stateful/secret freshness 또는 증빙 schema 검사 |
-| Dev 증빙 | `scripts/capture-dev-evidence.sh` | deployment/SLO 관측과 identity 결속 |
 | 인프라 적용 | `scripts/create-saved-plan.sh`, `verify-saved-plan.sh` | plan의 source·account·backend·승인·digest 검증 |
 | Drift | `scripts/terraform-drift-check.sh` | 읽기 전용 plan과 redacted drift decision |
-| 수명주기 | `scripts/eks-upgrade-preflight.sh`, `eks-node-rollout-check.sh` | 지원 버전·노드 교체 전후 상태 확인 |
-| DB/백업 | `scripts/rds-recovery-check.sh`, `argocd-backup.sh` | 복구 입력·실측·보존 상태 검증 |
-| 폐기 | `scripts/final-cleanup.sh` | 승인 inventory와 saved destroy plan을 순서대로 실행 |
 
 `--execute`, `collect`, `--validate-only` 등의 의미는 각 명령의 usage와 해당 runbook을 확인합니다. 읽기 전용 확인, 명시적 변경, 로컬 fixture 검증을 같은 성공 주장으로 취급하지 않습니다.
 

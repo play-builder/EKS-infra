@@ -134,8 +134,7 @@ and all aggregate-plan log bindings. RETAIN/shared/unknown bindings fail closed.
 (including declared groups never created) must be actually absent before the network root apply.
 Only `module.vpc.aws_cloudwatch_log_group.vpc_flow[0]` may remain in that same network saved plan:
 exact DELETE, before ARN/key equality and the actual saved-configuration reference chain are required.
-`tests/log-key-dag-contract.py` compiles the real Terraform graph proving log-group-to-key dependency;
-normal Terraform destroy reverses it. No targeted apply, state removal or AWS CLI log deletion is used.
+Native log-key tests verify KMS policy boundaries; review the actual Terraform plan before changing ownership.
 
 The residual report separately records `scheduledKeyDeletions` with DescribeKey's actual
 PendingDeletion state and deletion date after all bound logs are absent. This is **not physical
@@ -161,24 +160,6 @@ TERRAFORM_APPLY_ROLE_ARN; the IAM root's infra role is only a provisioned alias,
 Exit 0 is clean, 2 is drift and 1 is error; either nonzero fails the workflow. Only redacted drift JSON
 is retained seven days, never tfvars or the binary plan. Scheduled execution is LIVE_NOT_VERIFIED.
 
-## Static verification and tools
+## Static verification
 
-핵심 요약: the fast runner executes offline contracts once. CI runs Terraform mocks, chart/PromQL/Lua evaluation and pinned SDK serialization as separate steps. None executes cloud workloads.
-
-```bash
-bash tests/run-contract-tests.sh
-# Tool-backed commands and prerequisites: docs/testing.md
-```
-
-Use Terraform 1.16.0, Helm 4.2.4, promtool 3.14.0, yq4.53.6, jq/Ruby/rg and Python 3.10+.
-Health behavior uses real Lua5.1.5: `bash scripts/install-lua.sh /absolute/bin` downloads the official
-source, checks its pinned SHA256 before extraction/build, and requires cc/make. Put that directory
-on PATH or set LUA_BIN to its lua executable. This is a local test tool, not a workload dependency.
-Install scripts/requirements-argocd-backup.txt in the isolated venv (pinned AMP SDK + PyYAML6.0.3).
-AWS CLI does not imply importable boto3. The enterprise-static CI job always runs the three pinned SDK gates.
-Each render test checksum-checks its actual chart archive; use its documented CHART_ARCHIVE override.
-TFLint0.64.0, Trivy0.74.0 and Conftest0.69.0 remain separate required CI gates.
-Results are STATIC_VERIFIED/LOCAL_VERIFIED only. AWS apply/destroy, SSO, injection/admission, billing,
-notification delivery, PITR and backup restore remain LIVE_NOT_VERIFIED until separately authorized.
-
-Detailed local commands and evidence limits: [testing](../testing.md).
+Use `make check` and `make test-terraform`; see [testing](../testing.md). Runtime state is checked through AWS, Kubernetes and Argo CD.

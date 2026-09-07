@@ -67,9 +67,9 @@ aws amp describe-workspace-configuration \
 
 이 변경에는 provider major upgrade나 실제 retention 변경을 포함하지 않습니다. 기존 실제 보존 기간은 위 조회 결과를 기준으로 판단합니다.
 
-DEV_READY 소비자는 legacy v1과 현재 앱 producer의 v2를 모두 지원합니다. v2는 immutable app repository ID도 검증합니다. Network ECR과 Dev/Prod EKS 계정은 분리하고, 같은 image repository·digest·source·region·cluster 증빙의 결속은 유지합니다.
+승격은 성공한 앱 CI 실행과 GitOps main의 Dev digest를 기준으로 한다. Dev 상태와 지표 확인은 GitHub environment 승인 절차에서 수행한다.
 
-Secret 회전 baseline과 UUID pin 절차는 [README](../README.md#4-dev-runtime와-데이터-검증)를 따릅니다. metadata만으로 AWS secret payload가 동일하다고 추정하지 않습니다. EKS upgrade snapshot은 v2로 다시 수집하며, 현재 controller readiness와 목표 Kubernetes version 지원 확인을 구분합니다.
+Secret 회전은 ExternalSecret Ready, 실제 Secret version과 Pod 재시작/DB 연결을 확인한다. metadata만으로 payload와 접속 성공을 추정하지 않는다. EKS upgrade insight와 addon 호환성도 실제 대상에서 확인한다.
 
 ## 적용과 되돌리기
 

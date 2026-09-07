@@ -1,75 +1,28 @@
-# 운영 코드 검증
+# 검증 명령
 
-## 빠른 회귀 검사
+## 로컬과 CI
 
-핵심 요약: 한 실행기가 실제 Shell/Python 검사를 한 번씩 호출합니다. fake AWS·Terraform·Kubernetes 응답을 사용하는 검사는 운영 호출의 허용·거부와 증빙 보존을 확인합니다.
-교육 자료나 챕터 dispatcher가 없는 단독 checkout에서 실행할 수 있습니다.
-
-```bash
-bash tests/run-contract-tests.sh
-```
-
-Bash, Git, jq, Python 3.10+, Ruby, ripgrep, Terraform 1.16.0이 필요합니다. fake CLI에 `PLATFORM_CHECK_BIN_DIR`를 사용하면 생성 증빙의 등급은 `STATIC`입니다. 이 등급은 promotion 입력으로 사용할 수 없습니다.
-
-## Terraform native 검사
-
-핵심 요약: `.tftest.hcl`은 실제 Terraform이 계산한 입력·출력·정책을 검사합니다. mock provider와 remote-state override를 사용하므로 AWS state 이전이나 실제 배포를 증명하지 않습니다.
-CI의 `enterprise-static` job은 빠른 suite를 재실행하지 않습니다.
+핵심 요약: 인프라는 Terraform과 표준 정책 도구로 검사한다. 별도 테스트 실행 프레임워크는 없다.
 
 ```bash
-terraform fmt -check -recursive
-while IFS= read -r root; do
-  terraform -chdir="$root" init -backend=false -input=false -no-color
-  terraform -chdir="$root" validate -no-color
-  terraform -chdir="$root" test -no-color
-done < <(rg --files modules environments terraform -g '*.tftest.hcl' | sed 's|/tests/[^/]*$||' | sort -u)
+make check
+make test-terraform
 ```
 
-`init`은 provider와 module을 다운로드할 수 있습니다. source 문자열 수를 세던 검사는 state bucket 선택, network cluster identity, ownership tags, OTLP 출력과 NAT/Flow Log의 native assertion으로 통합했습니다. saved-plan·cleanup·drift는 실제 명령 경계와 생성 artifact를 기존 동작 테스트에서 검사합니다.
+`check`는 fmt, TFLint, Conftest와 운영 안전 검사다. `test-terraform`은 남겨둔 native 테스트가 있는 root를 초기화·validate·test한다. AWS에 apply하지 않으며 provider 다운로드는 발생할 수 있다.
+Terraform 1.16.0, TFLint 0.64.0, Conftest 0.69.0, Python 3.10+, Bash, jq, Git이 필요하다.
 
-## Chart·PromQL·Lua·SDK 검사
-
-핵심 요약: Helm 4.2.4, promtool 3.14.0, yq 4.53.6, Lua 5.1.5와 SHA-256이 검증된 chart archive를 사용합니다. CI의 도구 설치·archive pin은 `.github/workflows/terraform-validate.yml`이 기준입니다.
-실제 차트 렌더와 로컬 정책 평가는 Kubernetes controller나 admission 실행과 구분합니다.
-
-```bash
-python3 -m venv /tmp/eks-check-python
-/tmp/eks-check-python/bin/pip install -r scripts/requirements-argocd-backup.txt
-export ENTERPRISE_PYTHON=/tmp/eks-check-python/bin/python3
-```
-
-`ARGOCD_CHART_ARCHIVE`, `ROLLOUTS_CHART_ARCHIVE`, `SIGSTORE_CHART_ARCHIVE`, `AUTOSCALER_CHART_ARCHIVE`에는 각각 CI와 동일한 archive를 지정합니다. Lua 실행 파일은 PATH 또는 `LUA_BIN`으로 선택합니다.
-
-```bash
-"$ENTERPRISE_PYTHON" tests/ownership-marker-destroy-contract.py
-"$ENTERPRISE_PYTHON" tests/log-key-dag-contract.py
-"$ENTERPRISE_PYTHON" tests/external-secret-lua-contract.py
-bash tests/argocd-render-contract.sh
-bash tests/sigstore-controller-contract.sh
-bash tests/cluster-autoscaler-render-contract.sh
-"$ENTERPRISE_PYTHON" tests/adot-scrape-contract.py
-"$ENTERPRISE_PYTHON" tests/amp-promql-contract.py
-```
-
-```bash
-"$ENTERPRISE_PYTHON" tests/amp-slo-sdk-contract.py
-"$ENTERPRISE_PYTHON" tests/dev-evidence-runtime-test.py --terraform
-"$ENTERPRISE_PYTHON" tests/argocd-backup-sdk-contract.py
-"$ENTERPRISE_PYTHON" tests/rds-recovery-sdk-contract.py
-```
-
-SDK 검사는 pinned boto3/botocore 1.42.59의 serialization과 stub 응답을 검사합니다. 실제 AWS 인증·권한·알림 전달·복구 성공은 별도 운영 증빙이 필요합니다. CI의 TFLint, Trivy, Conftest gate도 유지합니다.
-
-## 운영 진입점
-
-핵심 요약: 코드 검증과 실제 환경 확인은 명령으로 구분합니다. 운영 명령의 기존 identity, 승인, saved-plan, 증빙 등급 조건은 유지합니다.
-
-| 목적 | 진입점 |
+| 검사 | 막는 실패 |
 | --- | --- |
-| 계정별 state bucket·DNS 위임·OIDC | `scripts/foundation-check.sh` |
-| Dev Deployment·stateful·Secret 회전 | `scripts/dev-ready-check.sh core\|stateful\|secret-baseline\|secret-freshness` |
-| Dev 배포·SLO 증빙 | `scripts/capture-dev-evidence.sh deployment\|slo` |
-| 세 파일의 DEV_READY 결속 | `scripts/dev-ready-check.sh deployment.json slo.json ready.json` |
-| teardown 사전 검사·실행 | `scripts/cleanup-preflight.sh`, `checkpoint-teardown.sh`, `final-cleanup.sh` |
+| `tests/test_inputs.py` | 다른 계정·backend 입력, 경로 이탈, 기존 tfvars 덮어쓰기, 비밀값 출력 |
+| `tests/saved-plan.sh` | 승인자·source SHA·plan hash·환경이 다른 saved plan 사용 |
+| root/module `tests/*.tftest.hcl` | IAM 최소 권한, 암호화/보존, 네트워크 격리, RDS 복구 제약 |
+| `policy/terraform` | Terraform plan 정책 위반 |
 
-`foundation-check.sh`는 기존 `NETWORK_AWS_PROFILE`, `DEV_AWS_PROFILE`, `AWS_REGION`, `PLATFORM_PROJECT_NAME`, `ROOT_DOMAIN`, `INFRA_GH_REPO`, `APP_GH_REPO`, `GITOPS_GH_REPO` 입력을 사용합니다. teardown은 저장된 검토 plan과 명시적인 실행 승인이 있어야 변경을 수행합니다.
+GitHub Actions는 `contract`, `format`, `lint`, `security`, `enterprise-static`, `validate` check 이름을 유지한다. `enterprise-static`은 native Terraform 테스트만 실행한다. `validate` matrix는 운영 root 전체의 backend 없는 validate를 수행한다. `security`는 Trivy와 Conftest다.
+
+## 운영 확인
+
+핵심 요약: 정적 검사 성공과 실제 EKS 배포 성공을 구분한다.
+
+실제 계정·IAM·네트워크·node·controller·Pod·트래픽·알림은 [운영 절차](runbook.md)의 AWS/Kubernetes/Argo CD 명령과 관측 화면에서 확인한다. 코드 검사는 실환경 성공을 대신하지 않는다.
