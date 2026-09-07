@@ -1,0 +1,7 @@
+# Use only when the domain was registered through Route 53 Domains, which creates the
+# apex hosted zone automatically. Copy to import.tf, fill the zone ID, run plan/apply once,
+# then delete import.tf.
+import {
+  to = aws_route53_zone.apex
+  id = "Z0123456789ABCDEFGHIJ"
+}
