@@ -20,14 +20,18 @@ misconfigurations:
     statement: "Public subnets intentionally host internet-facing load balancers; worker nodes use private subnets."
     expired_at: 2027-09-02
   - id: AWS-0132
-    paths: ["terraform/state-backend/main.tf"]
+    paths: ["modules/bootstrap/state-backend/main.tf"]
     statement: "The disposable course backend uses SSE-S3 to avoid a persistent KMS key charge."
     expired_at: 2027-09-02
+  - id: AWS-0032
+    paths: ["environments/network/02-registry/main.tf"]
+    statement: "The pull policy uses Principal * only together with an aws:PrincipalOrgID condition, so it grants read access to member accounts of this Organization and nothing public; dev/prod clusters pull from the network account registry."
+    expired_at: 2027-09-07
   - id: GIT-0001
-    paths: ["terraform/github-governance/main.tf"]
+    paths: ["environments/network/03-github-governance/main.tf"]
     statement: "The public visibility is intentional because students fork this course repository; delivery controls and secret scanning remain independently enforced."
     expired_at: 2027-09-03
   - id: GIT-0003
-    paths: ["terraform/github-governance/main.tf"]
+    paths: ["environments/network/03-github-governance/main.tf"]
     statement: "Alerts are managed by the dedicated github_repository_vulnerability_alerts resource; Trivy only inspects the github_repository block."
     expired_at: 2027-09-03
