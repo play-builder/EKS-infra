@@ -1,0 +1,16 @@
+aws_region   = "ap-northeast-2"
+project_name = "mini-commerce"
+course_id    = "replace-with-unique-course-id"
+org_id       = "o-replaceme"
+
+# Fork identity. Numeric IDs never change even if names do.
+github_owner        = "replace-with-github-owner"
+github_owner_id     = "0"
+app_repository_name = "mini-commerce"
+app_repository_id   = "0"
+
+# create in a fresh account; external when the account already has token.actions.githubusercontent.com
+oidc_provider_mode         = "create"
+external_oidc_provider_arn = null
+
+ecr_keep_last_images = 30
