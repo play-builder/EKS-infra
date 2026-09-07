@@ -321,6 +321,11 @@ jobs:
           curl -fsSL https://github.com/argoproj/argo-helm/releases/download/argo-rollouts-2.42.0/argo-rollouts-2.42.0.tgz -o "$RUNNER_TEMP/enterprise-charts/argo-rollouts.tgz"
           curl -fsSL https://github.com/kubernetes/autoscaler/releases/download/cluster-autoscaler-chart-9.59.0/cluster-autoscaler-9.59.0.tgz -o "$RUNNER_TEMP/enterprise-charts/autoscaler.tgz"
           helm pull oci://ghcr.io/sigstore/helm-charts/policy-controller@sha256:bd825655f80a062a23e71725cb33118566ff6a90daf97a1ce17a52a4bc6e010d --destination "$RUNNER_TEMP/enterprise-charts"
+          # Helm 4 stores a digest pull as <chart>@sha256-<digest>.tgz; normalize to the version name the checks expect.
+          digest_archive="$RUNNER_TEMP/enterprise-charts/policy-controller@sha256-bd825655f80a062a23e71725cb33118566ff6a90daf97a1ce17a52a4bc6e010d.tgz"
+          if [[ -f "$digest_archive" ]]; then
+            mv "$digest_archive" "$RUNNER_TEMP/enterprise-charts/policy-controller-0.10.5.tgz"
+          fi
           printf '%s  %s\n' a2cf167748f21a5a456d7070fcd6ab786c4f924b36a3aa497878e0c9b960bbab "$RUNNER_TEMP/enterprise-charts/argo-cd.tgz" | sha256sum -c -
           printf '%s  %s\n' d3a4ff76978290eca71f95125281c7c90b1f058a809574d39502a26143865bda "$RUNNER_TEMP/enterprise-charts/argo-rollouts.tgz" | sha256sum -c -
           printf '%s  %s\n' 90276dafe65cf5d4328ef8313baf6cfb9d130683e0c9f3c28a03b4d8a9ed8f6e "$RUNNER_TEMP/enterprise-charts/autoscaler.tgz" | sha256sum -c -
