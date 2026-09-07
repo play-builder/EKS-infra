@@ -10,14 +10,27 @@ cat >"$tmp_dir/bin/aws" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 case "$*" in
-  *"route53 get-hosted-zone"*) echo '{"DelegationSet":{"NameServers":["ns-1.example.invalid.","ns-2.example.invalid."]}}' ;;
+  *"--profile network"*) account_id=111111111111; account_role=network ;;
+  *"--profile dev"*) account_id=222222222222; account_role=dev ;;
+  *) printf 'unexpected aws profile: %s\n' "$*" >&2; exit 97 ;;
+esac
+case "$*" in
+  *"sts get-caller-identity"*) printf '{"Account":"%s"}\n' "$account_id" ;;
+  *"route53 list-hosted-zones-by-name"*"--dns-name example.invalid "*)
+    echo '{"HostedZones":[{"Id":"/hostedzone/ZAPEX","Name":"example.invalid.","Config":{"PrivateZone":false}}]}' ;;
+  *"route53 list-hosted-zones-by-name"*"--dns-name dev.example.invalid "*)
+    echo '{"HostedZones":[{"Id":"/hostedzone/ZDEV","Name":"dev.example.invalid.","Config":{"PrivateZone":false}}]}' ;;
+  *"route53 get-hosted-zone --id ZAPEX"*) echo '{"DelegationSet":{"NameServers":["ns-1.example.invalid.","ns-2.example.invalid."]}}' ;;
+  *"route53 get-hosted-zone --id ZDEV"*) echo '{"DelegationSet":{"NameServers":["ns-dev-1.example.invalid.","ns-dev-2.example.invalid."]}}' ;;
+  *"route53 list-resource-record-sets"*)
+    echo '{"ResourceRecordSets":[{"Name":"dev.example.invalid.","Type":"NS","ResourceRecords":[{"Value":"ns-dev-1.example.invalid."},{"Value":"ns-dev-2.example.invalid."}]}]}' ;;
   *"s3api get-bucket-tagging"*)
-    echo '{"TagSet":[{"Key":"ManagedBy","Value":"gitops-course"},{"Key":"Project","Value":"course"}]}' ;;
+    printf '{"TagSet":[{"Key":"ManagedBy","Value":"gitops-course"},{"Key":"Project","Value":"course"},{"Key":"Environment","Value":"%s"}]}\n' "$account_role" ;;
   *"s3api get-bucket-location"*) echo '{"LocationConstraint":"ap-northeast-2"}' ;;
   *"s3api get-bucket-versioning"*) echo '{"Status":"Enabled"}' ;;
   *"s3api get-bucket-encryption"*) echo '{"ServerSideEncryptionConfiguration":{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}}' ;;
   *"s3api get-public-access-block"*) echo '{"PublicAccessBlockConfiguration":{"BlockPublicAcls":true,"IgnorePublicAcls":true,"BlockPublicPolicy":true,"RestrictPublicBuckets":true}}' ;;
-  *"iam list-open-id-connect-providers"*) echo '{"OpenIDConnectProviderList":[{"Arn":"arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"}]}' ;;
+  *"iam list-open-id-connect-providers"*) printf '{"OpenIDConnectProviderList":[{"Arn":"arn:aws:iam::%s:oidc-provider/token.actions.githubusercontent.com"}]}\n' "$account_id" ;;
   *"iam get-open-id-connect-provider"*) echo '{"Url":"token.actions.githubusercontent.com","ClientIDList":["sts.amazonaws.com"]}' ;;
   *) printf 'unexpected aws invocation: %s\n' "$*" >&2; exit 97 ;;
 esac
@@ -26,8 +39,11 @@ EOF
 cat >"$tmp_dir/bin/dig" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-echo 'ns-1.example.invalid.'
-echo 'ns-2.example.invalid.'
+case "${!#}" in
+  example.invalid) printf '%s\n' ns-1.example.invalid. ns-2.example.invalid. ;;
+  dev.example.invalid) printf '%s\n' ns-dev-1.example.invalid. ns-dev-2.example.invalid. ;;
+  *) printf 'unexpected dig query: %s\n' "$*" >&2; exit 97 ;;
+esac
 EOF
 
 cat >"$tmp_dir/bin/gh" <<'EOF'
@@ -55,8 +71,8 @@ cat >"$database_file" <<'JSON'
 JSON
 
 base_env=(
-  AWS_PROFILE=course AWS_REGION=ap-northeast-2 STATE_BUCKET_NAME=state-bucket
-  LAB_PROJECT_NAME=course HOSTED_ZONE_ID=Z123 ROOT_DOMAIN=example.invalid
+  NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION=ap-northeast-2
+  LAB_PROJECT_NAME=course ROOT_DOMAIN=example.invalid
   INFRA_GH_REPO=owner/infra APP_GH_REPO=owner/app GITOPS_GH_REPO=owner/gitops
   COURSE_CHECK_BIN_DIR="$tmp_dir/bin"
 )
