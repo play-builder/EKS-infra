@@ -49,6 +49,20 @@ class Cleanup(unittest.TestCase):
         with self.assertRaises(ValueError):
             cleanup.discover({"ownerId": "fixture", "resources": []}, lambda *a: {})
 
+    def test_discovery_includes_canonical_and_legacy_identity(self):
+        calls = []
+        def query(*args):
+            calls.append(args)
+            return {"ResourceTagMappingList": []}
+        cleanup.discover({"ownerId": "fixture", "resources": []}, query)
+        self.assertEqual([c[3] for c in calls],
+                         ["Key=PlatformInstanceId,Values=fixture", "Key=OwnerId,Values=fixture"])
+        with self.assertRaisesRegex(ValueError, "OWNER_CONFLICT"):
+            cleanup.discover({"ownerId": "fixture", "resources": [{"id": "arn:db"}]},
+                             lambda *a: {"ResourceTagMappingList": [{"ResourceARN": "arn:db", "Tags": [
+                                 {"Key": "PlatformInstanceId", "Value": "fixture"},
+                                 {"Key": "OwnerId", "Value": "someone-else"}]}]})
+
     def test_actual_api_response_shapes(self):
         cases = [
             ("RdsInstance", "arn:aws:rds:us-east-1:123456789012:db:prod-db", {"DBInstances": [{"DBInstanceArn": "arn:aws:rds:us-east-1:123456789012:db:prod-db"}]}, ("rds", "describe-db-instances")),

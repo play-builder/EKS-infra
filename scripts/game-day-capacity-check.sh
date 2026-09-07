@@ -60,7 +60,7 @@ pb_assert_json "$profile" '
   ([.reserve[],.workload[],.rollout[],.billable[]] | all(type == "number" and . >= 0)) and
   .workload.replicas > 0 and .workload.podsPerReplica > 0 and
   now < (.expiresAt | fromdateiso8601)
-' 'invalid or expired Ch17 capacity profile'
+' 'invalid or expired capacity profile'
 
 subnet_ids=()
 while IFS= read -r subnet_id; do subnet_ids+=("$subnet_id"); done < <(jq -r '.subnetIds[]' "$profile")
@@ -167,7 +167,7 @@ payload=$(jq -n --arg grade "$grade" --arg context "$context" --arg observed "$o
 ')
 pb_write_json "$output" "$payload"
 if [[ "$grade" == "STATIC" ]]; then
-  [[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT Ch25 live capacity recheck is GO.'
+  [[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT game-day live capacity recheck is GO.'
 else
-  [[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [CLOUD_RUNTIME] Ch25 live capacity recheck is GO.'
+  [[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [CLOUD_RUNTIME] game-day live capacity recheck is GO.'
 fi

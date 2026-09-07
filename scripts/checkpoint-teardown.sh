@@ -95,4 +95,4 @@ payload=$(jq -n --argjson approval "$(jq -c . "$approval")" --argjson inventory 
   }
 ')
 pb_write_json "$output" "$payload"
-[[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [LOCAL_RUNTIME] checkpoint partial teardown completed; this is not Ch26 completion evidence.'
+[[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]] || echo 'PASS: [LOCAL_RUNTIME] checkpoint partial teardown completed; full cleanup completion requires final-cleanup.sh.'

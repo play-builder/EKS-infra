@@ -143,21 +143,21 @@ EOF
 chmod +x "$tmp_dir/bin/gh" "$tmp_dir/bin/aws" "$tmp_dir/bin/dig"
 
 for region in ap-northeast-2 us-east-1; do
-  aws_log="$tmp_dir/aws-ch02-$region.log"
+  aws_log="$tmp_dir/aws-foundation-$region.log"
   : >"$aws_log"
   PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$aws_log" \
-    NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION="$region" LAB_PROJECT_NAME=mini-commerce \
+    NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION="$region" PLATFORM_PROJECT_NAME=mini-commerce \
     ROOT_DOMAIN=example.com INFRA_GH_REPO=owner/EKS-infra \
     APP_GH_REPO=owner/mini-commerce GITOPS_GH_REPO=owner/argocd-gitops \
-    bash "$root/scripts/foundation-check.sh" >"$tmp_dir/ch02-$region.out"
-  [[ $(grep -Ec 'PASS: \[STATIC\]' "$tmp_dir/ch02-$region.out") -eq 1 ]]
+    bash "$root/scripts/foundation-check.sh" >"$tmp_dir/foundation-$region.out"
+  [[ $(grep -Ec 'PASS: \[STATIC\]' "$tmp_dir/foundation-$region.out") -eq 1 ]]
   # Per-account state buckets derive from the profile account ID, never from STATE_BUCKET_NAME.
-  grep -Fq 'STATE_BUCKET[network]=mini-commerce-tfstate-111111111111' "$tmp_dir/ch02-$region.out"
-  grep -Fq 'STATE_BUCKET[dev]=mini-commerce-tfstate-222222222222' "$tmp_dir/ch02-$region.out"
-  grep -Fq 'GITHUB_OIDC_ARN[network]=arn:aws:iam::111111111111:' "$tmp_dir/ch02-$region.out"
-  grep -Fq 'GITHUB_OIDC_ARN[dev]=arn:aws:iam::222222222222:' "$tmp_dir/ch02-$region.out"
-  grep -Fq 'IMMUTABLE_MAIN_SUB[owner/mini-commerce]=repo:owner@101/mini-commerce@202:ref:refs/heads/main' "$tmp_dir/ch02-$region.out"
-  grep -Fq 'IMMUTABLE_MAIN_SUB[owner/EKS-infra]=repo:owner@101/EKS-infra@202:ref:refs/heads/main' "$tmp_dir/ch02-$region.out"
+  grep -Fq 'STATE_BUCKET[network]=mini-commerce-tfstate-111111111111' "$tmp_dir/foundation-$region.out"
+  grep -Fq 'STATE_BUCKET[dev]=mini-commerce-tfstate-222222222222' "$tmp_dir/foundation-$region.out"
+  grep -Fq 'GITHUB_OIDC_ARN[network]=arn:aws:iam::111111111111:' "$tmp_dir/foundation-$region.out"
+  grep -Fq 'GITHUB_OIDC_ARN[dev]=arn:aws:iam::222222222222:' "$tmp_dir/foundation-$region.out"
+  grep -Fq 'IMMUTABLE_MAIN_SUB[owner/mini-commerce]=repo:owner@101/mini-commerce@202:ref:refs/heads/main' "$tmp_dir/foundation-$region.out"
+  grep -Fq 'IMMUTABLE_MAIN_SUB[owner/EKS-infra]=repo:owner@101/EKS-infra@202:ref:refs/heads/main' "$tmp_dir/foundation-$region.out"
   # 2 accounts x (sts + 5 bucket checks) + apex (lookup, zone) + child (lookup, zone, apex NS record) + 2 x (oidc list, get)
   [[ $(wc -l <"$aws_log" | tr -d ' ') -eq 21 ]]
   [[ $(grep -c -- '--profile network ' "$aws_log") -eq 11 ]]
@@ -173,12 +173,12 @@ for region in ap-northeast-2 us-east-1; do
 done
 
 # Every per-account comparison must be able to fail: each case flips one fake response or input.
-expect_ch02_fail() {
+expect_foundation_fail() {
   local label=$1 expected_text=$2 output status
   shift 2
   set +e
   output=$(env PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws-negative.log" \
-    NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION=ap-northeast-2 LAB_PROJECT_NAME=mini-commerce \
+    NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION=ap-northeast-2 PLATFORM_PROJECT_NAME=mini-commerce \
     ROOT_DOMAIN=example.com INFRA_GH_REPO=owner/EKS-infra APP_GH_REPO=owner/mini-commerce GITOPS_GH_REPO=owner/argocd-gitops \
     "$@" bash "$root/scripts/foundation-check.sh" 2>&1)
   status=$?
@@ -191,15 +191,15 @@ expect_ch02_fail() {
   ! grep -Fq 'PASS: [' <<<"$output"
 }
 
-expect_ch02_fail same-profile 'NETWORK_AWS_PROFILE과 DEV_AWS_PROFILE은 서로 다른 계정 profile이어야 합니다.' DEV_AWS_PROFILE=network
-expect_ch02_fail uppercase-root-domain 'ROOT_DOMAIN은 trailing dot이 없는 소문자 도메인이어야 합니다' ROOT_DOMAIN=Example.com
-expect_ch02_fail trailing-dot-root-domain 'ROOT_DOMAIN은 trailing dot이 없는 소문자 도메인이어야 합니다' ROOT_DOMAIN=example.com.
-expect_ch02_fail bucket-environment-mismatch 'state bucket ownership tag가 일치하지 않습니다(account=dev)' PLATFORM_FAKE_CASE=bucket-environment-mismatch
-expect_ch02_fail public-apex-mismatch 'Route 53 지정 nameserver와 public DNS 응답이 다릅니다.' PLATFORM_FAKE_CASE=public-apex-mismatch
-expect_ch02_fail delegation-missing 'NS 위임 record가 없습니다' PLATFORM_FAKE_CASE=delegation-missing
-expect_ch02_fail delegation-mismatch 'NS 위임 record가 child zone nameserver와 다릅니다.' PLATFORM_FAKE_CASE=delegation-mismatch
-expect_ch02_fail public-child-mismatch 'child zone nameserver와 public DNS dev.example.com NS 응답이 다릅니다.' PLATFORM_FAKE_CASE=public-child-mismatch
-expect_ch02_fail dig-failure 'public DNS dev.example.com NS 조회에 실패했습니다(dig exit=9).' PLATFORM_FAKE_CASE=dig-failure
-expect_ch02_fail duplicate-dev-oidc 'GitHub OIDC provider는 dev 계정에 정확히 1개여야 합니다(found=2).' PLATFORM_FAKE_CASE=duplicate-dev-oidc
+expect_foundation_fail same-profile 'NETWORK_AWS_PROFILE과 DEV_AWS_PROFILE은 서로 다른 계정 profile이어야 합니다.' DEV_AWS_PROFILE=network
+expect_foundation_fail uppercase-root-domain 'ROOT_DOMAIN은 trailing dot이 없는 소문자 도메인이어야 합니다' ROOT_DOMAIN=Example.com
+expect_foundation_fail trailing-dot-root-domain 'ROOT_DOMAIN은 trailing dot이 없는 소문자 도메인이어야 합니다' ROOT_DOMAIN=example.com.
+expect_foundation_fail bucket-environment-mismatch 'state bucket ownership tag가 일치하지 않습니다(account=dev)' PLATFORM_FAKE_CASE=bucket-environment-mismatch
+expect_foundation_fail public-apex-mismatch 'Route 53 지정 nameserver와 public DNS 응답이 다릅니다.' PLATFORM_FAKE_CASE=public-apex-mismatch
+expect_foundation_fail delegation-missing 'NS 위임 record가 없습니다' PLATFORM_FAKE_CASE=delegation-missing
+expect_foundation_fail delegation-mismatch 'NS 위임 record가 child zone nameserver와 다릅니다.' PLATFORM_FAKE_CASE=delegation-mismatch
+expect_foundation_fail public-child-mismatch 'child zone nameserver와 public DNS dev.example.com NS 응답이 다릅니다.' PLATFORM_FAKE_CASE=public-child-mismatch
+expect_foundation_fail dig-failure 'public DNS dev.example.com NS 조회에 실패했습니다(dig exit=9).' PLATFORM_FAKE_CASE=dig-failure
+expect_foundation_fail duplicate-dev-oidc 'GitHub OIDC provider는 dev 계정에 정확히 1개여야 합니다(found=2).' PLATFORM_FAKE_CASE=duplicate-dev-oidc
 
 echo 'PASS: foundation state, DNS delegation and immutable OIDC boundaries'

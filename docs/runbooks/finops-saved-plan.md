@@ -19,7 +19,7 @@ FinOps gate는 기존 billing 설정이 승인한 계약과 일치하는지 확�
 | `FINOPS_BILLING_ROLE_ARN` | management-account의 기존 read-only monitoring role ARN |
 | `FINOPS_BILLING_PROFILE` | local operator만 role 대신 사용할 명시 profile; 둘 중 정확히 하나 |
 
-GitHub workflow는 `vars.FINOPS_CONTRACT_PATH`, `vars.FINOPS_CONTRACT_SHA256`, `vars.PLATFORM_INSTANCE_ID`, `vars.FINOPS_BILLING_MONITOR_ROLE_ARN`을 사용한다. plan은 repository vars, apply는 protected `production` environment의 유효 vars를 사용하므로 의도한 동일 계약을 설정해야 한다. role ARN을 dispatch 입력으로 받지 않는다. workload credential은 기존 `TERRAFORM_PLAN_ROLE_ARN`/`TERRAFORM_APPLY_ROLE_ARN` secrets로만 구성한다.
+GitHub workflow는 `vars.FINOPS_CONTRACT_PATH`, `vars.FINOPS_CONTRACT_SHA256`, `vars.PLATFORM_INSTANCE_ID`, `vars.FINOPS_BILLING_MONITOR_ROLE_ARN`을 사용한다. plan과 apply는 선택 root의 계정별 environment (`production-plan`/`production`, `recovery-plan`/`recovery`) vars를 사용하므로 의도한 동일 계약을 설정해야 한다. role ARN을 dispatch 입력으로 받지 않는다. workload credential은 기존 `TERRAFORM_PLAN_ROLE_ARN`/`TERRAFORM_APPLY_ROLE_ARN` secrets로만 구성한다.
 
 management monitoring role은 operator가 미리 준비해야 한다. workload plan/apply identity에 정확한 monitoring role의 `sts:AssumeRole` 허용이 필요하고, management role trust에도 그 두 실제 role만 명시해야 한다. IAM root의 optional `billing_monitor_role_arn`은 그 root가 관리하는 workload role에 한정된 권한이며, 별도로 관리하는 plan/apply role의 policy/trust를 자동 생성하지 않는다. management 권한은 기존 collector에 필요한 Organizations membership, Budgets, CE, SNS 및 조건부 KMS read API로 제한한다. provision/apply/delete 권한을 monitoring role에 추가하지 않는다.
 

@@ -187,12 +187,6 @@ variable "enable_amp" {
   default     = true
 }
 
-variable "amp_retention_days" {
-  description = "AMP metrics retention in days"
-  type        = number
-  default     = 90
-}
-
 # Amazon Managed Grafana
 variable "enable_amg" {
   description = "Enable Amazon Managed Grafana"

@@ -52,3 +52,11 @@ run "five_log_names_and_flow_group_share_owned_key" {
     error_message = "Network must precompute all five names and encrypt Flow Logs with its owned key."
   }
 }
+
+run "cleanup_identity_is_published" {
+  command = plan
+  assert {
+    condition     = output.logging_contract.platform_tags.OwnerId == var.platform_instance_id && output.logging_contract.platform_tags.PlatformInstanceId == var.platform_instance_id
+    error_message = "Cleanup OwnerId and billing PlatformInstanceId must identify the same platform."
+  }
+}

@@ -10,3 +10,29 @@ infra_repository_id   = "0"
 
 oidc_provider_mode         = "create"
 external_oidc_provider_arn = null
+
+# No CI permissions by default. The legacy infra role is retired with DenyAll.
+# Security/identity owners provision 3 separate roles, customer-managed boundaries and exact state/service policies.
+# Supply a role mapping only after reviewing those policies; never reuse one apply role for plan/drift.
+enable_external_ci_roles = false
+external_ci_roles        = {}
+# external_ci_roles = {
+#   plan = {
+#     role_arn                           = "arn:aws:iam::<DEV_ACCOUNT_ID>:role/<REVIEWED_PLAN_ROLE>"
+#     permissions_boundary_arn           = "arn:aws:iam::<DEV_ACCOUNT_ID>:policy/<REVIEWED_PLAN_BOUNDARY>"
+#     permissions_boundary_policy_sha256 = "<SHA256_OF_CANONICAL_POLICY_JSON>"
+#   }
+#   apply = {
+#     role_arn                           = "arn:aws:iam::<DEV_ACCOUNT_ID>:role/<REVIEWED_APPLY_ROLE>"
+#     permissions_boundary_arn           = "arn:aws:iam::<DEV_ACCOUNT_ID>:policy/<REVIEWED_APPLY_BOUNDARY>"
+#     permissions_boundary_policy_sha256 = "<SHA256_OF_CANONICAL_POLICY_JSON>"
+#   }
+#   drift = {
+#     role_arn                           = "arn:aws:iam::<DEV_ACCOUNT_ID>:role/<REVIEWED_DRIFT_ROLE>"
+#     permissions_boundary_arn           = "arn:aws:iam::<DEV_ACCOUNT_ID>:policy/<REVIEWED_DRIFT_BOUNDARY>"
+#     permissions_boundary_policy_sha256 = "<SHA256_OF_CANONICAL_POLICY_JSON>"
+#   }
+# }
+# environment=dev -> dev-plan / dev / dev-drift
+# environment=prod -> production-plan / production / production-drift
+# environment=recovery -> recovery-plan / recovery / recovery-drift

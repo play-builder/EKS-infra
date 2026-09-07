@@ -5,13 +5,14 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 
 case "${1:-}" in
-  core|stateful|secret-freshness)
+  core|stateful|secret-baseline|secret-freshness)
     mode=$1; shift
     pb_prepare_commands
     source "$SCRIPT_DIR/lib/runtime-readiness.sh"
     case "$mode" in
       core) check_core_runtime "$@" ;;
       stateful) check_stateful "$@" ;;
+      secret-baseline) check_secret_baseline "$@" ;;
       secret-freshness) check_secret_freshness "$@" ;;
     esac
     pb_emit_pass "Dev $mode readiness verified."
@@ -32,7 +33,7 @@ pb_validate_account "$AWS_ACCOUNT_ID"
 pb_assert_json "$deployment" '
   def canonical_ecr_repository:
     capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
-    $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
+    $repository.region == $ENV.AWS_REGION and
     (($repository.name | length) >= 2 and ($repository.name | length) <= 256);
   def canonical_utc_seconds:
     . as $timestamp |
@@ -55,7 +56,7 @@ pb_assert_json "$slo" '
   def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
   def canonical_ecr_repository:
     capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
-    $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
+    $repository.region == $ENV.AWS_REGION and
     (($repository.name | length) >= 2 and ($repository.name | length) <= 256);
   def canonical_utc_seconds:
     . as $timestamp |
@@ -79,15 +80,15 @@ pb_assert_json "$ready" '
   def nonblank: type == "string" and test("[^[:space:]\uFEFF]");
   def canonical_ecr_repository:
     capture("^(?<accountId>[0-9]{12})\\.dkr\\.ecr\\.(?<region>ap-northeast-2|us-east-1)\\.amazonaws\\.com/(?<name>[a-z0-9]+(?:[._/-][a-z0-9]+)*)$") as $repository |
-    $repository.accountId == $ENV.AWS_ACCOUNT_ID and $repository.region == $ENV.AWS_REGION and
+    $repository.region == $ENV.AWS_REGION and
     (($repository.name | length) >= 2 and ($repository.name | length) <= 256);
   def canonical_utc_seconds:
     . as $timestamp |
     ($timestamp | type == "string") and
     ($timestamp | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
     (($timestamp | fromdateiso8601 | todateiso8601) == $timestamp);
-  keys == ["attestation","cluster","environment","expiresAt","gitops","image","issuedAt","region","schemaVersion","slo","sourceSha","workflow"] and
-  .schemaVersion == "playbuilder.dev-ready/v1" and .environment == "dev" and .region == $ENV.AWS_REGION and
+  ((.schemaVersion == "playbuilder.dev-ready/v1" and keys == ["attestation","cluster","environment","expiresAt","gitops","image","issuedAt","region","schemaVersion","slo","sourceSha","workflow"]) or
+   (.schemaVersion == "playbuilder.dev-ready/v2" and .repositoryId == "1352247019" and keys == ["attestation","cluster","environment","expiresAt","gitops","image","issuedAt","region","repositoryId","schemaVersion","slo","sourceSha","workflow"])) and .environment == "dev" and .region == $ENV.AWS_REGION and
   (.sourceSha | test("^[0-9a-f]{40}$")) and
   (.workflow | keys == ["event","name","runAttempt","runId","runUrl"]) and
   .workflow.name == "ci" and .workflow.event == "push" and

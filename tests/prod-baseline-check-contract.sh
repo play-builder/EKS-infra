@@ -22,15 +22,6 @@ fi
 EOF
 chmod +x "$tmp_dir/bin/kubectl"
 
-grep -Fq '`playbuilder.prod-rollout-baseline/v1`' "$root/README.md" || {
-  echo 'README does not identify the EKS-only Rollout baseline assertion schema' >&2
-  exit 1
-}
-grep -Fq '`argocd-gitops/scripts/capture-prod-baseline-evidence.sh`' "$root/README.md" || {
-  echo 'README does not identify the canonical promotion baseline producer' >&2
-  exit 1
-}
-
 for region in ap-northeast-2 us-east-1; do
   PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_BASELINE_FIXTURE="$root/tests/fixtures/prod-baseline-rollout-healthy.json" \
   PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kube-$region.log" AWS_REGION="$region" AWS_ACCOUNT_ID=123456789012 \

@@ -67,3 +67,11 @@ run "production_identity_tags_are_forwarded" {
     error_message = "Production network must publish its selected ownership identity."
   }
 }
+
+run "cleanup_identity_is_published" {
+  command = plan
+  assert {
+    condition     = output.logging_contract.platform_tags.OwnerId == var.platform_instance_id && output.logging_contract.platform_tags.PlatformInstanceId == var.platform_instance_id
+    error_message = "Cleanup OwnerId and billing PlatformInstanceId must identify the same platform."
+  }
+}

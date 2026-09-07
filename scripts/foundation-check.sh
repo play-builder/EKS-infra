@@ -56,9 +56,9 @@ check_state_bucket() {
 check_account_state_bucket() {
   local account_role=$1 profile=$2 account_id bucket
   account_id=$(account_id_for_profile "$profile")
-  bucket="${LAB_PROJECT_NAME}-tfstate-${account_id}"
+  bucket="${PLATFORM_PROJECT_NAME}-tfstate-${account_id}"
   printf 'STATE_BUCKET[%s]=%s account_id=%s\n' "$account_role" "$bucket" "$account_id"
-  check_state_bucket "$profile" "$AWS_REGION" "$bucket" "$LAB_PROJECT_NAME" "$account_role"
+  check_state_bucket "$profile" "$AWS_REGION" "$bucket" "$PLATFORM_PROJECT_NAME" "$account_role"
 }
 
 find_public_hosted_zone() {
@@ -217,7 +217,7 @@ check_foundation() {
   for command in aws dig gh git jq awk sort tr; do
     pb_require_command "$command"
   done
-  for name in AWS_REGION LAB_PROJECT_NAME NETWORK_AWS_PROFILE DEV_AWS_PROFILE ROOT_DOMAIN INFRA_GH_REPO APP_GH_REPO GITOPS_GH_REPO; do
+  for name in AWS_REGION PLATFORM_PROJECT_NAME NETWORK_AWS_PROFILE DEV_AWS_PROFILE ROOT_DOMAIN INFRA_GH_REPO APP_GH_REPO GITOPS_GH_REPO; do
     pb_require_environment "$name"
   done
   pb_validate_region "$AWS_REGION"

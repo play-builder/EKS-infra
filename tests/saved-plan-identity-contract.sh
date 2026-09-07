@@ -26,7 +26,7 @@ make_artifact() {
 
   jq -n --arg request "$request_identity" --arg run "$run_id" --arg approver "$approval_identity" '
     {schemaVersion:"platform.saved-plan-approval/v1",source:"github-actions-review-history",
-     environment:"production",state:"approved",runId:$run,requestIdentity:$request,
+     environment:"dev",state:"approved",runId:$run,requestIdentity:$request,
      approvalIdentity:$approver}' >"$artifact/approval-evidence.json"
 
   local plan_sha plan_json_sha binary_sha lock_sha approval_sha version
@@ -72,6 +72,14 @@ expect_failure() {
 
 make_artifact "$tmp_dir/valid"
 verify "$tmp_dir/valid" >/dev/null
+# Approval from another account lane cannot authorize a Dev plan, even if rehashed.
+cp -R "$tmp_dir/valid" "$tmp_dir/wrong-environment"
+jq '.environment="production"' "$tmp_dir/wrong-environment/approval-evidence.json" > "$tmp_dir/wrong-environment/new"
+mv "$tmp_dir/wrong-environment/new" "$tmp_dir/wrong-environment/approval-evidence.json"
+approval_digest=$(shasum -a 256 "$tmp_dir/wrong-environment/approval-evidence.json" | awk '{print $1}')
+jq --arg digest "sha256:$approval_digest" '.approvalEvidenceSha256=$digest' "$tmp_dir/wrong-environment/plan-identity.json" > "$tmp_dir/wrong-environment/new"
+mv "$tmp_dir/wrong-environment/new" "$tmp_dir/wrong-environment/plan-identity.json"
+expect_failure SAVED_PLAN_APPROVAL_EVIDENCE_INVALID "$tmp_dir/wrong-environment"
 
 cp -R "$tmp_dir/valid" "$tmp_dir/pending"
 jq '.approvalIdentity="pending"' "$tmp_dir/pending/plan-identity.json" >"$tmp_dir/pending/new"
@@ -110,7 +118,7 @@ expect_failure SAVED_PLAN_OPERATION_MISMATCH "$tmp_dir/destroy" apply
 verify "$tmp_dir/destroy" destroy >/dev/null
 
 cat >"$tmp_dir/history-approved.json" <<'JSON'
-[{"state":"approved","environments":[{"name":"production"}],"user":{"login":"platform-approver"}}]
+[{"state":"approved","environments":[{"name":"dev"}],"user":{"login":"platform-approver"}}]
 JSON
 make_artifact "$tmp_dir/bind"
 jq '.approvalIdentity=null | .approvalRunId=null | .approvalEvidenceSha256=null' \
@@ -118,7 +126,7 @@ jq '.approvalIdentity=null | .approvalRunId=null | .approvalEvidenceSha256=null'
 mv "$tmp_dir/bind/new" "$tmp_dir/bind/plan-identity.json"
 rm "$tmp_dir/bind/approval-evidence.json"
 bash "$root/scripts/bind-saved-plan-approval.sh" "$tmp_dir/bind" "$tmp_dir/history-approved.json" \
-  production "$request_identity" "$run_id"
+  dev "$request_identity" "$run_id"
 verify "$tmp_dir/bind" >/dev/null
 
 # A different rerun actor must not rewrite the original requester or make the
@@ -126,7 +134,7 @@ verify "$tmp_dir/bind" >/dev/null
 cp -R "$tmp_dir/bind" "$tmp_dir/bind-mismatch"
 set +e
 output=$(bash "$root/scripts/bind-saved-plan-approval.sh" "$tmp_dir/bind-mismatch" \
-  "$tmp_dir/history-approved.json" production different-requester "$run_id" 2>&1)
+  "$tmp_dir/history-approved.json" dev different-requester "$run_id" 2>&1)
 bind_status=$?
 verify_output=$(request_identity=different-requester verify "$tmp_dir/bind-mismatch" 2>&1)
 verify_status=$?
@@ -141,15 +149,15 @@ verify "$tmp_dir/bind-mismatch" >/dev/null
 
 for invalid in pending blank self; do
   case "$invalid" in
-    pending) history='[{"state":"pending","environments":[{"name":"production"}],"user":{"login":"platform-approver"}}]' ;;
-    blank) history='[{"state":"approved","environments":[{"name":"production"}],"user":{"login":""}}]' ;;
-    self) history='[{"state":"approved","environments":[{"name":"production"}],"user":{"login":"release-requester"}}]' ;;
+    pending) history='[{"state":"pending","environments":[{"name":"dev"}],"user":{"login":"platform-approver"}}]' ;;
+    blank) history='[{"state":"approved","environments":[{"name":"dev"}],"user":{"login":""}}]' ;;
+    self) history='[{"state":"approved","environments":[{"name":"dev"}],"user":{"login":"release-requester"}}]' ;;
   esac
   printf '%s\n' "$history" >"$tmp_dir/history-$invalid.json"
   cp -R "$tmp_dir/bind" "$tmp_dir/bind-$invalid"
   set +e
   output=$(bash "$root/scripts/bind-saved-plan-approval.sh" "$tmp_dir/bind-$invalid" \
-    "$tmp_dir/history-$invalid.json" production "$request_identity" "$run_id" 2>&1)
+    "$tmp_dir/history-$invalid.json" dev "$request_identity" "$run_id" 2>&1)
   status=$?
   set -e
   [[ "$status" -ne 0 && "$output" == *SAVED_PLAN_APPROVAL_HISTORY_INVALID* ]]

@@ -35,13 +35,46 @@ run_valid() {
     bash "$root/scripts/cleanup-preflight.sh" --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
       --inventory-output "$tmp_dir/inventory.json" --retain-template "$tmp_dir/retain-template.json" \
-      --preflight-output "$tmp_dir/preflight.json"
+      --preflight-output "$tmp_dir/preflight.json" || return $?
   jq -e '.evidenceGrade == "STATIC" and (.resources | length == 7)' "$tmp_dir/inventory.json" >/dev/null
   jq -e '.evidenceGrade == "LOCAL_RUNTIME" and .status == "PENDING"' "$tmp_dir/retain-template.json" >/dev/null
   jq -e '.evidenceGrade == "STATIC" and .status == "PASS"' "$tmp_dir/preflight.json" >/dev/null
   pb_assert_file_mode "$tmp_dir/inventory.json" 600
 }
 run_valid
+
+# The canonical platform marker works without the legacy alias. Conflicting
+# identities must still stop teardown before any plan can be accepted.
+python3 - "$tmp_dir/plan-json" <<'PY'
+import json
+import pathlib
+import sys
+for path in pathlib.Path(sys.argv[1]).glob('*.json'):
+    plan = json.loads(path.read_text())
+    for resource in plan.get('resource_changes', []):
+        tags = (resource.get('change', {}).get('before') or {}).get('tags_all', {})
+        if 'OwnerId' in tags:
+            tags['PlatformInstanceId'] = tags.pop('OwnerId')
+    path.write_text(json.dumps(plan))
+PY
+run_valid
+python3 - "$tmp_dir/plan-json" <<'PY'
+import json
+import pathlib
+import sys
+for path in pathlib.Path(sys.argv[1]).glob('*.json'):
+    plan = json.loads(path.read_text())
+    for resource in plan.get('resource_changes', []):
+        tags = (resource.get('change', {}).get('before') or {}).get('tags_all', {})
+        if 'PlatformInstanceId' in tags:
+            tags['OwnerId'] = 'different-platform'
+    path.write_text(json.dumps(plan))
+PY
+if run_valid >"$tmp_dir/conflicting-owner.log" 2>&1; then
+  echo 'cleanup preflight accepted conflicting platform ownership markers' >&2
+  exit 1
+fi
+prepare_realistic_destroy_plan_jsons "$tmp_dir/plan-json"
 
 whitespace_inventory="$tmp_dir/ownership-whitespace.json"
 jq '.resources[0].classification=" "' \

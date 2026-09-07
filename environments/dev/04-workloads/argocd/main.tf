@@ -22,6 +22,7 @@ data "terraform_remote_state" "platform" {
 
 locals {
   workload_ownership = {
+    OwnerId     = var.tags["PlatformInstanceId"]
     AccountId   = data.aws_caller_identity.current.account_id
     Region      = var.aws_region
     Project     = var.project_name

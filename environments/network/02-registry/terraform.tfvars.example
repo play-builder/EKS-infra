@@ -13,3 +13,17 @@ oidc_provider_mode         = "create"
 external_oidc_provider_arn = null
 
 ecr_keep_last_images = 30
+
+# Optional publisher. These GitHub IDs were verified from public metadata on 2026-09-08.
+# Forks must replace all four GitHub identity fields; AWS account/region come from the operator.
+# platform_image_publisher = {
+#   github_owner        = "play-builder"
+#   github_owner_id     = "42942042"
+#   repository_name     = "EKS-infra"
+#   repository_id       = "405337777"
+#   ecr_repository_name = "mini-commerce-platform-istio-proxy"
+# }
+
+# External is the default: this root makes no registry-wide scanning changes.
+# See docs/runbooks/platform-image-publishing.md before importing this account/region singleton.
+registry_scanning = { ownership_mode = "external" }

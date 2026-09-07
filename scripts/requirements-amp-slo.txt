@@ -7,3 +7,6 @@ s3transfer==0.16.1
 python-dateutil==2.9.0.post0
 urllib3==2.7.0
 six==1.17.0
+
+# Dev runtime collector parses the nested AMP rule/Alertmanager YAML blobs.
+PyYAML==6.0.3

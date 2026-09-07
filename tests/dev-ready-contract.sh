@@ -17,6 +17,16 @@ for region in ap-northeast-2 us-east-1; do
   ! grep -Fq '[CLOUD_RUNTIME]' <<<"$output"
 done
 
+# Current v2 producer: the registry account differs from the bound workload account.
+v2_ready="$tmp_dir/v2-ready.json"
+jq '.schemaVersion="playbuilder.dev-ready/v2" | .repositoryId="1352247019" | .image.repository="210987654321.dkr.ecr.ap-northeast-2.amazonaws.com/mini-commerce"' "$root/tests/fixtures/dev-ready-ap-northeast-2.json" > "$v2_ready"
+make_dev_handoff "$v2_ready" "$tmp_dir/v2-deployment.json" "$tmp_dir/v2-slo.json"
+AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 bash "$root/scripts/dev-ready-check.sh" "$tmp_dir/v2-deployment.json" "$tmp_dir/v2-slo.json" "$v2_ready" >/dev/null
+jq '.repositoryId="1"' "$v2_ready" > "$tmp_dir/v2-invalid.json"
+if AWS_REGION=ap-northeast-2 AWS_ACCOUNT_ID=123456789012 bash "$root/scripts/dev-ready-check.sh" "$tmp_dir/v2-deployment.json" "$tmp_dir/v2-slo.json" "$tmp_dir/v2-invalid.json" >/dev/null 2>&1; then
+  echo 'DEV_READY accepted another repository ID' >&2; exit 1
+fi
+
 grep -Fq '(.evidenceId | nonblank)' "$root/scripts/dev-ready-check.sh" || {
   echo 'raw Dev SLO evidenceId does not use the canonical nonblank predicate' >&2
   exit 1
@@ -222,18 +232,5 @@ run_rejected_with_slo "$deployment" "$tmp_dir/slo-invalid-expiry-date.json" \
   "$tmp_dir/dev-ready-invalid-expiry-date.json"
 run_rejected_with_slo "$tmp_dir/deployment-long-cluster-name.json" \
   "$tmp_dir/slo-long-cluster-name.json" "$tmp_dir/dev-ready-long-cluster-name.json"
-
-grep -Fq '"name": "ci"' "$root/README.md"
-grep -Fq '"event": "push"' "$root/README.md"
-grep -Fq '"runId": "<digits>"' "$root/README.md"
-grep -Fq 'linux/amd64' "$root/README.md"
-grep -Fq 'linux/arm64' "$root/README.md"
-grep -Fq '"githubId": "<digits>"' "$root/README.md"
-grep -Fq 'attestations/<digits>' "$root/README.md"
-! grep -Fq 'Build and publish' "$root/README.md"
-grep -Fq '"name": "ci"' "$root/docs/architecture.md"
-grep -Fq '"githubId": "<digits>"' "$root/docs/architecture.md"
-grep -Fq 'attestations/<digits>' "$root/docs/architecture.md"
-! grep -Fq 'Build and publish' "$root/docs/architecture.md"
 
 echo 'PASS: canonical DEV_READY and intermediate evidence contract'

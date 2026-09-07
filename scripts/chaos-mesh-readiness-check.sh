@@ -20,7 +20,7 @@ IFS=',' read -r -a allowed <<<"$allowed_csv_input"
 [[ -n "$context" && "$namespace" == "chaos-mesh" ]] || pb_fail 'invalid Chaos Mesh context or namespace' 64
 [[ "$owner_id" =~ ^[a-z0-9][a-z0-9-]{7,62}$ ]] || pb_fail 'invalid OwnerId' 64
 [[ "$max_duration" =~ ^[0-9]+$ && "$max_duration" -ge 1 && "$max_duration" -le 300 ]] || pb_fail 'max fault duration must be 1..300 seconds' 64
-[[ "$max_faults" == 1 ]] || pb_fail 'Ch25 permits exactly one fault' 64
+[[ "$max_faults" == 1 ]] || pb_fail 'A bounded fault exercise permits exactly one fault' 64
 ((${#allowed[@]} > 0)) || pb_fail 'at least one allowed application namespace is required' 64
 for app_namespace in "${allowed[@]}"; do
   [[ "$app_namespace" =~ ^app-[a-z0-9-]+$ && "$app_namespace" != app-prod ]] || pb_fail 'only non-prod app namespaces may be fault targets' 64

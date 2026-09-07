@@ -111,4 +111,4 @@ if [[ "$status" -eq 0 || -e "$tmp_dir/rejected.json" ]]; then
   exit 1
 fi
 
-echo 'PASS: Ch25 game-day capacity collector contract'
+echo 'PASS: Bounded game-day capacity collector contract'

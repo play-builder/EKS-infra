@@ -1,67 +1,78 @@
-# dev account: GitHub OIDC provider and the role GitHub Actions assumes to run Terraform for this account.
-# Local operators apply dev roots directly; this role is used by the reviewed CI apply workflow.
-
+# Bootstrap is operator-managed. CI never owns its own IAM roles, OIDC provider or boundary.
+# Provisioning permissions belong to the external identity/security owner, not a generic PowerUser policy.
 provider "aws" {
   region = var.aws_region
-
   default_tags {
-    tags = {
-      Project   = var.project_name
-      ManagedBy = "Terraform"
-    }
+    tags = { Project = var.project_name, ManagedBy = "Terraform" }
   }
 }
 
 data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
 
 locals {
   github_issuer      = "token.actions.githubusercontent.com"
-  infra_main_subject = "repo:${var.github_owner}@${var.github_owner_id}/${var.infra_repository_name}@${var.infra_repository_id}:ref:refs/heads/main"
+  repository_subject = "repo:${var.github_owner}@${var.github_owner_id}/${var.infra_repository_name}@${var.infra_repository_id}"
+  infra_main_subject = "${local.repository_subject}:ref:refs/heads/main"
+  github_environment = var.environment == "prod" ? "production" : var.environment
+  ci_environments = {
+    plan  = "${local.github_environment}-plan"
+    apply = local.github_environment
+    drift = "${local.github_environment}-drift"
+  }
+  ci_subjects        = { for purpose, name in local.ci_environments : purpose => "${local.repository_subject}:environment:${name}" }
   oidc_provider_arn  = var.oidc_provider_mode == "create" ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.external[0].arn
-  state_bucket_arn   = "arn:aws:s3:::${var.state_bucket_name}"
-  state_keys = [
+  account_arn_prefix = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}"
+  legacy_role_arn    = "${local.account_arn_prefix}:role/${var.project_name}-github-${var.environment}-infra"
+  state_bucket_arn   = "arn:${data.aws_partition.current.partition}:s3:::${var.state_bucket_name}"
+  state_keys = var.environment == "recovery" ? ["recovery/03-database/terraform.tfstate"] : concat([
     "${var.environment}/01-network/terraform.tfstate",
     "${var.environment}/02-eks/terraform.tfstate",
     "${var.environment}/03-platform/terraform.tfstate",
     "${var.environment}/04-workloads/argocd/terraform.tfstate",
-  ]
+  ], var.environment == "prod" ? ["prod/03-database/terraform.tfstate"] : [])
   state_object_arns = [for key in local.state_keys : "${local.state_bucket_arn}/${key}"]
   lock_object_arns  = [for key in local.state_keys : "${local.state_bucket_arn}/${key}.tflock"]
+  protected_identity_arns = distinct(concat(
+    [local.legacy_role_arn, local.oidc_provider_arn],
+    [for role in var.external_ci_roles : role.role_arn],
+    [for role in var.external_ci_roles : role.permissions_boundary_arn],
+  ))
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
   count          = var.oidc_provider_mode == "create" ? 1 : 0
   url            = "https://${local.github_issuer}"
   client_id_list = ["sts.amazonaws.com"]
-
-  tags = { Name = "github-actions-oidc" }
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  tags           = { Name = "github-actions-oidc" }
+  lifecycle { prevent_destroy = true }
 }
 
 data "aws_iam_openid_connect_provider" "external" {
   count = var.oidc_provider_mode == "external" ? 1 : 0
   arn   = var.external_oidc_provider_arn
+  lifecycle {
+    postcondition {
+      condition = (
+        self.arn == "${local.account_arn_prefix}:oidc-provider/${local.github_issuer}" &&
+        trimsuffix(trimprefix(self.url, "https://"), "/") == local.github_issuer &&
+        contains(self.client_id_list, "sts.amazonaws.com")
+      )
+      error_message = "External OIDC must be the current account's GitHub issuer with sts.amazonaws.com audience."
+    }
+  }
 }
 
+# Preserve the old address/name for a reviewed in-place retirement. No implicit IAM deletion or state removal.
+# Deny new sessions and all operations, including old sessions once IAM propagates the inline policy.
 data "aws_iam_policy_document" "infra_trust" {
   statement {
-    effect  = "Allow"
+    effect  = "Deny"
     actions = ["sts:AssumeRoleWithWebIdentity"]
-
     principals {
       type        = "Federated"
       identifiers = [local.oidc_provider_arn]
     }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${local.github_issuer}:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-
     condition {
       test     = "StringEquals"
       variable = "${local.github_issuer}:sub"
@@ -72,67 +83,17 @@ data "aws_iam_policy_document" "infra_trust" {
 
 resource "aws_iam_role" "infra" {
   name                 = "${var.project_name}-github-${var.environment}-infra"
+  description          = "RETIRED: use externally owned purpose-specific CI roles; all API access is denied."
   assume_role_policy   = data.aws_iam_policy_document.infra_trust.json
   max_session_duration = 3600
 }
 
-# Broad service access without IAM/account administration...
-resource "aws_iam_role_policy_attachment" "power_user" {
-  role       = aws_iam_role.infra.name
-  policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
-}
-
-# ...plus the IAM scope Terraform needs for roles it creates, and state access limited to this account's keys.
-# The dev roots name their IAM resources "<environment>-<project>-*" (environments/dev/*/main.tf local.name) and
-# 02-eks creates the cluster's own IAM OIDC provider, so both patterns are in scope next to "<project>-*".
 data "aws_iam_policy_document" "infra_extra" {
   statement {
-    sid    = "ManageProjectRoles"
-    effect = "Allow"
-    actions = [
-      "iam:AttachRolePolicy", "iam:CreateInstanceProfile", "iam:CreatePolicy", "iam:CreatePolicyVersion",
-      "iam:CreateRole", "iam:CreateServiceLinkedRole", "iam:DeleteInstanceProfile", "iam:DeletePolicy",
-      "iam:DeletePolicyVersion", "iam:DeleteRole", "iam:DeleteRolePolicy", "iam:DetachRolePolicy",
-      "iam:GetInstanceProfile", "iam:GetOpenIDConnectProvider", "iam:GetPolicy", "iam:GetPolicyVersion",
-      "iam:GetRole", "iam:GetRolePolicy", "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole",
-      "iam:ListPolicyVersions", "iam:ListRolePolicies", "iam:PassRole", "iam:PutRolePolicy",
-      "iam:TagPolicy", "iam:TagRole", "iam:UntagPolicy", "iam:UntagRole", "iam:UpdateAssumeRolePolicy",
-      "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile",
-      "iam:CreateOpenIDConnectProvider", "iam:DeleteOpenIDConnectProvider",
-      "iam:TagOpenIDConnectProvider", "iam:UntagOpenIDConnectProvider",
-    ]
-    resources = [
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.project_name}-*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/${var.project_name}-*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.environment}-${var.project_name}-*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.environment}-${var.project_name}-*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/${var.environment}-${var.project_name}-*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/*",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.github_issuer}",
-      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/oidc.eks.${var.aws_region}.amazonaws.com/id/*",
-    ]
-  }
-
-  statement {
-    sid       = "ListStateBucket"
-    effect    = "Allow"
-    actions   = ["s3:ListBucket", "s3:GetBucketVersioning"]
-    resources = [local.state_bucket_arn]
-  }
-
-  statement {
-    sid       = "ReadWriteStateObjects"
-    effect    = "Allow"
-    actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = local.state_object_arns
-  }
-
-  statement {
-    sid       = "ManageLockObjects"
-    effect    = "Allow"
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = local.lock_object_arns
+    sid       = "RetiredRoleDenyAll"
+    effect    = "Deny"
+    actions   = ["*"]
+    resources = ["*"]
   }
 }
 
