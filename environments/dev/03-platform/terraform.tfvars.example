@@ -1,12 +1,13 @@
 # Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
-project_name = "playdevops"
+project_name = "mini-commerce"
 state_bucket_name = "replace-with-your-dev-state-bucket"
 course_id    = "replace-with-unique-course-id"
 environment  = "dev"
 
-acm_domain_name = "example.com"
-hosted_zone_id  = "Z_REPLACE_ME"
+# dev child zone (environments/dev/bootstrap/dns outputs), not the apex domain.
+acm_domain_name = "dev.example.com" # zone_name output
+hosted_zone_id  = "Z_REPLACE_ME"    # zone_id output (dev account child zone ID)
 
 enable_alb_controller = true
 ebs_csi_driver_use_aws_managed_policy = true
@@ -53,6 +54,7 @@ enable_gateway_api               = true
 enable_course_storage_class      = true
 course_application_namespace     = "app-dev"
 secret_recovery_window_in_days   = 7
+# ExternalDNS writes only into the dev child zone; no apex exclusion filter is needed.
 external_dns_domain_filters      = ["dev.example.com"]
 external_dns_exclude_domains     = []
 # Capacity must match 02-eks MNG limits and measured subnet IP availability.
