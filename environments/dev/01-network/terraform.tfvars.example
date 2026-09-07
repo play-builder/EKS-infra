@@ -1,6 +1,6 @@
 # Supported deployment Regions: ap-northeast-2 or us-east-1.
 aws_region   = "ap-northeast-2"
-project_name = "playdevops"
+project_name = "mini-commerce"
 course_id    = "replace-with-unique-course-id"
 environment  = "dev"
 
