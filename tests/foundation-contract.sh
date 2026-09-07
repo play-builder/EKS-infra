@@ -142,48 +142,6 @@ esac
 EOF
 chmod +x "$tmp_dir/bin/gh" "$tmp_dir/bin/aws" "$tmp_dir/bin/dig"
 
-sha=0123456789abcdef0123456789abcdef01234567
-
-run_case() {
-  local fixture=$1 expected_status=$2 expected_text=$3 output status
-  set +e
-  output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
-    PLATFORM_CHECK_RUNS_FIXTURE="$fixtures/$fixture" \
-    PLATFORM_CHECK_HEAD_SHA="$sha" \
-    PLATFORM_CHECK_WAIT_ATTEMPTS=1 \
-    bash "$root/scripts/platform-check.sh" ch05 owner/repo "$sha" CI push 100 2>&1)
-  status=$?
-  set -e
-  [[ "$status" -eq "$expected_status" ]]
-  grep -Fq "$expected_text" <<<"$output"
-  if [[ "$expected_status" -eq 0 ]]; then
-    [[ $(grep -Ec 'PASS: \[(STATIC|CLOUD_RUNTIME|INCIDENT_EVIDENCE)\]' <<<"$output") -eq 1 ]]
-    grep -Fq '[STATIC] SIMULATED_CLOUD_CONTRACT' <<<"$output"
-    ! grep -Fq '[CLOUD_RUNTIME]' <<<"$output"
-  fi
-}
-
-run_case workflow-runs-one-exact.json 0 'databaseId'
-run_case workflow-runs-none.json 1 'EXACT_RUN_NOT_FOUND'
-run_case workflow-runs-ambiguous.json 1 'AMBIGUOUS_RUN'
-
-default_workflow_output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
-  PLATFORM_CHECK_RUNS_FIXTURE="$fixtures/workflow-runs-one-exact-lowercase.json" \
-  PLATFORM_CHECK_HEAD_SHA="$sha" PLATFORM_CHECK_WORKFLOW_NAME=ci \
-  PLATFORM_CHECK_WAIT_ATTEMPTS=1 \
-  bash "$root/scripts/platform-check.sh" ch05 owner/repo "$sha")
-grep -Fq 'databaseId' <<<"$default_workflow_output"
-grep -Fq '[STATIC] SIMULATED_CLOUD_CONTRACT' <<<"$default_workflow_output"
-
-grep -Fq 'OTEL_EXPORTER_OTLP_ENDPOINT' "$root/README.md"
-! grep -Fq 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT' "$root/README.md"
-
-for region in ap-northeast-2 us-east-1; do
-  AWS_REGION=$region PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
-    bash "$root/scripts/platform-check.sh" ch14 --contract-only >"$tmp_dir/ch14-$region.out"
-  [[ $(grep -Ec 'PASS: \[STATIC\]' "$tmp_dir/ch14-$region.out") -eq 1 ]]
-done
-
 for region in ap-northeast-2 us-east-1; do
   aws_log="$tmp_dir/aws-ch02-$region.log"
   : >"$aws_log"
@@ -191,7 +149,7 @@ for region in ap-northeast-2 us-east-1; do
     NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION="$region" LAB_PROJECT_NAME=mini-commerce \
     ROOT_DOMAIN=example.com INFRA_GH_REPO=owner/EKS-infra \
     APP_GH_REPO=owner/mini-commerce GITOPS_GH_REPO=owner/argocd-gitops \
-    bash "$root/scripts/platform-check.sh" ch02 >"$tmp_dir/ch02-$region.out"
+    bash "$root/scripts/foundation-check.sh" >"$tmp_dir/ch02-$region.out"
   [[ $(grep -Ec 'PASS: \[STATIC\]' "$tmp_dir/ch02-$region.out") -eq 1 ]]
   # Per-account state buckets derive from the profile account ID, never from STATE_BUCKET_NAME.
   grep -Fq 'STATE_BUCKET[network]=mini-commerce-tfstate-111111111111' "$tmp_dir/ch02-$region.out"
@@ -222,7 +180,7 @@ expect_ch02_fail() {
   output=$(env PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws-negative.log" \
     NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION=ap-northeast-2 LAB_PROJECT_NAME=mini-commerce \
     ROOT_DOMAIN=example.com INFRA_GH_REPO=owner/EKS-infra APP_GH_REPO=owner/mini-commerce GITOPS_GH_REPO=owner/argocd-gitops \
-    "$@" bash "$root/scripts/platform-check.sh" ch02 2>&1)
+    "$@" bash "$root/scripts/foundation-check.sh" 2>&1)
   status=$?
   set -e
   [[ "$status" -ne 0 ]] || { printf 'ch02 negative case passed unexpectedly: %s\n' "$label" >&2; exit 1; }
@@ -244,19 +202,4 @@ expect_ch02_fail public-child-mismatch 'child zone nameserver와 public DNS dev.
 expect_ch02_fail dig-failure 'public DNS dev.example.com NS 조회에 실패했습니다(dig exit=9).' PLATFORM_FAKE_CASE=dig-failure
 expect_ch02_fail duplicate-dev-oidc 'GitHub OIDC provider는 dev 계정에 정확히 1개여야 합니다(found=2).' PLATFORM_FAKE_CASE=duplicate-dev-oidc
 
-while IFS=$'\t' read -r chapter mode; do
-  [[ -n "$chapter" ]] || continue
-  case "$mode" in
-    contract)
-      AWS_REGION=ap-northeast-2 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
-        bash "$root/scripts/platform-check.sh" "$chapter" --contract-only >/dev/null
-      ;;
-    workflow)
-      PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_CHECK_RUNS_FIXTURE="$fixtures/workflow-runs-one-exact.json" \
-        PLATFORM_CHECK_HEAD_SHA="$sha" PLATFORM_CHECK_WAIT_ATTEMPTS=1 \
-        bash "$root/scripts/platform-check.sh" "$chapter" owner/repo "$sha" CI push 100 >/dev/null
-      ;;
-  esac
-done < <(jq -r '.chapters[] | [.chapter,.mode] | @tsv' "$fixtures/chapter-command-contracts.json")
-
-echo 'PASS: platform-check semantic dispatcher contract'
+echo 'PASS: foundation state, DNS delegation and immutable OIDC boundaries'

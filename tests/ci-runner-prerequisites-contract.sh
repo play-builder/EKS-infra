@@ -11,7 +11,7 @@ contracts = {
     required: %w[bash git jq python3 rg ruby terraform]
   },
   'enterprise-static' => {
-    test_command: 'tests/run-enterprise-static-tests.sh',
+    test_command: 'terraform -chdir="$root" test',
     required: %w[bash git helm jq python3 rg ruby terraform]
   }
 }

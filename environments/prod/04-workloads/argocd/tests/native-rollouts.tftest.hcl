@@ -27,3 +27,12 @@ run "native_istio_only" {
     error_message = "Do not ignore an entire HTTPRoute spec."
   }
 }
+
+run "explicit_backend_bucket_is_used_by_every_state_consumer" {
+  command = plan
+  variables { state_bucket_name = "alternate-reviewed-state-bucket" }
+  assert {
+    condition     = data.terraform_remote_state.eks.config.bucket == var.state_bucket_name && data.terraform_remote_state.platform.config.bucket == var.state_bucket_name
+    error_message = "Every remote state must use the selected backend bucket."
+  }
+}

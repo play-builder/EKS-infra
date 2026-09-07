@@ -84,6 +84,6 @@ bash scripts/prod-preflight.sh \
 - 실패하면 stderr의 단계와 원본 계정/Region/실제 리소스 상태를 확인한다. 원시 응답의 endpoint/email은 출력하지 않는다. 출력 경로가 이전 실행 파일을 포함하면 exit code를 먼저 확인하고 실패 실행의 결과로 재사용하지 않는다.
 - workload cleanup 및 retained billable resource 결정을 마칠 때까지 FinOps 리소스를 보존한다. root 제거는 Budget/monitor/subscription만 제거하며 외부 SNS/KMS와 retained 리소스의 비용은 남는다. 롤백은 승인된 Terraform 저장 계획으로 수행하고 외부 topic policy를 덮어쓰지 않는다.
 
-검증 명령: `bash tests/finops-readiness-contract.sh`, `bash tests/prod-preflight-contract.sh`, `bash tests/prod-bootstrap-contract.sh`. 이 테스트들은 로컬 계약만 검증하며 **LIVE_NOT_VERIFIED**다.
+검증 명령: `python3 -B tests/finops_readiness_test.py`, `bash tests/prod-preflight-contract.sh`, `bash tests/prod-bootstrap-contract.sh`. 이 테스트들은 로컬 계약만 검증하며 **LIVE_NOT_VERIFIED**다.
 
 근거: [Budget SNS/KMS](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-sns-policy.html), [Anomaly SNS/KMS](https://docs.aws.amazon.com/cost-management/latest/userguide/ad-SNS.html), [Anomaly subscription API](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_AnomalySubscription.html), [Cost allocation tag API](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_ListCostAllocationTags.html), [Cost usage API와 DataUnavailableException](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html).

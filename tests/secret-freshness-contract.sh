@@ -11,7 +11,7 @@ cat >"$tmp_dir/bin/aws" <<'EOF'
 set -Eeuo pipefail
 [[ "$1 $2" == "secretsmanager describe-secret" ]] || exit 97
 cat <<'JSON'
-{"ARN":"arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:sample-app/dev/sample-app-runtime","VersionIdsToStages":{"runtime-v2":["AWSCURRENT"],"runtime-v1":["AWSPREVIOUS"]}}
+{"ARN":"arn:aws:secretsmanager:ap-northeast-2:123456789012:secret:sample-app/dev/mini-commerce-runtime","VersionIdsToStages":{"runtime-v2":["AWSCURRENT"],"runtime-v1":["AWSPREVIOUS"]}}
 JSON
 EOF
 
@@ -19,7 +19,7 @@ cat >"$tmp_dir/bin/kubectl" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 case "$*" in
-  *"get externalsecret sample-app-runtime"*)
+  *"get externalsecret mini-commerce-runtime"*)
     cat <<'JSON'
 {"metadata":{"generation":2},"status":{"syncedResourceVersion":"runtime-v2","conditions":[{"type":"Ready","status":"True","observedGeneration":2}]}}
 JSON
@@ -36,14 +36,14 @@ EOF
 chmod +x "$tmp_dir/bin/aws" "$tmp_dir/bin/kubectl"
 
 output=$(AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
-  bash "$root/scripts/platform-check.sh" ch12 mini-commerce-dev app-dev sample-app-runtime sample-app \
-  sample-app/dev/sample-app-runtime runtime-v2 pod-old)
+  bash "$root/scripts/dev-ready-check.sh" secret-freshness mini-commerce-dev app-dev mini-commerce-runtime sample-app \
+  sample-app/dev/mini-commerce-runtime runtime-v2 pod-old)
 grep -Fq 'version=runtime-v2' <<<"$output"
 grep -Fq '[STATIC] SIMULATED_CLOUD_CONTRACT' <<<"$output"
 ! grep -Fq 'secret-value' <<<"$output"
 
 if AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" \
-  bash "$root/scripts/platform-check.sh" ch12 mini-commerce-dev app-dev sample-app-db sample-app \
+  bash "$root/scripts/dev-ready-check.sh" secret-freshness mini-commerce-dev app-dev sample-app-db sample-app \
   sample-app/dev/sample-app-db runtime-v2 pod-old >/dev/null 2>&1; then
   echo 'DB secret must never enter the runtime reload path' >&2
   exit 1

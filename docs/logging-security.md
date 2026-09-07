@@ -64,7 +64,14 @@ Apply the approved network saved plan, then refresh/plan EKS against its new out
 ## Checks and operational limits
 
 ```bash
-bash tests/log-plane-integration-contract.sh
+for environment in dev prod; do
+  for layer in 01-network 02-eks 03-platform; do
+    root="environments/$environment/$layer"
+    terraform -chdir="$root" init -backend=false -input=false
+    terraform -chdir="$root" validate
+    terraform -chdir="$root" test -filter=tests/logging.tftest.hcl
+  done
+done
 ```
 
 This executes mock-only Terraform tests and provider schema validation, including all six roots. It requires installed Terraform/provider dependencies; initialization may download providers. It never invokes AWS deployment, state migration or log-reading commands.

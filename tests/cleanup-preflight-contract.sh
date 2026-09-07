@@ -32,7 +32,7 @@ run_valid() {
   PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" \
   OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
   AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
-    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight --saved-plan-manifest "$tmp_dir/saved-plans.json" \
+    bash "$root/scripts/cleanup-preflight.sh" --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
       --inventory-output "$tmp_dir/inventory.json" --retain-template "$tmp_dir/retain-template.json" \
       --preflight-output "$tmp_dir/preflight.json"
@@ -51,7 +51,7 @@ whitespace_rejected=true
 if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
   OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
   AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
-    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
+    bash "$root/scripts/cleanup-preflight.sh" \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$whitespace_inventory" \
       --inventory-output "$tmp_dir/whitespace-inventory.json" \
@@ -78,7 +78,7 @@ sentinel_digest_before=$(shasum -a 256 "$sentinel_inventory" "$sentinel_retain" 
 if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
   OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
   AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
-    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
+    bash "$root/scripts/cleanup-preflight.sh" \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$whitespace_inventory" \
       --inventory-output "$sentinel_inventory" --retain-template "$sentinel_retain" \
@@ -101,7 +101,7 @@ bom_rejected=true
 if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
   OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
   AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
-    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
+    bash "$root/scripts/cleanup-preflight.sh" \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$bom_inventory" \
       --inventory-output "$tmp_dir/bom-inventory.json" \
@@ -121,7 +121,7 @@ sentinel_digest_before=$(shasum -a 256 "$sentinel_inventory" "$sentinel_retain" 
 if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$root/tests/fixtures/cleanup-owned.json" \
   OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
   AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
-    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
+    bash "$root/scripts/cleanup-preflight.sh" \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$bom_inventory" \
       --inventory-output "$sentinel_inventory" --retain-template "$sentinel_retain" \
@@ -148,7 +148,7 @@ for protected_id in \
   output=$(PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$protected_plan" \
     OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 \
     AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
-      bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight --saved-plan-manifest "$tmp_dir/saved-plans.json" \
+      bash "$root/scripts/cleanup-preflight.sh" --saved-plan-manifest "$tmp_dir/saved-plans.json" \
         --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
         --inventory-output "$tmp_dir/rejected-inventory.json" --retain-template "$tmp_dir/rejected-retain.json" \
         --preflight-output "$tmp_dir/rejected-preflight.json" 2>&1)
@@ -167,7 +167,7 @@ jq '.resource_changes[0].change.actions=["create"]' \
 rm -f "$tmp_dir/non-destroy-inventory.json" "$tmp_dir/non-destroy-retain.json" "$tmp_dir/non-destroy-preflight.json"
 if PLATFORM_CHECK_BIN_DIR="$tmp_dir/fake-bin" PLATFORM_FAKE_PLAN_JSON="$non_destroy_plan" \
   OWNER_ID=playbuilder AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-2 PROJECT_NAME=playdevops \
-    bash "$root/scripts/platform-check.sh" ch26 --cleanup-preflight \
+    bash "$root/scripts/cleanup-preflight.sh" \
       --saved-plan-manifest "$tmp_dir/saved-plans.json" \
       --inventory-source "$root/tests/fixtures/cleanup-ownership-valid.json" \
       --inventory-output "$tmp_dir/non-destroy-inventory.json" \

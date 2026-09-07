@@ -34,6 +34,7 @@ on:
   pull_request:
     paths:
       - "**/*.tf"
+      - "**/*.tftest.hcl"
       - "**/*.tfvars.example"
       - ".tflint.hcl"
       - ".trivyignore.yaml"
@@ -45,6 +46,7 @@ on:
     branches: [main]
     paths:
       - "**/*.tf"
+      - "**/*.tftest.hcl"
       - "**/*.tfvars.example"
       - ".tflint.hcl"
       - ".trivyignore.yaml"
@@ -98,7 +100,7 @@ jobs:
           "$RUNNER_TEMP/finops-python/bin/pip" install -r scripts/requirements-amp-slo.txt
           "$RUNNER_TEMP/finops-python/bin/python3" -I -c 'import boto3,botocore; assert boto3.__version__ == botocore.__version__ == "1.42.59"'
           echo "$RUNNER_TEMP/finops-python/bin" >> "$GITHUB_PATH"
-      - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ secrets.TERRAFORM_PLAN_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -157,7 +159,7 @@ jobs:
           "$RUNNER_TEMP/finops-python/bin/pip" install -r scripts/requirements-amp-slo.txt
           "$RUNNER_TEMP/finops-python/bin/python3" -I -c 'import boto3,botocore; assert boto3.__version__ == botocore.__version__ == "1.42.59"'
           echo "$RUNNER_TEMP/finops-python/bin" >> "$GITHUB_PATH"
-      - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ secrets.TERRAFORM_APPLY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
@@ -277,8 +279,6 @@ jobs:
   enterprise-static:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    env:
-      RUN_SDK_CONTRACTS: "true"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
@@ -334,8 +334,32 @@ jobs:
           echo "ROLLOUTS_CHART_ARCHIVE=$RUNNER_TEMP/enterprise-charts/argo-rollouts.tgz" >> "$GITHUB_ENV"
           echo "AUTOSCALER_CHART_ARCHIVE=$RUNNER_TEMP/enterprise-charts/autoscaler.tgz" >> "$GITHUB_ENV"
           echo "SIGSTORE_CHART_ARCHIVE=$RUNNER_TEMP/enterprise-charts/policy-controller-0.10.5.tgz" >> "$GITHUB_ENV"
-      - name: Run aggregate static mock render PromQL and SDK gates
-        run: bash tests/run-enterprise-static-tests.sh
+      - name: Run Terraform mock tests
+        run: |
+          set -euo pipefail
+          while IFS= read -r root; do
+            terraform -chdir="$root" init -backend=false -input=false -no-color
+            terraform -chdir="$root" validate -no-color
+            terraform -chdir="$root" test -no-color
+          done < <(rg --files modules environments terraform -g '*.tftest.hcl' | sed 's|/tests/[^/]*$||' | sort -u)
+      - name: Verify chart rendering and local semantics
+        run: |
+          set -euo pipefail
+          "$ENTERPRISE_PYTHON" tests/ownership-marker-destroy-contract.py
+          "$ENTERPRISE_PYTHON" tests/log-key-dag-contract.py
+          "$ENTERPRISE_PYTHON" tests/external-secret-lua-contract.py
+          bash tests/argocd-render-contract.sh
+          bash tests/sigstore-controller-contract.sh
+          bash tests/cluster-autoscaler-render-contract.sh
+          "$ENTERPRISE_PYTHON" tests/adot-scrape-contract.py
+          "$ENTERPRISE_PYTHON" tests/amp-promql-contract.py
+      - name: Verify pinned SDK serialization
+        run: |
+          set -euo pipefail
+          "$ENTERPRISE_PYTHON" -c 'import boto3,botocore; assert boto3.__version__ == botocore.__version__ == "1.42.59"'
+          "$ENTERPRISE_PYTHON" tests/amp-slo-sdk-contract.py
+          "$ENTERPRISE_PYTHON" tests/argocd-backup-sdk-contract.py
+          "$ENTERPRISE_PYTHON" tests/rds-recovery-sdk-contract.py
 
   validate:
     runs-on: ubuntu-latest

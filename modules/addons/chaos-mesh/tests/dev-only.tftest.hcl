@@ -10,7 +10,7 @@ run "disabled_by_default" {
 
   assert {
     condition     = length(helm_release.this) == 0
-    error_message = "Chaos Mesh must remain absent until Ch25 explicitly enables it."
+    error_message = "Chaos Mesh must remain absent until explicitly enabled."
   }
 }
 
@@ -33,9 +33,9 @@ run "enabled_only_for_dev_with_bounded_settings" {
       helm_release.this[0].namespace == "chaos-mesh" &&
       yamldecode(helm_release.this[0].values[0]).controllerManager.enableFilterNamespace == true &&
       yamldecode(helm_release.this[0].values[0]).controllerManager.targetNamespace == "app-dev" &&
-      yamldecode(helm_release.this[0].values[0]).playbuilder.ownerId == "playbuilder" &&
-      yamldecode(helm_release.this[0].values[0]).playbuilder.maxFaultDurationSeconds == 60 &&
-      yamldecode(helm_release.this[0].values[0]).playbuilder.maxFaults == 1
+      yamldecode(helm_release.this[0].values[0]).contract.environment == "dev" &&
+      yamldecode(helm_release.this[0].values[0]).contract.maxFaultDurationSeconds == 60 &&
+      yamldecode(helm_release.this[0].values[0]).contract.maxFaults == 1
     )
     error_message = "Enabled Chaos Mesh must carry namespace filtering and bounded fault metadata."
   }

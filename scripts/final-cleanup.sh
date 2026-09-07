@@ -6,10 +6,7 @@ REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
 
-if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
-  [[ -d "$PLATFORM_CHECK_BIN_DIR" ]] || pb_fail 'PLATFORM_CHECK_BIN_DIR is not a directory' 64
-  PATH="$PLATFORM_CHECK_BIN_DIR:$PATH"
-fi
+pb_prepare_commands
 
 saved_plan_manifest=''
 apply_progress=''

@@ -56,7 +56,7 @@ variables {
   enable_adot_collector           = false
   enable_amp                      = false
   enable_gateway_api              = false
-  enable_pb_storage_class     = false
+  enable_pb_storage_class         = false
   external_secrets_ownership_mode = "fresh"
 }
 

@@ -78,7 +78,7 @@ expect_timestamp_rejected_before_mutation expires-offset expiresAt '2099-03-01T0
 : >"$tmp_dir/aws.log"
 
 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
-  bash "$root/scripts/platform-check.sh" ch26 --checkpoint-teardown "${common[@]}"
+  bash "$root/scripts/checkpoint-teardown.sh" "${common[@]}"
 [[ ! -s "$tmp_dir/mutations.log" && ! -e "$tmp_dir/resume.json" ]]
 
 set +e

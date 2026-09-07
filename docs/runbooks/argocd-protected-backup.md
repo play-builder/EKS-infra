@@ -127,7 +127,7 @@ archive version, checksum/KMS mismatch, Secret not Ready, or a non-Healthy/non-S
 ## Local verification
 
 ```bash
-bash tests/argocd-backup-contract.sh
+python3 -B tests/argocd-backup-contract.py
 python3 tests/argocd-backup-sdk-contract.py
 terraform -chdir=modules/storage/protected-backup test
 terraform -chdir=terraform/platform-backup test

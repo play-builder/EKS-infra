@@ -78,7 +78,7 @@ base_env=(
 )
 
 run_check() {
-  env "${base_env[@]}" "$@" bash "$root/scripts/platform-check.sh" ch02
+  env "${base_env[@]}" "$@" bash "$root/scripts/foundation-check.sh"
 }
 
 output=$(run_check RUNTIME_SECRET_JSON_FILE="$runtime_file" DB_SECRET_JSON_FILE="$database_file")
