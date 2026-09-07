@@ -17,13 +17,13 @@ case "$*" in
   "--context $CH10_EXPECTED_CONTEXT get nodes -o json")
     echo '{"items":[{"status":{"conditions":[{"type":"Ready","status":"True"}]}}]}'
     ;;
-  "--context $CH10_EXPECTED_CONTEXT -n argocd get application sample-app-dev -o json")
+  "--context $CH10_EXPECTED_CONTEXT -n argocd get application mini-commerce-dev -o json")
     echo '{"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}}'
     ;;
-  "--context $CH10_EXPECTED_CONTEXT -n $CH10_EXPECTED_NAMESPACE get externalsecret sample-app-runtime -o json")
+  "--context $CH10_EXPECTED_CONTEXT -n $CH10_EXPECTED_NAMESPACE get externalsecret mini-commerce-runtime -o json")
     echo '{"status":{"conditions":[{"type":"Ready","status":"True"}]}}'
     ;;
-  "--context $CH10_EXPECTED_CONTEXT -n $CH10_EXPECTED_NAMESPACE get deployment sample-app -o json")
+  "--context $CH10_EXPECTED_CONTEXT -n $CH10_EXPECTED_NAMESPACE get deployment mini-commerce -o json")
     echo '{"status":{"replicas":2,"availableReplicas":2}}'
     ;;
   *)
@@ -42,7 +42,7 @@ run_ch10() {
     CH10_EXPECTED_CONTEXT="$expected_context" CH10_EXPECTED_NAMESPACE="$expected_namespace" \
     COURSE_CHECK_BIN_DIR="$tmp_dir/bin" \
     bash "$root/scripts/course-check.sh" ch10 "$@" >/dev/null
-  grep -Fxq -- "--context $expected_context -n $expected_namespace get externalsecret sample-app-runtime -o json" \
+  grep -Fxq -- "--context $expected_context -n $expected_namespace get externalsecret mini-commerce-runtime -o json" \
     "$tmp_dir/kubectl.log"
   [[ $(wc -l <"$tmp_dir/kubectl.log" | tr -d ' ') -eq 4 ]]
 }
