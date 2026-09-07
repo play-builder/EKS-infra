@@ -61,7 +61,7 @@ check_ch01() {
   require_command git
 
   local name repository branch head origin_head dirty
-  for name in EKS-infra argocd-gitops cicd-course-sample-app; do
+  for name in EKS-infra argocd-gitops mini-commerce; do
     repository="$repositories_root/$name"
     [[ -d "$repository/.git" ]] || fail "Git repository를 찾을 수 없습니다: $repository" 66
 
@@ -89,15 +89,24 @@ normalize_nameservers() {
     | sort -u
 }
 
+account_id_for_profile() {
+  local profile=$1 identity account_id
+  identity=$(aws sts get-caller-identity --profile "$profile" --region "$AWS_REGION" --output json)
+  account_id=$(jq -r '.Account // empty' <<<"$identity")
+  [[ "$account_id" =~ ^[0-9]{12}$ ]] || fail "profile의 AWS 계정 ID를 확인하지 못했습니다: $profile"
+  printf '%s\n' "$account_id"
+}
+
 check_state_bucket() {
-  local profile=$1 region=$2 bucket=$3 project=$4
+  local profile=$1 region=$2 bucket=$3 project=$4 account_role=$5
   local tags location versioning encryption public_block
 
   tags=$(aws s3api get-bucket-tagging --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
-  jq -e --arg project "$project" '
+  jq -e --arg project "$project" --arg account_role "$account_role" '
     any(.TagSet[]?; .Key == "ManagedBy" and .Value == "gitops-course") and
-    any(.TagSet[]?; .Key == "Project" and .Value == $project)
-  ' <<<"$tags" >/dev/null || fail "state bucket ownership tag가 일치하지 않습니다: $bucket"
+    any(.TagSet[]?; .Key == "Project" and .Value == $project) and
+    any(.TagSet[]?; .Key == "Environment" and .Value == $account_role)
+  ' <<<"$tags" >/dev/null || fail "state bucket ownership tag가 일치하지 않습니다(account=$account_role): $bucket"
 
   location=$(aws s3api get-bucket-location --bucket "$bucket" --profile "$profile" --region "$AWS_REGION" --output json)
   if [[ "$region" == "us-east-1" ]]; then
@@ -119,30 +128,84 @@ check_state_bucket() {
   jq -e '.PublicAccessBlockConfiguration | .BlockPublicAcls and .IgnorePublicAcls and .BlockPublicPolicy and .RestrictPublicBuckets' \
     <<<"$public_block" >/dev/null || fail "state bucket public access block 네 항목이 모두 true가 아닙니다."
 
-  pass "Terraform state bucket 보안 상태가 유효합니다(bucket=$bucket)."
+  pass "Terraform state bucket 보안 상태가 유효합니다(account=$account_role, bucket=$bucket)."
+}
+
+check_account_state_bucket() {
+  local account_role=$1 profile=$2 account_id bucket
+  account_id=$(account_id_for_profile "$profile")
+  bucket="${LAB_PROJECT_NAME}-tfstate-${account_id}"
+  printf 'STATE_BUCKET[%s]=%s account_id=%s\n' "$account_role" "$bucket" "$account_id"
+  check_state_bucket "$profile" "$AWS_REGION" "$bucket" "$LAB_PROJECT_NAME" "$account_role"
+}
+
+find_public_hosted_zone() {
+  local profile=$1 zone_name=$2 zones zone_id
+  zones=$(aws route53 list-hosted-zones-by-name \
+    --dns-name "$zone_name" --max-items 10 --profile "$profile" --region "$AWS_REGION" --output json)
+  zone_id=$(jq -r --arg name "${zone_name}." '
+    [.HostedZones[]? | select(.Name == $name and (.Config.PrivateZone // false) == false)]
+    | if length == 1 then .[0].Id else empty end
+  ' <<<"$zones")
+  [[ -n "$zone_id" ]] || fail "public hosted zone을 정확히 하나 찾지 못했습니다: $zone_name (profile=$profile)"
+  printf '%s\n' "${zone_id#/hostedzone/}"
+}
+
+hosted_zone_nameservers() {
+  local profile=$1 hosted_zone_id=$2
+  aws route53 get-hosted-zone \
+    --id "$hosted_zone_id" --profile "$profile" --region "$AWS_REGION" --output json \
+    | jq -r '.DelegationSet.NameServers[]' \
+    | normalize_nameservers
 }
 
 check_dns_delegation() {
   local profile=$1 hosted_zone_id=$2 root_domain=$3
   local route53_nameservers public_nameservers
 
-  route53_nameservers=$(aws route53 get-hosted-zone \
-    --id "$hosted_zone_id" --profile "$profile" --region "$AWS_REGION" --output json \
-    | jq -r '.DelegationSet.NameServers[]' \
-    | normalize_nameservers)
-  public_nameservers=$(dig +short NS "$root_domain" | normalize_nameservers)
+  route53_nameservers=$(hosted_zone_nameservers "$profile" "$hosted_zone_id")
+  public_nameservers=$(dig +short NS "$root_domain" | normalize_nameservers) || \
+    fail "public DNS $root_domain NS 조회에 실패했습니다(dig exit=$?)."
 
   [[ -n "$route53_nameservers" ]] || fail "Route 53 nameserver 응답이 비어 있습니다."
   [[ -n "$public_nameservers" ]] || fail "public DNS nameserver 응답이 비어 있습니다. registrar 위임을 확인하십시오."
   [[ "$route53_nameservers" == "$public_nameservers" ]] || \
     fail "Route 53 지정 nameserver와 public DNS 응답이 다릅니다."
 
-  printf 'DNS_NAMESERVERS:\n%s\n' "$public_nameservers"
-  pass "DNS delegation이 일치합니다(domain=$root_domain)."
+  printf 'DNS_NAMESERVERS[%s]:\n%s\n' "$root_domain" "$public_nameservers"
+  pass "apex DNS delegation이 일치합니다(domain=$root_domain, zone=$hosted_zone_id)."
+}
+
+check_child_zone_delegation() {
+  local network_profile=$1 apex_zone_id=$2 child_profile=$3 child_zone_id=$4 child_domain=$5
+  local child_nameservers delegation_nameservers public_nameservers
+
+  child_nameservers=$(hosted_zone_nameservers "$child_profile" "$child_zone_id")
+  [[ -n "$child_nameservers" ]] || fail "child zone nameserver 응답이 비어 있습니다: $child_domain"
+
+  delegation_nameservers=$(aws route53 list-resource-record-sets \
+    --hosted-zone-id "$apex_zone_id" --start-record-name "$child_domain" --start-record-type NS --max-items 1 \
+    --profile "$network_profile" --region "$AWS_REGION" --output json \
+    | jq -r --arg name "${child_domain}." \
+      '.ResourceRecordSets[]? | select(.Name == $name and .Type == "NS") | .ResourceRecords[].Value' \
+    | normalize_nameservers)
+  [[ -n "$delegation_nameservers" ]] || \
+    fail "apex zone에 $child_domain NS 위임 record가 없습니다. 01-dns child_zones에 등록하십시오."
+  [[ "$child_nameservers" == "$delegation_nameservers" ]] || \
+    fail "apex zone의 $child_domain NS 위임 record가 child zone nameserver와 다릅니다."
+
+  public_nameservers=$(dig +short NS "$child_domain" | normalize_nameservers) || \
+    fail "public DNS $child_domain NS 조회에 실패했습니다(dig exit=$?)."
+  [[ -n "$public_nameservers" ]] || fail "public DNS $child_domain NS 응답이 비어 있습니다."
+  [[ "$child_nameservers" == "$public_nameservers" ]] || \
+    fail "child zone nameserver와 public DNS $child_domain NS 응답이 다릅니다."
+
+  printf 'DNS_NAMESERVERS[%s]:\n%s\n' "$child_domain" "$public_nameservers"
+  pass "child zone delegation이 일치합니다(domain=$child_domain, zone=$child_zone_id)."
 }
 
 find_github_oidc_provider() {
-  local profile=$1 provider_arns provider_arn provider_json count=0 selected=""
+  local profile=$1 account_role=$2 provider_arns provider_arn provider_json count=0 selected=""
   provider_arns=$(aws iam list-open-id-connect-providers --profile "$profile" --region "$AWS_REGION" --output json \
     | jq -r '.OpenIDConnectProviderList[].Arn')
 
@@ -158,13 +221,13 @@ find_github_oidc_provider() {
     fi
   done <<<"$provider_arns"
 
-  [[ "$count" -eq 1 ]] || fail "GitHub OIDC provider는 계정에 정확히 1개여야 합니다(found=$count)."
-  printf 'GITHUB_OIDC_ARN=%s\n' "$selected"
-  pass "account-wide GitHub OIDC provider가 유일하며 audience가 유효합니다."
+  [[ "$count" -eq 1 ]] || fail "GitHub OIDC provider는 $account_role 계정에 정확히 1개여야 합니다(found=$count)."
+  printf 'GITHUB_OIDC_ARN[%s]=%s\n' "$account_role" "$selected"
+  pass "$account_role 계정의 GitHub OIDC provider가 유일하며 audience가 유효합니다."
 }
 
 check_immutable_subject() {
-  local repository=$1 metadata customization owner name owner_id repository_id subject
+  local repository=$1 trusted_by=$2 metadata customization owner name owner_id repository_id subject
   metadata=$(gh api -H "X-GitHub-Api-Version: $API_VERSION" "repos/$repository")
   customization=$(gh api -H "X-GitHub-Api-Version: $API_VERSION" \
     "repos/$repository/actions/oidc/customization/sub")
@@ -177,6 +240,7 @@ check_immutable_subject() {
   repository_id=$(jq -r '.id' <<<"$metadata")
   subject="repo:${owner}@${owner_id}/${name}@${repository_id}:ref:refs/heads/main"
   printf 'IMMUTABLE_MAIN_SUB[%s]=%s\n' "$repository" "$subject"
+  pass "$repository immutable main subject가 활성화됐습니다(trusted by $trusted_by)."
 }
 
 check_ruleset() {
@@ -231,19 +295,37 @@ check_ch02() {
   for command in aws dig gh git jq awk sort tr; do
     require_command "$command"
   done
-  for name in AWS_PROFILE AWS_REGION STATE_BUCKET_NAME LAB_PROJECT_NAME HOSTED_ZONE_ID ROOT_DOMAIN INFRA_GH_REPO APP_GH_REPO GITOPS_GH_REPO; do
+  for name in AWS_REGION LAB_PROJECT_NAME NETWORK_AWS_PROFILE DEV_AWS_PROFILE ROOT_DOMAIN INFRA_GH_REPO APP_GH_REPO GITOPS_GH_REPO; do
     require_environment "$name"
   done
   validate_region "$AWS_REGION"
+  [[ "$NETWORK_AWS_PROFILE" != "$DEV_AWS_PROFILE" ]] || \
+    fail "NETWORK_AWS_PROFILE과 DEV_AWS_PROFILE은 서로 다른 계정 profile이어야 합니다." 64
+  [[ "$ROOT_DOMAIN" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || \
+    fail "ROOT_DOMAIN은 trailing dot이 없는 소문자 도메인이어야 합니다(01-dns root_domain과 동일): $ROOT_DOMAIN" 64
 
-  check_state_bucket "$AWS_PROFILE" "$AWS_REGION" "$STATE_BUCKET_NAME" "$LAB_PROJECT_NAME"
-  check_dns_delegation "$AWS_PROFILE" "$HOSTED_ZONE_ID" "$ROOT_DOMAIN"
-  find_github_oidc_provider "$AWS_PROFILE"
-  check_immutable_subject "$INFRA_GH_REPO"
-  check_immutable_subject "$APP_GH_REPO"
+  local child_domain="dev.${ROOT_DOMAIN}" apex_zone_id child_zone_id
+
+  # Terraform state bucket: one per account, named <project>-tfstate-<account id> by bootstrap/state-backend.
+  check_account_state_bucket network "$NETWORK_AWS_PROFILE"
+  check_account_state_bucket dev "$DEV_AWS_PROFILE"
+
+  # DNS: apex zone in the network account, dev child zone delegated from it.
+  apex_zone_id=$(find_public_hosted_zone "$NETWORK_AWS_PROFILE" "$ROOT_DOMAIN")
+  check_dns_delegation "$NETWORK_AWS_PROFILE" "$apex_zone_id" "$ROOT_DOMAIN"
+  child_zone_id=$(find_public_hosted_zone "$DEV_AWS_PROFILE" "$child_domain")
+  check_child_zone_delegation "$NETWORK_AWS_PROFILE" "$apex_zone_id" "$DEV_AWS_PROFILE" "$child_zone_id" "$child_domain"
+
+  # GitHub OIDC provider: exactly one per account.
+  find_github_oidc_provider "$NETWORK_AWS_PROFILE" network
+  find_github_oidc_provider "$DEV_AWS_PROFILE" dev
+
+  # Immutable subjects: mini-commerce main -> network image push role, EKS-infra main -> dev infra role.
+  check_immutable_subject "$APP_GH_REPO" "network 02-registry image push role"
+  check_immutable_subject "$INFRA_GH_REPO" "dev bootstrap/ci-identity infra role"
   check_ruleset "$GITOPS_GH_REPO"
   check_secret_json_pair
-  pass "ch02 외부 상태와 보안 계약이 유효합니다."
+  pass "ch02 계정별 state, DNS, identity, governance 계약이 유효합니다."
 }
 
 check_workflow_run() {
@@ -394,17 +476,17 @@ check_ch10() {
   jq -e '(.items | length) > 0 and all(.items[]; any(.status.conditions[]?; .type == "Ready" and .status == "True"))' \
     <<<"$nodes" >/dev/null || fail "Ready 상태가 아닌 Dev node가 있습니다."
 
-  application=$(kubectl --context "$context" -n argocd get application sample-app-dev -o json)
+  application=$(kubectl --context "$context" -n argocd get application mini-commerce-dev -o json)
   jq -e '.status.sync.status == "Synced" and .status.health.status == "Healthy"' \
-    <<<"$application" >/dev/null || fail "sample-app-dev Application이 Synced/Healthy가 아닙니다."
+    <<<"$application" >/dev/null || fail "mini-commerce-dev Application이 Synced/Healthy가 아닙니다."
 
-  external_secret=$(kubectl --context "$context" -n "$namespace" get externalsecret sample-app-runtime -o json)
+  external_secret=$(kubectl --context "$context" -n "$namespace" get externalsecret mini-commerce-runtime -o json)
   jq -e 'any(.status.conditions[]?; .type == "Ready" and .status == "True")' \
-    <<<"$external_secret" >/dev/null || fail "sample-app-runtime ExternalSecret이 Ready가 아닙니다."
+    <<<"$external_secret" >/dev/null || fail "mini-commerce-runtime ExternalSecret이 Ready가 아닙니다."
 
-  deployment=$(kubectl --context "$context" -n "$namespace" get deployment sample-app -o json)
+  deployment=$(kubectl --context "$context" -n "$namespace" get deployment mini-commerce -o json)
   jq -e '.status.availableReplicas > 0 and .status.availableReplicas == .status.replicas' \
-    <<<"$deployment" >/dev/null || fail "sample-app Deployment replica가 모두 Available이 아닙니다."
+    <<<"$deployment" >/dev/null || fail "mini-commerce Deployment replica가 모두 Available이 아닙니다."
 
   pass "ch10 Dev 핵심 runtime 상태가 Ready/Synced/Healthy입니다."
 }
@@ -800,7 +882,8 @@ usage() {
   printf '%s\n' \
     'Usage: bash scripts/course-check.sh <chapter> [arguments]' \
     '  ch01 <three-repositories-root>' \
-    '  ch02 [RUNTIME_SECRET_JSON_FILE=<path> DB_SECRET_JSON_FILE=<path>]' \
+    '  ch02 (env: AWS_REGION LAB_PROJECT_NAME NETWORK_AWS_PROFILE DEV_AWS_PROFILE ROOT_DOMAIN INFRA_GH_REPO APP_GH_REPO GITOPS_GH_REPO)' \
+    '       [RUNTIME_SECRET_JSON_FILE=<path> DB_SECRET_JSON_FILE=<path>]' \
     '  ch05 <owner/repository> <commit-sha> <workflow-name> <event> [before-id]' \
     '  ch06 <ecr-repository-name> <sha256-digest>' \
     '  ch12 <context> <namespace> <externalsecret> <rollout> <runtime-secret-id> <version-id> <previous-pod-uid>' \
