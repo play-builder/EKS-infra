@@ -338,9 +338,14 @@ jobs:
       fail-fast: false
       matrix:
         root:
-          - terraform/state-backend
-          - terraform/iam-github-oidc
-          - terraform/github-governance
+          - modules/bootstrap/state-backend
+          - environments/network/bootstrap/state-backend
+          - environments/network/01-dns
+          - environments/network/02-registry
+          - environments/network/03-github-governance
+          - environments/dev/bootstrap/state-backend
+          - environments/dev/bootstrap/ci-identity
+          - environments/dev/bootstrap/dns
           - terraform/platform-backup
           - environments/prod/00-finops
           - environments/prod/03-database
