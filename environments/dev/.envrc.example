@@ -1,0 +1,7 @@
+# Copy to environments/dev/.envrc (git-ignored). Every command below this directory runs in the dev account.
+if declare -F source_up >/dev/null; then source_up; fi
+export AWS_PROFILE="mini-commerce-dev"
+export STATE_BUCKET_NAME="mini-commerce-tfstate-[dev account id]"       # value from bootstrap/state-backend output
+# scripts/course-check.sh ch02 spans both accounts, so it reads NETWORK_AWS_PROFILE and DEV_AWS_PROFILE instead of AWS_PROFILE,
+# derives each state bucket from the profile account ID, and needs LAB_PROJECT_NAME equal to the Terraform project_name.
+# export NETWORK_AWS_PROFILE="mini-commerce-network" DEV_AWS_PROFILE="mini-commerce-dev" LAB_PROJECT_NAME="mini-commerce" ROOT_DOMAIN="<root domain>"
