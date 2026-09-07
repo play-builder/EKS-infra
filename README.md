@@ -7,12 +7,34 @@ Terraform state, VPC CIDR, Argo CD instance, AMP workspace가 분리됩니다.
 현재 플랫폼은 Mini Commerce의 business/management 포트 분리, Istio native Rollouts,
 독립 Prod RDS·복구, 보호 백업 및 FinOps 계약을 사용합니다. 전체 운영 경계와 준비 순서는
 [enterprise integration](docs/runbooks/enterprise-integration.md)에 있습니다.
-운영 명령은 아래 목적별 진입점을 사용합니다. 챕터 판정과 수료 도구는 교육 워크스페이스의
-`course/tooling/`에서 관리하며 이 저장소의 배포·CI에 필요하지 않습니다.
+운영 명령은 아래 목적별 진입점을 사용합니다. 아키텍처·소유권·폴더별 코드 지도는
+[아키텍처](docs/architecture.md), 장애 대응과 제거 절차는 [운영 runbook](docs/runbook.md),
+실행 가능한 검증은 [테스트 안내](docs/testing.md)에서 관리합니다.
 
-Shared identity는 전용 계정의 Terraform-owned GitHub OIDC provider와 기존 account-wide provider를
+Network 계정의 shared identity는 전용 계정의 Terraform-owned GitHub OIDC provider와 기존 account-wide provider를
 구분합니다. 기존 provider는 삭제하지 않고 external mode로 참조하며, ECR lifecycle 변경 전에는
 모든 rollback image-index digest가 보존되는지 preview gate로 확인합니다.
+
+
+## 저장소 구조
+
+핵심 요약: 배포 단위는 `environments/`, 재사용 구현은 `modules/`, 운영 명령은 `scripts/`입니다.
+모든 디렉터리를 하나의 Terraform root로 실행하지 않습니다.
+
+| 경로 | 역할 |
+| --- | --- |
+| `environments/network/` | 계정별 state bootstrap, DNS, ECR/OIDC, GitHub governance |
+| `environments/dev/`, `environments/prod/` | 네트워크 → EKS → platform → Argo CD의 독립 state |
+| `environments/prod/03-database/`, `environments/recovery/` | 운영 DB와 별도 복구 대상 |
+| `modules/` | 위 root에서 사용하는 Terraform 구성 요소 |
+| `terraform/platform-backup/` | workload 폐기와 분리된 보호 백업 root |
+| `scripts/`, `scripts/lib/` | 운영 CLI와 구현: 검증, 배포 plan, 복구, 증빙, 정리 |
+| `tests/`, 각 root의 `tests/` | 명령 동작·API 계약·Terraform mock 회귀 검증 |
+| `vendor/`, `versions.lock.yaml`, `platform-images.lock.json` | 고정한 CRD·도구·chart·이미지 입력 |
+| `policy/`, `.github/workflows/`, `docs/` | 검증 정책, CI, 설계·운영 절차 |
+
+[상세 코드 지도와 운영 규모별 선택](docs/architecture.md#폴더와-코드-지도)을 먼저 읽고
+실제 계정·Region·기존 state 경계를 결정합니다. 로컬 검증 PASS를 운영 배포 완료로 표시하지 않습니다.
 
 ## 배포 순서
 
@@ -60,14 +82,17 @@ export AWS_REGION="ap-northeast-2"
 export STATE_BUCKET_NAME="replace-with-your-state-bucket"
 ```
 
-`.github/workflows/terraform-validate.yml`을 dispatch하기 전 repository Actions Variables에
-`AWS_ACCOUNT_ID`, `AWS_REGION`, `STATE_BUCKET_NAME`을 등록하고, Secrets에 별도 최소 권한 role의
-`TERRAFORM_PLAN_ROLE_ARN`, `TERRAFORM_APPLY_ROLE_ARN`을 등록합니다. `production` environment에는
-required reviewer와 self-review 차단을 설정합니다. Plan role은 state 조회와 plan에 필요한 읽기
-권한만, apply role은 승인된 plan 실행에 필요한 mutation 권한만 가져야 합니다.
-`TERRAFORM_PLAN_INPUTS_JSON`에는 선택 root의 실제 Terraform 입력도 등록해야 합니다.
-CI는 Git에 없는 로컬 tfvars를 읽지 않습니다. plan/drift 입력의 계정·region·bucket 결속과
-비공개 파일 처리는 [CI 입력 계약](docs/runbooks/enterprise-integration.md#scheduled-read-only-drift)을 확인합니다.
+`.github/workflows/terraform-validate.yml`은 선택한 root에서 계정별 GitHub environment를 결정합니다.
+Dev는 `dev-plan` → `dev`, Prod는 `production-plan` → `production`, Recovery는
+`recovery-plan` → `recovery`를 사용합니다. 각 environment에 해당 계정의
+`AWS_ACCOUNT_ID`, `AWS_REGION`, `STATE_BUCKET_NAME`과 역할·입력 secret을 등록합니다.
+Apply environment는 required reviewer, self-review 차단, `main` branch 제한을 설정합니다.
+Plan/apply는 모든 정적 검증이 성공한 뒤 실행됩니다.
+
+운영 job은 VPC에 접근할 수 있는 self-hosted runner를 기본으로 사용합니다.
+계정별 설정 목록, runner 준비, OIDC 신뢰 조건은 [CI 운영 설정](docs/runbooks/terraform-ci.md)을 따릅니다.
+CI는 Git에 없는 로컬 tfvars를 읽지 않습니다. 기존 설치의 변경 절차는
+[운영 전환 안내](docs/production-migration.md)에 있습니다.
 
 ## 0. Network 계정의 GitHub OIDC와 ECR
 
@@ -173,10 +198,11 @@ ADOT X-Ray trace 입력은 애플리케이션과 OTLP/HTTP protobuf 계약을 �
 AMP metric discovery는 `namespace`, `pod`, `app`, `rollouts_pod_template_hash`만 application label
 계약으로 보존하며 임의 Kubernetes label을 복사하지 않습니다.
 
-Secrets Manager에는 `sample-app-runtime`과 `sample-app-db` 두 shell만 만들며 값은 Terraform으로
-전달하지 않습니다. application reader IRSA는 두 exact ARN의 `DescribeSecret`/`GetSecretValue`만
-허용합니다. Reloader 대상은 runtime secret뿐이며 DB secret rotation은 application Pod reload
-증거로 인정하지 않습니다.
+신규 Mini Commerce의 Secret shell은 `module.mini_commerce_secrets`가 runtime·database·migration으로
+분리합니다. 실제 이름·ARN·대상 Kubernetes Secret·reader IRSA는 `mini_commerce_secrets` 출력으로
+연결하며, 비밀값은 Terraform으로 전달하지 않습니다. 기존 `sample_app_*` state 주소와 Secret은
+이전 경로의 소유권·복구 호환성을 위해 유지될 수 있습니다. 신규/기존 writer를 함께 활성화하지
+않으며, [운영 통합 안내](docs/runbooks/enterprise-integration.md)의 전환 절차를 따릅니다.
 
 기존 Argo CD Application이 External Secrets를 관리 중이라면 두 writer를 동시에 켜지 않습니다.
 Phase A에서 automated sync와 resources finalizer를 제거한 runtime handoff evidence를 받은 뒤 다음
@@ -247,7 +273,7 @@ DEV_READY의 workflow identity는 mini-commerce의 canonical `ci` workflow에 �
 
 Dev 배포 및 SLO runtime evidence는 EKS-infra가 호출자가 지정한 임시 경로에만 원자적으로 씁니다.
 `argocd-gitops/evidence/dev` 경로에는 직접 쓰지 않으며, 사람이 검토한 뒤 GitOps 변경으로 반영합니다.
-fixture/fake CLI가 활성화된 실행은 항상 `STATIC`이고 promotion input으로 사용할 수 없습니다.
+runtime capture는 fake CLI/clock 주입을 거부합니다. 파일 schema 검사(`--validate-evidence`)는 `STATIC`이며 promotion 실행 증거가 아닙니다.
 
 ```bash
 bash scripts/capture-dev-evidence.sh deployment <context> <namespace> <application> \
@@ -258,6 +284,17 @@ ALERT_DELIVERY_EVIDENCE=<firing-and-resolved.json> \
 bash scripts/capture-dev-evidence.sh slo <deployment-evidence> <context> <k6-namespace> \
   <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <temporary-path>
 ```
+
+수집 환경에는 `scripts/requirements-amp-slo.txt`를 설치한 Python 3.10+ venv, `kubectl`, `gh`,
+`openssl`, `jq`, `AWS_PROFILE`이 필요합니다. `DEV_GITOPS_REPOSITORY` 기본값은 실제
+`play-builder/argocd-gitops` URL, `DEV_ARGO_APPLICATION` 기본값은 `mini-commerce-dev`입니다.
+Network ECR 계정과 EKS 계정은 별도 identity로 검증하며 source SHA·실행 이미지·GitOps revision은 같아야 합니다.
+
+`ALERT_DELIVERY_EVIDENCE`는 `platform.amp-slo-drill/v1`의 실제 captured 기록이어야 합니다.
+Confirmed HTTPS 구독과 SNS 서명, 같은 message ID/payload의 CloudWatch 성공 전달 로그를 검사합니다.
+현재 email 구독만으로는 이 증빙을 발급하지 않습니다. HTTPS receiver와 SNS 전달 로깅을 별도로 구성해야 합니다.
+성공 전달 로그도 담당자의 확인을 뜻하지는 않습니다. 수집 시점의 sample/scrape freshness와 충분한 트래픽,
+동일 서비스의 burn rules·firing/resolved 기록을 검증합니다.
 
 배포 evidence는 Stateless deployment 상태만 증명합니다. DB endpoint, DB query span,
 PostgreSQL PVC는 별도 Stateful evidence에서 다룹니다. SLO evidence는 배포 evidence와 동일한 source/image/GitOps/cluster/Region,
@@ -296,7 +333,7 @@ GitOps revision, stable Rollout revision/hash, 100% route, EKS ARN/Region을 결
 
 `core`는 Dev Deployment, node, Application, ExternalSecret의 현재 상태를 확인합니다.
 `stateful`은 분리된 Dev DB chart와 migration을 활성화한 뒤 실행하며 StorageClass, PVC,
-PostgreSQL, Job, Pod와 상품·재고 API를 확인하고 검증용 멱등 주문을 생성합니다.
+PostgreSQL, Job, Pod와 상품 조회 API를 읽기 전용으로 확인합니다. 검증용 주문을 만들거나 예제 SKU/가격을 요구하지 않습니다.
 
 ```bash
 bash scripts/dev-ready-check.sh core mini-commerce-dev app-dev
@@ -307,9 +344,21 @@ bash scripts/dev-ready-check.sh stateful mini-commerce-dev app-dev https://mini-
 `STATIC`으로 표시합니다. 단일 replica Dev PostgreSQL 검사는 Prod RDS HA·복구를 증명하지
 않습니다. 실제 schema와 복구 경계는 [RDS 운영 경로](docs/runbooks/enterprise-integration.md)를 따릅니다.
 
-Secret 회전 검증은 `dev-ready-check.sh secret-freshness <context> <namespace> <externalsecret>
-<rollout> <runtime-secret-id> <version-id> <previous-pod-uid>`로 수행합니다. 공급자 version,
-ExternalSecret refresh와 Pod 교체가 일치해야 통과하며 비밀값은 출력하지 않습니다.
+Secret 회전은 단일 이전 Pod UID 대신 전체 소유 Pod 집합과 rollout generation을 baseline으로 저장합니다.
+
+```bash
+bash scripts/dev-ready-check.sh secret-baseline <context> <namespace> <externalsecret> \
+  <rollout> <runtime-secret-name-or-arn> <baseline.json>
+bash scripts/dev-ready-check.sh secret-freshness <context> <namespace> <externalsecret> \
+  <rollout> <runtime-secret-name-or-arn> <new-version-id> <baseline.json>
+```
+
+두 번째 명령은 검토한 GitOps 변경으로 `remoteRef.key`를 실제 Secret ARN,
+`remoteRef.version`을 `uuid/<new-version-id>`로 지정한 검증 회전에서 사용합니다.
+ESO의 `syncedResourceVersion`은 generation/metadata hash이므로 AWS VersionId와 비교하지 않습니다.
+Metadata만으로 AWSCURRENT payload 동일성을 추측하지 않으며, 정확한 UUID pin이 없으면 명확히 거부합니다.
+현재 AWS version·ESO 최신 generation·2시간 이내 baseline·전체 Pod 교체를 확인하고 비밀값은 읽거나 출력하지 않습니다.
+자동 회전용 AWSCURRENT 추적으로 돌아갈 때는 pin 해제도 GitOps 변경으로 검토하고 reconcile·rollout을 확인합니다.
 
 ## GitHub governance state
 
@@ -327,120 +376,17 @@ repository import와 위 설정 외의 예상하지 않은 변경이 없는지 �
 
 ## 제거 순서와 비용
 
-리소스 제거는 개별 Kubernetes 리소스를 직접 삭제하지 않고, digest로 결속된 ownership·GitOps
-증거를 `final-cleanup.sh`가 검증한 뒤에만 수행합니다. 각 allowlisted root에서 `terraform plan
--destroy -out=<absolute-path>`로 binary plan을 저장하고 `terraform show <absolute-path>`를 사람이
-검토한 뒤, exact layer·absolute path·SHA-256을 `playbuilder.saved-destroy-plans/v1` 형식의
-`SAVED_DESTROY_PLAN_MANIFEST`에 기록합니다. raw plan JSON은 보관하지 않습니다. 현재 cloud
-inventory와 함께 preflight를 실행하며 `OWNER_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`,
-`PROJECT_NAME`가 설정되어 있어야 합니다.
+핵심 요약: 배포 rollback, 일부 계층 teardown, 플랫폼 전체 폐기는 서로 다른 작업입니다.
+전체 폐기는 소유권 inventory와 보존 결정, writer 중지, 검토한 saved destroy plan을 요구합니다.
 
-```bash
-bash scripts/cleanup-preflight.sh \
-  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST" \
-  --inventory-source "$LIVE_OWNERSHIP_INPUT" \
-  --inventory-output evidence/cleanup/ownership-inventory.json \
-  --retain-template evidence/cleanup/retain-decisions.json \
-  --preflight-output "$CLEANUP_PREFLIGHT_EVIDENCE"
-```
+운영 절차의 단일 기준은 [runbook의 제거와 비용](docs/runbook.md#제거와-비용)입니다.
+`cleanup-preflight.sh` → retain 결정 → `capture-in-flight-zero.sh` → GitOps freeze/removal →
+`final-cleanup.sh` dry-run → 명시적 execute 순서로 진행합니다. DB·snapshot·KMS·보호 백업의
+추가 보존 조건은 [enterprise integration](docs/runbooks/enterprise-integration.md#cleanup-and-retention)을 따릅니다.
 
-`evidence/cleanup/ownership-inventory.json`의 모든 `DELETE`, `RETAIN`, `EXTERNAL_SHARED` 결정을
-검토합니다. `evidence/cleanup/retain-decisions.json`은 retained/shared 항목만 승인할 수 있으며
-delete 권한을 추가할 수 없습니다. 결정이 틀리면 source inventory와 destroy plan을 고친 뒤
-preflight를 다시 실행합니다. 일치하는 경우에만 `status`를 `APPROVED`로, `approvedAt`을 현재
-canonical UTC seconds 값으로 바꾸고 파일 권한 `0600`을 유지합니다.
-
-`argocd-gitops`에서 optional load·Chaos·recovery 입력을 끄고 해당 removal을 기다린 뒤 Auto-Sync를
-끕니다. 이어 두 cluster에서 active load, Chaos, recovery, migration writer가 모두 0인지 live API로
-다시 확인합니다.
-이 producer는 EKS ARN·account·Region·OwnerId tag와 각 kube context의 API endpoint를 교차 검증하고
-`evidence/cleanup/in-flight-zero.json`에만 `CLOUD_RUNTIME` 증거를 원자적으로 기록합니다.
-
-```bash
-bash scripts/capture-in-flight-zero.sh \
-  --dev-context "$DEV_KUBE_CONTEXT" \
-  --prod-context "$PROD_KUBE_CONTEXT" \
-  --dev-cluster-name "$DEV_CLUSTER_NAME" \
-  --prod-cluster-name "$PROD_CLUSTER_NAME"
-```
-
-두 cluster API가 모두 접근 가능한 동안 `argocd-gitops` 저장소에서 먼저
-`evidence/cleanup/freeze.json`을 수집합니다.
-
-```bash
-AWS_REGION="$AWS_REGION" DEV_CLUSTER_NAME="$DEV_CLUSTER_NAME" PROD_CLUSTER_NAME="$PROD_CLUSTER_NAME" \
-  bash scripts/capture-cleanup-evidence.sh freeze \
-    --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
-```
-
-그 뒤에만 검토된 cleanup commit을 manual full Sync/prune하고 workload와 writer가 제거된 것을
-확인한 다음 `evidence/cleanup/removal.json`을 수집합니다.
-
-```bash
-bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$LAB_EKS_REPO" \
-  --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
-```
-
-EKS 저장소로 돌아와 동일한 파일 집합으로 먼저 dry-run을 실행합니다. `--execute`와 세 confirmation을
-추가한 두 번째 호출만 실제 제거를 허용합니다.
-
-`$SAVED_DESTROY_PLAN_MANIFEST`는 운영자가 검토한 exact binary path/SHA256와 layer 순서를 결속합니다.
-완료/실패/교체 plan은 crash-safe progress registry로 관리하므로 이전 `--saved-plan-dir` 인터페이스를
-대체합니다. 이는 별도의 명시적 운영자 cleanup 승인이지 GitHub protected-apply 승인 증거가 아닙니다.
-일반 CI 생성/apply의 source/account/backend/approval/FinOps gate는 그대로 유지합니다.
-기본 8개 root에 inventory가 요구하는 recovery/prod DB가 controllers 뒤에 추가됩니다.
-
-```bash
-cleanup_args=(
-  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST"
-  --apply-progress evidence/cleanup/saved-plan-progress.json
-  --inventory evidence/cleanup/ownership-inventory.json
-  --retain-decisions evidence/cleanup/retain-decisions.json
-  --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
-  --in-flight-evidence evidence/cleanup/in-flight-zero.json
-  --gitops-freeze-evidence "$ARGO_REPO/evidence/cleanup/freeze.json"
-  --gitops-removal-evidence "$ARGO_REPO/evidence/cleanup/removal.json"
-  --dev-context "$DEV_KUBE_CONTEXT"
-  --prod-context "$PROD_KUBE_CONTEXT"
-  --kubernetes-pre-destroy-output evidence/cleanup/kubernetes-pre-destroy.json
-  --residual-output evidence/cleanup/residual.json
-)
-
-bash scripts/final-cleanup.sh "${cleanup_args[@]}"
-bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
-  --confirm-account-id "$AWS_ACCOUNT_ID" \
-  --confirm-region "$AWS_REGION" \
-  --confirm-owner-id "$OWNER_ID"
-```
-
-실행 스크립트는 마지막 Kubernetes 관찰을 기록한 후 다음 allowlist의 digest-bound saved plan을
-`terraform apply <saved-plan>`으로 적용합니다. 성공한 layer/digest는 권한 `0600`인
-`playbuilder.saved-destroy-progress/v2` progress에 원자적으로 기록한 뒤 해당 binary plan을 즉시 삭제합니다.
-progress는 원본과 교체 plan의 path/digest를 모두 등록합니다. 중간 실패 시 성공 prefix만 건너뛰며,
-결과가 불확실한 in-flight layer는 현재 state로 새 plan을 만들고 다시 review해야 합니다. 새 plan이
-delete-only이면 그 plan을 적용하고, no-change이면 `RECOVERED_NO_CHANGES`로 완료 처리합니다. 전체
-remaining plan의 semantic preflight가 끝나기 전에는 manifest binding을 변경하지 않습니다. 모든
-layer가 완료되면 등록된 원본/교체 binary plan을 모두 제거합니다.
-
-- `environments/prod/04-workloads/argocd`
-- `environments/dev/04-workloads/argocd`
-- `environments/prod/03-platform`
-- `environments/dev/03-platform`
-- `environments/prod/02-eks`
-- `environments/dev/02-eks`
-- `environments/prod/01-network`
-- `environments/dev/01-network`
-
-EKS 삭제 전에는 canonical `kubernetes-pre-destroy.json`, 삭제 후에는 AWS/Terraform API만 사용한
-`residual.json`을 원자적으로 기록합니다. PVC, VolumeSnapshot, VolumeSnapshotContent, Namespace와
-provider-side handle은 승인된 retain 결정에 따라 검증되므로 PVC 직접 삭제 명령을 실행하지
-않습니다. Gateway가 만든 ALB와 target group이 남거나 미승인 billable residual이 있으면 완료
-증거가 생성되지 않습니다. ECR의 `force_delete=false`와 Secrets Manager의 7일 recovery window는
-보호 경계로 유지됩니다.
-
-운영 비용이 발생하는 핵심 항목은 NAT Gateway, EKS control plane, EC2 node, ALB, AMP입니다.
-최종 PASS는 `evidence/cleanup/residual.json`의 미승인 platform-owned billable residual이 0이고
-승인된 retained/external handle이 inventory와 일치할 때만 성립합니다.
+`checkpoint-teardown.sh`는 선택 계층의 부분 제거이며 전체 폐기 완료를 의미하지 않습니다.
+NAT, EKS, EC2, ALB, RDS, AMP와 보존된 백업은 비용이 남을 수 있습니다. 완료 여부는 파일
+개수가 아니라 실제 잔존 리소스·승인된 보존 대상·provider 소유권을 대조해 판단합니다.
 
 ## 검증 범위
 

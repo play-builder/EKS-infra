@@ -8,6 +8,8 @@ trigger=w.fetch('on',w[true])
 raise 'scheduled drift missing' unless trigger.fetch('schedule').size==1
 job=w.fetch('jobs').fetch('drift')
 raise 'unexpected write permission' unless job.fetch('permissions')=={'contents'=>'read','id-token'=>'write'}
+raise 'drift must use account-scoped environments' unless job.fetch('environment').include?("'dev-drift'") && job.fetch('environment').include?("'production-drift'") && job.fetch('environment').include?("'recovery-drift'")
+raise 'drift runner must reach private EKS' unless job.fetch('runs-on').include?('TERRAFORM_RUNNER_LABELS') && job.fetch('runs-on').include?('eks-operations')
 steps=job.fetch('steps')
 auth=steps.find{|s|s.fetch('uses','').start_with?('aws-actions/configure-aws-credentials@')}
 raise 'dedicated drift identity' unless auth.fetch('with').fetch('role-to-assume')=='${{ secrets.TERRAFORM_DRIFT_ROLE_ARN }}'

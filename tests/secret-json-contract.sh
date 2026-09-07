@@ -72,7 +72,7 @@ JSON
 
 base_env=(
   NETWORK_AWS_PROFILE=network DEV_AWS_PROFILE=dev AWS_REGION=ap-northeast-2
-  LAB_PROJECT_NAME=mini-commerce ROOT_DOMAIN=example.invalid
+  PLATFORM_PROJECT_NAME=mini-commerce ROOT_DOMAIN=example.invalid
   INFRA_GH_REPO=owner/infra APP_GH_REPO=owner/app GITOPS_GH_REPO=owner/gitops
   PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin"
 )

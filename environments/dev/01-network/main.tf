@@ -15,6 +15,7 @@ locals {
     var.tags,
     {
       PlatformInstanceId = var.platform_instance_id
+      OwnerId            = var.platform_instance_id # cleanup identity; distinct from the team Owner tag
       Owner              = var.owner
       CostCenter         = var.cost_center
       Environment        = var.environment

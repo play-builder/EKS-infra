@@ -53,6 +53,7 @@ bash tests/cluster-autoscaler-render-contract.sh
 
 ```bash
 "$ENTERPRISE_PYTHON" tests/amp-slo-sdk-contract.py
+"$ENTERPRISE_PYTHON" tests/dev-evidence-runtime-test.py --terraform
 "$ENTERPRISE_PYTHON" tests/argocd-backup-sdk-contract.py
 "$ENTERPRISE_PYTHON" tests/rds-recovery-sdk-contract.py
 ```
@@ -66,9 +67,9 @@ SDK 검사는 pinned boto3/botocore 1.42.59의 serialization과 stub 응답을 �
 | 목적 | 진입점 |
 | --- | --- |
 | 계정별 state bucket·DNS 위임·OIDC | `scripts/foundation-check.sh` |
-| Dev Deployment·stateful·Secret 회전 | `scripts/dev-ready-check.sh core\|stateful\|secret-freshness` |
+| Dev Deployment·stateful·Secret 회전 | `scripts/dev-ready-check.sh core\|stateful\|secret-baseline\|secret-freshness` |
 | Dev 배포·SLO 증빙 | `scripts/capture-dev-evidence.sh deployment\|slo` |
 | 세 파일의 DEV_READY 결속 | `scripts/dev-ready-check.sh deployment.json slo.json ready.json` |
 | teardown 사전 검사·실행 | `scripts/cleanup-preflight.sh`, `checkpoint-teardown.sh`, `final-cleanup.sh` |
 
-`foundation-check.sh`는 기존 `NETWORK_AWS_PROFILE`, `DEV_AWS_PROFILE`, `AWS_REGION`, `LAB_PROJECT_NAME`, `ROOT_DOMAIN`, `INFRA_GH_REPO`, `APP_GH_REPO`, `GITOPS_GH_REPO` 입력을 사용합니다. teardown은 저장된 검토 plan과 명시적인 실행 승인이 있어야 변경을 수행합니다.
+`foundation-check.sh`는 기존 `NETWORK_AWS_PROFILE`, `DEV_AWS_PROFILE`, `AWS_REGION`, `PLATFORM_PROJECT_NAME`, `ROOT_DOMAIN`, `INFRA_GH_REPO`, `APP_GH_REPO`, `GITOPS_GH_REPO` 입력을 사용합니다. teardown은 저장된 검토 plan과 명시적인 실행 승인이 있어야 변경을 수행합니다.

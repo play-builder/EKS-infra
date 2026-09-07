@@ -381,8 +381,7 @@ module "amp" {
   source = "../../../modules/addons/amp"
   count  = var.enable_amp ? 1 : 0
 
-  name           = "${local.name}-prometheus"
-  retention_days = var.amp_retention_days
+  name = "${local.name}-prometheus"
 
   tags = local.common_tags
 }

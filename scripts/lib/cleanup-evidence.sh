@@ -163,7 +163,8 @@ cleanup_inspect_saved_destroy_plan() {
     def tags_allow_delete:
       (.change.before.tags_all // .change.before.tags // null) as $tags |
       if ($tags | type) == "object" and ($tags | length) > 0 then
-        $tags.OwnerId == $owner and $tags.Project == $project and
+        ($tags.OwnerId // $tags.PlatformInstanceId) == $owner and
+        ($tags.PlatformInstanceId == null or $tags.PlatformInstanceId == $owner) and $tags.Project == $project and
         $tags.Environment == (if $environment == "recovery" then "prod" else $environment end) and $tags.Layer == $semanticLayer and
         $tags.ManagedBy == "Terraform"
       elif .type == "terraform_data" and .address == "terraform_data.workload_ownership" then

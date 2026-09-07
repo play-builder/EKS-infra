@@ -25,6 +25,12 @@ expected_backend_key=$(terraform_plan_expected_backend_key_for_root "$terraform_
 [[ "$expected_operation" == apply || "$expected_operation" == destroy ]] || fail OPERATION_INVALID
 [[ "$request_identity" =~ [^[:space:]] && "$request_identity" != pending ]] || fail REQUEST_IDENTITY_INVALID
 [[ "$approval_run_id" =~ ^[1-9][0-9]*$ ]] || fail APPROVAL_RUN_ID_INVALID
+case "$terraform_root" in
+  environments/dev/*) approval_environment=dev ;;
+  environments/prod/*|terraform/platform-backup) approval_environment=production ;;
+  environments/recovery/*) approval_environment=recovery ;;
+  *) fail APPROVAL_ENVIRONMENT_UNSUPPORTED ;;
+esac
 pb_validate_account "$account_id"
 pb_validate_region "$region"
 
@@ -61,9 +67,9 @@ request_lower=$(printf '%s' "$request_identity" | tr '[:upper:]' '[:lower:]')
 
 approval_sha="sha256:$(pb_raw_sha256_file "$approval_evidence")"
 [[ $(jq -r '.approvalEvidenceSha256 // empty' "$manifest") == "$approval_sha" ]] || fail APPROVAL_EVIDENCE_DIGEST_MISMATCH
-jq -e --arg approver "$approval_identity" --arg requester "$request_identity" --arg run "$approval_run_id" '
+jq -e --arg approver "$approval_identity" --arg requester "$request_identity" --arg run "$approval_run_id" --arg environment "$approval_environment" '
   .schemaVersion == "platform.saved-plan-approval/v1" and
-  .source == "github-actions-review-history" and .environment == "production" and
+  .source == "github-actions-review-history" and .environment == $environment and
   .state == "approved" and .runId == $run and .requestIdentity == $requester and
   .approvalIdentity == $approver and
   (.approvalIdentity | type == "string" and test("[^[:space:]\\uFEFF]")) and

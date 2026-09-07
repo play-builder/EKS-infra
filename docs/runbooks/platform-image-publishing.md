@@ -6,7 +6,7 @@ upstream signature. Application image provenance and SPDX policies remain indepe
 
 ## Prerequisites and ownership
 
-- Apply the reviewed shared identity root through the platform Terraform owner. The new ECR repository
+- Apply the reviewed `environments/network/02-registry` root through the platform Terraform owner. The new ECR repository
   and publisher role are separate from application repositories and build/attestation roles.
 - Configure the actual fork owner/repository numeric IDs in `platform_image_publisher`; read metadata
   with `gh api repos/OWNER/EKS-infra` and `gh api users/OWNER`. Identity values are not secrets.
@@ -17,6 +17,12 @@ upstream signature. Application image provenance and SPDX policies remain indepe
   `PLATFORM_IMAGE_PUBLISHER_ROLE_ARN` from the exact Terraform outputs. No AWS static access key is needed.
 - Add the platform ECR ARN to the Sigstore controller's explicit read allowlist. Workload node image pull
   permissions and outbound access to ECR/S3 are separate from the admission reader's permissions.
+
+## Registry-wide scanning ownership
+
+`registry_scanning` defaults to `ownership_mode = "external"`. This leaves the account/Region singleton unchanged and does not claim Enhanced scanning is enabled. The image scan gate still reads actual ECR results.
+
+To manage it here, provide `ownership_mode = "terraform"`, the complete reviewed `repository_filters` and optional `scan_on_push_repository_filters`, plus `ownership_handoff = { account_id, aws_region, approval_reference }`. Continuous filters must explicitly include the app and optional platform image repositories. The root imports the existing singleton before proposing any change; preserve other teams' filters. The previous owner must release state ownership without deleting the remote configuration. See [migration procedure](../production-migration.md#iam-역할과-ecr-소유권-전환).
 
 ## Publication and activation
 

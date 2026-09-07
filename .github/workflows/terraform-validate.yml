@@ -32,28 +32,8 @@ on:
           - environments/prod/config/database.tfbackend
           - environments/recovery/config/database.tfbackend
   pull_request:
-    paths:
-      - "**/*.tf"
-      - "**/*.tftest.hcl"
-      - "**/*.tfvars.example"
-      - ".tflint.hcl"
-      - ".trivyignore.yaml"
-      - "policy/**"
-      - "scripts/**"
-      - "tests/**"
-      - ".github/workflows/terraform-validate.yml"
   push:
     branches: [main]
-    paths:
-      - "**/*.tf"
-      - "**/*.tftest.hcl"
-      - "**/*.tfvars.example"
-      - ".tflint.hcl"
-      - ".trivyignore.yaml"
-      - "policy/**"
-      - "scripts/**"
-      - "tests/**"
-      - ".github/workflows/terraform-validate.yml"
 
 permissions:
   contents: read
@@ -62,8 +42,11 @@ permissions:
 
 jobs:
   reviewed-plan:
+    needs: [contract, format, lint, security, enterprise-static, validate]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.TERRAFORM_RUNNER_LABELS || '["self-hosted","linux","x64","eks-operations"]') }}
+    environment: ${{ startsWith(inputs.terraform_root, 'environments/dev/') && 'dev-plan' || startsWith(inputs.terraform_root, 'environments/prod/') && 'production-plan' || 'recovery-plan' }}
+    timeout-minutes: 30
     env:
       TF_ROOT: ${{ inputs.terraform_root }}
       TF_BACKEND: ${{ inputs.backend_config }}
@@ -125,9 +108,9 @@ jobs:
 
   reviewed-plan-apply:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    needs: reviewed-plan
-    runs-on: ubuntu-latest
-    environment: production
+    needs: [reviewed-plan, contract, format, lint, security, enterprise-static, validate]
+    runs-on: ${{ fromJSON(vars.TERRAFORM_RUNNER_LABELS || '["self-hosted","linux","x64","eks-operations"]') }}
+    environment: ${{ startsWith(inputs.terraform_root, 'environments/dev/') && 'dev' || startsWith(inputs.terraform_root, 'environments/prod/') && 'production' || 'recovery' }}
     env:
       FINOPS_CONTRACT_SHA256: ${{ vars.FINOPS_CONTRACT_SHA256 }}
       PLATFORM_INSTANCE_ID: ${{ vars.PLATFORM_INSTANCE_ID }}
@@ -166,9 +149,10 @@ jobs:
       - name: Bind protected environment approval history
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ENVIRONMENT: ${{ startsWith(inputs.terraform_root, 'environments/dev/') && 'dev' || startsWith(inputs.terraform_root, 'environments/prod/') && 'production' || 'recovery' }}
         run: |
           gh api "/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" > "$RUNNER_TEMP/approval-history.json"
-          bash "$GITHUB_WORKSPACE/scripts/bind-saved-plan-approval.sh" "$GITHUB_WORKSPACE/plan-artifact" "$RUNNER_TEMP/approval-history.json" production "$GITHUB_TRIGGERING_ACTOR" "$GITHUB_RUN_ID"
+          bash "$GITHUB_WORKSPACE/scripts/bind-saved-plan-approval.sh" "$GITHUB_WORKSPACE/plan-artifact" "$RUNNER_TEMP/approval-history.json" "$DEPLOYMENT_ENVIRONMENT" "$GITHUB_TRIGGERING_ACTOR" "$GITHUB_RUN_ID"
       - name: Verify reviewed saved plan before apply
         run: |
           LIVE_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -358,6 +342,7 @@ jobs:
           set -euo pipefail
           "$ENTERPRISE_PYTHON" -c 'import boto3,botocore; assert boto3.__version__ == botocore.__version__ == "1.42.59"'
           "$ENTERPRISE_PYTHON" tests/amp-slo-sdk-contract.py
+          "$ENTERPRISE_PYTHON" tests/dev-evidence-runtime-test.py --terraform
           "$ENTERPRISE_PYTHON" tests/argocd-backup-sdk-contract.py
           "$ENTERPRISE_PYTHON" tests/rds-recovery-sdk-contract.py
 

@@ -41,3 +41,32 @@ output "image_repository_arn" {
 output "chart_repository_arn" {
   value = aws_ecr_repository.chart.arn
 }
+
+output "aws_region" {
+  description = "GitHub Actions Variable AWS_REGION for this registry account."
+  value       = var.aws_region
+}
+
+output "platform_istio_proxy_repository_url" {
+  description = "GitHub Actions Variable PLATFORM_ISTIO_PROXY_REPOSITORY_URL; null while publisher creation is disabled."
+  value       = try(aws_ecr_repository.platform["platform"].repository_url, null)
+}
+
+output "platform_istio_proxy_repository_arn" {
+  description = "Add to the Sigstore controller and workload pull allowlists."
+  value       = try(aws_ecr_repository.platform["platform"].arn, null)
+}
+
+output "platform_image_publisher_role_arn" {
+  description = "GitHub Actions Variable PLATFORM_IMAGE_PUBLISHER_ROLE_ARN."
+  value       = try(aws_iam_role.platform_publisher["platform"].arn, null)
+}
+
+output "platform_image_publisher_trusted_subject" {
+  value = local.platform_subject
+}
+
+output "registry_scanning_contract" {
+  description = "Required scanning and singleton ownership; external mode does not assert live scanning is enabled."
+  value       = module.registry_scanning.contract
+}

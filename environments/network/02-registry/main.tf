@@ -13,6 +13,7 @@ provider "aws" {
 }
 
 data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
 
 locals {
   github_issuer     = "token.actions.githubusercontent.com"
@@ -39,6 +40,17 @@ resource "aws_iam_openid_connect_provider" "github" {
 data "aws_iam_openid_connect_provider" "external" {
   count = var.oidc_provider_mode == "external" ? 1 : 0
   arn   = var.external_oidc_provider_arn
+
+  lifecycle {
+    postcondition {
+      condition = (
+        self.arn == "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.github_issuer}" &&
+        trimsuffix(trimprefix(self.url, "https://"), "/") == local.github_issuer &&
+        contains(self.client_id_list, "sts.amazonaws.com")
+      )
+      error_message = "External OIDC must be the current account's GitHub issuer with sts.amazonaws.com audience."
+    }
+  }
 }
 
 # ---- ECR repositories ----

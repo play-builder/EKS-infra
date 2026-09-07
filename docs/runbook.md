@@ -8,10 +8,10 @@ FinOps management와 protected backup은 별도 operator lane이며, native Isti
 ## 핵심 요약
 
 적용은 `01 → 02 → 03 → 04` 순서로 수행합니다. 제거는 raw `terraform destroy`나 개별
-Kubernetes 리소스 삭제가 아니라 아래 Ch26 guarded cleanup만 사용합니다.
+Kubernetes 리소스 삭제가 아니라 아래 guarded cleanup만 사용합니다.
 장애 대응 전에는 AWS identity, kube context, 대상 environment를 먼저 확인합니다.
 
-과정에서 검증한 `ap-northeast-2` 또는 `us-east-1` 중 클러스터를 만든 Region을 사용합니다.
+이 저장소에서 지원하는 `ap-northeast-2` 또는 `us-east-1` 중 클러스터를 만든 Region을 사용합니다.
 
 ```bash
 export AWS_REGION="ap-northeast-2"
@@ -30,14 +30,13 @@ prod 작업 전에는 출력의 account ID와 cluster name을 작업 티켓의 �
 
 ## Reviewed Terraform apply 설정
 
-`terraform-validate` workflow의 repository Actions Variables에는 `AWS_REGION`과
-`STATE_BUCKET_NAME`을, Secrets에는 `TERRAFORM_PLAN_ROLE_ARN`과 `TERRAFORM_APPLY_ROLE_ARN`을
-등록합니다. 두 IAM role은 GitHub OIDC로만 assume하고 plan role에는 mutation 권한을 주지 않습니다.
-`production` environment에는 required reviewer와 self-review 차단을 설정합니다.
+계정별 GitHub environment와 private EKS에 도달하는 runner를 [Terraform CI 운영 설정](runbooks/terraform-ci.md)에 따라 준비합니다.
+Plan과 apply는 별도 OIDC role을 사용합니다. Apply environment `dev`, `production`, `recovery`에는
+required reviewer와 self-review 차단을 설정합니다.
 
 Apply job은 live STS account, source SHA, backend root/key, Terraform executable/version, tracked provider
 lock, plan digests와 GitHub environment approval history가 모두 일치할 때만 저장된 binary plan을
-실행합니다. `STATE_BUCKET_NAME`은 dispatch input이 아니라 repository-managed Variable이므로 state
+실행합니다. `STATE_BUCKET_NAME`은 dispatch input이 아니라 environment-managed Variable이므로 state
 선택을 실행자가 임의로 바꿀 수 없습니다.
 
 ## 클러스터 접속
@@ -178,7 +177,7 @@ EKS는 한 minor씩 올리고 control plane → add-on compatibility → node gr
 
 ## 제거와 비용
 
-Ch26 cleanup은 개별 Application, Gateway, PVC를 직접 삭제하거나 각 Terraform root에서 raw
+Guarded cleanup은 개별 Application, Gateway, PVC를 직접 삭제하거나 각 Terraform root에서 raw
 destroy하지 않습니다. `OWNER_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`,
 `PROJECT_NAME`를 설정합니다. 각 allowlisted root의 binary `terraform plan -destroy -out` 결과를
 `terraform show`로 검토하고 exact path와 SHA-256을 `playbuilder.saved-destroy-plans/v1` manifest에
@@ -224,7 +223,7 @@ AWS_REGION="$AWS_REGION" DEV_CLUSTER_NAME="$DEV_CLUSTER_NAME" PROD_CLUSTER_NAME=
 evidence를 수집합니다.
 
 ```bash
-bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$LAB_EKS_REPO" \
+bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$EKS_REPO_ROOT" \
   --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
 ```
 
@@ -237,7 +236,7 @@ progress registry로 대체되었습니다. 이 별도 운영자 cleanup 승인�
 간주하지 않습니다. 일반 CI source/account/backend/approval/FinOps gate는 변경되지 않았습니다.
 
 ```bash
-cd "$LAB_EKS_REPO"
+cd "$EKS_REPO_ROOT"
 cleanup_args=(
   --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST"
   --apply-progress evidence/cleanup/saved-plan-progress.json
@@ -297,7 +296,8 @@ release or blue/green MNG, not an assumed AMI downgrade.
 Run `bash scripts/eks-upgrade-preflight.sh CLUSTER REGION FROM TO NODEGROUP RELEASE OUTPUT`
 from the operator path with a kubeconfig pointing at that cluster. It refreshes
 upgrade insights with a bounded wait, reads every returned insight, nodes, PDBs,
-all five add-ons and six controller families, and rejects missing/unknown data.
+all installed add-ons (including the five required ones), target-version compatibility and six controller families, and rejects missing/unknown data.
+The new capture uses `platform.eks-upgrade-preflight/v2`; older snapshots must be recaptured. Controller Ready counts are current-version observations, not proof of third-party support for the target Kubernetes version.
 It performs no upgrade. PDBs with zero allowed disruption block this conservative
 gate. Fixture parsing is local verification only; AWS pins and rollout remain unverified.
 ## Managed-node capacity and user-run drill

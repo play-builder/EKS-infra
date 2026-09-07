@@ -191,17 +191,24 @@ def rows(response, key):
 
 
 def discover(inventory, query=aws):
-    response = query("resourcegroupstaggingapi", "get-resources", "--tag-filters",
-                     "Key=OwnerId,Values=" + inventory["ownerId"], "--resource-type-filters",
-                     "rds:db", "rds:snapshot", "rds:subgrp", "rds:pg", "kms:key", "logs:log-group",
-                     "wafv2:webacl", "s3:bucket", "ecr:repository")
-    if response is None:
-        raise ValueError("ENTERPRISE_DISCOVERY_FAILED")
+    # Search both the canonical platform identity and the historical cleanup tag.
+    # Separate queries implement a union; a combined tag filter would be an AND.
     known = {r["id"].removesuffix(":*") if hasattr(str, "removesuffix") else r["id"].rstrip(":*") for r in inventory["resources"]}
-    for item in rows(response, "ResourceTagMappingList"):
-        arn = item["ResourceARN"]
-        if arn not in known and arn.rstrip(":*") not in known:
-            raise ValueError("UNCLASSIFIED_ENTERPRISE_RESIDUAL: " + arn)
+    for key in ("PlatformInstanceId", "OwnerId"):
+        response = query("resourcegroupstaggingapi", "get-resources", "--tag-filters",
+                         "Key=" + key + ",Values=" + inventory["ownerId"], "--resource-type-filters",
+                         "rds:db", "rds:snapshot", "rds:subgrp", "rds:pg", "kms:key", "logs:log-group",
+                         "wafv2:webacl", "s3:bucket", "ecr:repository")
+        if response is None:
+            raise ValueError("ENTERPRISE_DISCOVERY_FAILED")
+        for item in rows(response, "ResourceTagMappingList"):
+            tags = {t["Key"]: t["Value"] for t in item.get("Tags", [])}
+            if any(tags.get(k, inventory["ownerId"]) != inventory["ownerId"]
+                   for k in ("PlatformInstanceId", "OwnerId")):
+                raise ValueError("ENTERPRISE_DISCOVERY_OWNER_CONFLICT")
+            arn = item["ResourceARN"]
+            if arn not in known and arn.rstrip(":*") not in known:
+                raise ValueError("UNCLASSIFIED_ENTERPRISE_RESIDUAL: " + arn)
 
 
 def present(kind, ident, query=aws):

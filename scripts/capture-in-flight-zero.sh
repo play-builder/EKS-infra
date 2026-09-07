@@ -82,7 +82,9 @@ capture_cluster() {
     .cluster.name == $name and .cluster.status == "ACTIVE" and
     .cluster.arn == ("arn:aws:eks:"+$region+":"+$account+":cluster/"+$name) and
     (.cluster.endpoint | type == "string" and startswith("https://")) and
-    .cluster.tags.OwnerId == $owner and .cluster.tags.Environment == $environment
+    (.cluster.tags.OwnerId // .cluster.tags.PlatformInstanceId) == $owner and
+    (.cluster.tags.PlatformInstanceId == null or .cluster.tags.PlatformInstanceId == $owner) and
+    .cluster.tags.Environment == $environment
   ' <<<"$cluster_json" >/dev/null || pb_fail "$environment EKS cluster scope or ownership mismatch"
   cluster_arn=$(jq -r '.cluster.arn' <<<"$cluster_json")
   pb_assert_eks_cluster_arn "$cluster_arn" "$AWS_REGION" "$AWS_ACCOUNT_ID"

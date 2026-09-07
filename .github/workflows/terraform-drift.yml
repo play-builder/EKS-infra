@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   drift:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.TERRAFORM_RUNNER_LABELS || '["self-hosted","linux","x64","eks-operations"]') }}
+    environment: ${{ startsWith(matrix.root, 'environments/dev/') && 'dev-drift' || startsWith(matrix.root, 'environments/prod/') && 'production-drift' || 'recovery-drift' }}
     timeout-minutes: 30
     permissions:
       contents: read

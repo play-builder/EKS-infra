@@ -4,7 +4,7 @@ project_name = "mini-commerce"
 state_bucket_name = "replace-with-your-dev-state-bucket"
 environment  = "dev"
 
-gitops_repo_url        = "https://github.com/REPLACE_ME/argocd-gitops.git"
+gitops_repo_url        = "https://github.com/play-builder/argocd-gitops.git"
 gitops_target_revision = "main"
 
 # First apply with false. Set true after the repository exists and is reachable.
