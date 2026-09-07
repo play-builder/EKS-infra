@@ -48,6 +48,14 @@ override.tf.json
 !*.auto.tfvars.example
 
 # ============================================
+# Account-specific local files (contain account IDs; never commit)
+# ============================================
+# direnv account selection: environments/<account>/.envrc (.envrc.example stays tracked)
+.envrc
+# One-time import block: environments/network/01-dns/import.tf (import.tf.example stays tracked)
+import.tf
+
+# ============================================
 # Secrets & Credentials (NEVER commit)
 # ============================================
 *.pem
