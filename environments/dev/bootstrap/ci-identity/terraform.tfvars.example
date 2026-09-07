@@ -1,0 +1,13 @@
+aws_region        = "ap-northeast-2"
+environment       = "dev"
+project_name      = "mini-commerce"
+course_id         = "replace-with-unique-course-id"
+state_bucket_name = "mini-commerce-tfstate-replace-with-dev-account-id"
+
+github_owner          = "replace-with-github-owner"
+github_owner_id       = "0"
+infra_repository_name = "EKS-infra"
+infra_repository_id   = "0"
+
+oidc_provider_mode         = "create"
+external_oidc_provider_arn = null
