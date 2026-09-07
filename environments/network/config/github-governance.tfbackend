@@ -1,0 +1,3 @@
+key          = "network/03-github-governance/terraform.tfstate"
+encrypt      = true
+use_lockfile = true
