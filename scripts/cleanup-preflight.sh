@@ -5,6 +5,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$SCRIPT_DIR/.." && pwd -P)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 source "$SCRIPT_DIR/lib/cleanup-evidence.sh"
+pb_prepare_commands
 
 saved_plan_manifest=''
 inventory_source=''

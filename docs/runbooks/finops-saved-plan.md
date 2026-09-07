@@ -40,7 +40,7 @@ workflow 도구 전제는 Terraform `1.16.0` (wrapper 비활성), Python >=3.10 
 테스트는 실제 saved-plan shell scripts와 실제 readiness evaluator를 실행하고 외부 AWS/Terraform I/O만 double로 바꾼다. `PLATFORM_CHECK_BIN_DIR` + `FINOPS_FIXTURE_JSON`은 로컬 테스트에서만 사용하며 manifest grade를 `STATIC`으로 고정한다. GitHub 실행은 fixture를 거부하고 runtime lane은 STATIC/fixture artifact를 거부한다. fixture 결과를 비용 runtime 검증으로 승격하지 않는다.
 
 ```bash
-bash tests/finops-saved-plan-contract.sh
+python3 -B tests/finops_saved_plan_test.py
 bash tests/saved-plan-apply-workflow-contract.sh
 bash tests/install-trivy-contract.sh
 ```

@@ -144,3 +144,44 @@ run "different_provider_account_is_rejected" {
   }
   expect_failures = [terraform_data.logging_identity]
 }
+
+run "explicit_backend_bucket_is_used_by_every_state_consumer" {
+  command = plan
+  variables { state_bucket_name = "alternate-reviewed-state-bucket" }
+  assert {
+    condition     = data.terraform_remote_state.eks.config.bucket == var.state_bucket_name && data.terraform_remote_state.network.config.bucket == var.state_bucket_name
+    error_message = "Every remote state must use the selected backend bucket."
+  }
+}
+
+run "traces_disabled_publish_no_endpoint" {
+  command = plan
+  assert {
+    condition     = output.adot_xray_enabled == false && output.otlp_http_traces_endpoint == null && output.otlp_traces_protocol == null && output.otlp_http_port == null && output.otlp_http_traces_path == null
+    error_message = "Disabled trace export must publish no usable endpoint."
+  }
+}
+run "traces_enabled_forward_the_collector_contract" {
+  command = plan
+  variables {
+    enable_adot_collector = true
+    enable_adot_xray      = true
+  }
+  override_module {
+    target = module.adot_collector[0]
+    outputs = {
+      xray_enabled              = true
+      otlp_http_traces_endpoint = "http://adot-collector.platform.svc:4318"
+      otlp_traces_protocol      = "http/protobuf"
+      otlp_http_port            = 4318
+      otlp_http_traces_path     = "/v1/traces"
+      iam_role_arn              = "arn:aws:iam::123456789012:role/adot"
+      addon_version             = "fixture"
+      scrape_contract           = {}
+    }
+  }
+  assert {
+    condition     = output.adot_xray_enabled && output.otlp_http_traces_endpoint == "http://adot-collector.platform.svc:4318" && output.otlp_traces_protocol == "http/protobuf" && output.otlp_http_port == 4318 && output.otlp_http_traces_path == "/v1/traces"
+    error_message = "The platform root must forward all five collector trace outputs."
+  }
+}

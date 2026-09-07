@@ -14,7 +14,19 @@ require 'digest'
 
 source = ARGV.fetch(0)
 workflow = YAML.load_file(File.join(source, '.github/workflows/terraform-validate.yml'))
-steps = workflow.fetch('jobs').fetch('reviewed-plan-apply').fetch('steps')
+plan_job = workflow.fetch('jobs').fetch('reviewed-plan')
+apply_job = workflow.fetch('jobs').fetch('reviewed-plan-apply')
+raise 'apply must consume its reviewed plan job' unless apply_job.fetch('needs') == 'reviewed-plan'
+raise 'apply must require the protected production environment' unless apply_job.fetch('environment') == 'production'
+raise 'apply cannot cancel an in-flight state mutation' unless apply_job.dig('concurrency', 'cancel-in-progress') == false
+raise 'apply concurrency must isolate each root' unless apply_job.dig('concurrency', 'group').include?('${{ inputs.terraform_root }}')
+raise 'apply requires artifact read and OIDC permissions' unless apply_job.dig('permissions', 'actions') == 'read' && apply_job.dig('permissions', 'id-token') == 'write'
+raise 'state bucket cannot be an arbitrary workflow input' unless plan_job.dig('env', 'BACKEND_BUCKET') == '${{ vars.STATE_BUCKET_NAME }}'
+raise 'plan request identity must be the triggering actor' unless plan_job.fetch('steps').find { |step| step['name'] == 'Create reviewed plan artifact' }.dig('env', 'PLAN_REQUEST_IDENTITY') == '${{ github.triggering_actor }}'
+upload = plan_job.fetch('steps').find { |step| step.fetch('uses', '').start_with?('actions/upload-artifact@') }
+download = apply_job.fetch('steps').find { |step| step.fetch('uses', '').start_with?('actions/download-artifact@') }
+raise 'apply artifact must match the reviewed plan producer' unless upload && download && upload.dig('with', 'name') == download.dig('with', 'name') && upload.dig('with', 'retention-days') == 1
+steps = apply_job.fetch('steps')
 tfroot = 'environments/prod/01-network'
 backend = 'environments/prod/config/network.tfbackend'
 bindings = {

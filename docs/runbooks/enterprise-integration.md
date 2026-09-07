@@ -163,13 +163,11 @@ is retained seven days, never tfvars or the binary plan. Scheduled execution is 
 
 ## Static verification and tools
 
-핵심 요약: the default runner is fixture-only; the complete runner also initializes providers and
-evaluates real pinned charts/PromQL. Neither executes cloud workloads.
+핵심 요약: the fast runner executes offline contracts once. CI runs Terraform mocks, chart/PromQL/Lua evaluation and pinned SDK serialization as separate steps. None executes cloud workloads.
 
 ```bash
 bash tests/run-contract-tests.sh
-ENTERPRISE_PYTHON=/path/to/isolated-venv/bin/python3 RUN_SDK_CONTRACTS=true \
-  bash tests/run-enterprise-static-tests.sh
+# Tool-backed commands and prerequisites: docs/testing.md
 ```
 
 Use Terraform 1.16.0, Helm 4.2.4, promtool 3.14.0, yq4.53.6, jq/Ruby/rg and Python 3.10+.
@@ -177,8 +175,10 @@ Health behavior uses real Lua5.1.5: `bash scripts/install-lua.sh /absolute/bin` 
 source, checks its pinned SHA256 before extraction/build, and requires cc/make. Put that directory
 on PATH or set LUA_BIN to its lua executable. This is a local test tool, not a workload dependency.
 Install scripts/requirements-argocd-backup.txt in the isolated venv (pinned AMP SDK + PyYAML6.0.3).
-AWS CLI does not imply importable boto3. Without RUN_SDK_CONTRACTS=true the SDK gates report NOT_RUN.
+AWS CLI does not imply importable boto3. The enterprise-static CI job always runs the three pinned SDK gates.
 Each render test checksum-checks its actual chart archive; use its documented CHART_ARCHIVE override.
 TFLint0.64.0, Trivy0.74.0 and Conftest0.69.0 remain separate required CI gates.
 Results are STATIC_VERIFIED/LOCAL_VERIFIED only. AWS apply/destroy, SSO, injection/admission, billing,
 notification delivery, PITR and backup restore remain LIVE_NOT_VERIFIED until separately authorized.
+
+Detailed local commands and evidence limits: [testing](../testing.md).

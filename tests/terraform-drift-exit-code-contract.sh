@@ -19,12 +19,15 @@ EOF
 cat >"$repo/bin/terraform" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+printf '%s\n' "$*" >>"${FAKE_TERRAFORM_COMMAND_LOG:?}"
 if [[ "$*" == *' plan '* ]]; then
+  [[ " $* " == *' -detailed-exitcode '* ]] || exit 97
   for arg in "$@"; do
     [[ "$arg" == -out=* ]] && printf 'drift-plan\n' >"${arg#-out=}"
   done
   exit "${FAKE_TERRAFORM_PLAN_STATUS:?}"
 fi
+[[ " $* " == *' init '* ]] || exit 97
 exit 0
 EOF
 chmod +x "$repo/bin/terraform"
@@ -49,7 +52,7 @@ for code in 0 1 2; do
   mkdir -p "$artifact"
   printf 'previous\n' >"$artifact/sentinel"
   set +e
-  PATH="$repo/bin:$PATH" FAKE_TERRAFORM_PLAN_STATUS=$code BACKEND_BUCKET=platform-state-123456789012 \
+  PATH="$repo/bin:$PATH" FAKE_TERRAFORM_COMMAND_LOG="$tmp_dir/terraform.log" FAKE_TERRAFORM_PLAN_STATUS=$code BACKEND_BUCKET=platform-state-123456789012 \
     AWS_REGION=ap-northeast-2 bash "$repo/scripts/terraform-drift-check.sh" \
       "$repo/environments/prod/01-network" "$repo/environments/prod/config/network.tfbackend" \
       "$artifact" >"$tmp_dir/drift-$code.log" 2>&1
@@ -64,7 +67,7 @@ for code in 0 1 2; do
     [[ ! -e "$artifact/sentinel" ]] || fail "exit code $code must replace the previously published artifact"
     expected=NO_DRIFT
     [[ "$code" -eq 0 ]] || expected=DRIFT_DETECTED
-    jq -e --arg expected "$expected" '.decision == $expected and .evidenceGrade == "CLOUD_RUNTIME"' \
+    jq -e --arg expected "$expected" '.decision == $expected and .evidenceGrade == "CLOUD_RUNTIME" and .schemaVersion == "platform.terraform-drift/v1" and (.terraformRoot | startswith("environments/prod/")) and (.sourceSha | test("^[0-9a-f]{40}$")) and (.observedAt | fromdateiso8601) <= now' \
       "$artifact/drift.json" >/dev/null || fail "exit code $code must publish drift.json with decision $expected"
     [[ -s "$artifact/drift.tfplan" ]] || fail "exit code $code must publish the saved drift plan"
   fi

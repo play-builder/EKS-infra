@@ -4,6 +4,21 @@ set -Eeuo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/lib/evidence-common.sh"
 
+case "${1:-}" in
+  core|stateful|secret-freshness)
+    mode=$1; shift
+    pb_prepare_commands
+    source "$SCRIPT_DIR/lib/runtime-readiness.sh"
+    case "$mode" in
+      core) check_core_runtime "$@" ;;
+      stateful) check_stateful "$@" ;;
+      secret-freshness) check_secret_freshness "$@" ;;
+    esac
+    pb_emit_pass "Dev $mode readiness verified."
+    exit 0
+    ;;
+esac
+
 [[ $# -eq 3 ]] || pb_fail 'usage: dev-ready-check.sh <dev-deployment.json> <dev-slo.json> <dev-ready.json>' 64
 deployment=$1
 slo=$2

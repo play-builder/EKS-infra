@@ -130,7 +130,31 @@ SNS 서명 암호 검증, subscriber audit log 출처 및 실제 배포 revision
 terraform -chdir=modules/addons/amp-alerting test
 python3 tests/amp-promql-contract.py
 python3 tests/adot-scrape-contract.py
-bash tests/amp-slo-drill-contract.sh
+python3 -B tests/amp-slo-drill-contract.py
 # optional collector venv
 python tests/amp-slo-sdk-contract.py
 ```
+
+## 기존 AMP alerting state의 이름 변경 확인
+
+핵심 요약: 기존 `a834593` 변경에서 Terraform 주소 세 개와 rule namespace의 실제 이름이 변경되었습니다. 현재 mock 테스트 통과만으로 기존 state의 이전·무중단 갱신을 확인할 수 없습니다.
+기존 환경에 적용하기 전에 아래 주소와 실제 ARN을 대조하고 검토된 saved plan에서 교체 여부를 확인합니다.
+
+아래 주소는 dev/prod `03-platform` root의 `module.amp_alerting.` 아래입니다.
+
+| 이전 주소 | 현재 주소 |
+| --- | --- |
+| `aws_sns_topic.course_alerts[0]` | `aws_sns_topic.pb_alerts[0]` |
+| `aws_prometheus_rule_group_namespace.course[0]` | `aws_prometheus_rule_group_namespace.platform[0]` |
+| `aws_prometheus_alert_manager_definition.course[0]` | `aws_prometheus_alert_manager_definition.platform[0]` |
+
+SNS topic의 실제 `name` 식은 `${var.name}-amp-alerts`로 유지되지만 rule namespace의 `name`은
+`course-release-slo`에서 `mini-commerce-release-slo`로 바뀌었습니다. 주소 이전만으로 실제 이름
+변경에 따른 교체가 없어지는 것은 아닙니다. 기존 state가 어느 주소를 관리하는지 확인한 뒤
+필요한 `moved` 선언 또는 별도 이전 계획을 검토해야 합니다. 임의의 `state rm`, 재생성, topic
+구독 삭제로 해결하지 않습니다.
+
+이번 구조 리팩토링은 이 세 리소스의 state를 변경하지 않았습니다. 완료 조건은 실제 state를
+사용한 검토 saved plan, 승인되지 않은 삭제·재생성 없음, SNS 구독 유지, AMP rule/Alertmanager
+정상 반영 및 firing/resolved 전달 확인입니다. 이 조건을 확인하기 전까지 기존 환경의 AMP
+이전은 `LIVE_NOT_VERIFIED`입니다.

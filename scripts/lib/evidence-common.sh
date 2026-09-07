@@ -63,7 +63,8 @@ pb_now() {
 
 pb_expires_after() {
   local seconds=${1:-3600}
-  jq -nr --argjson seconds "$seconds" 'now + $seconds | todateiso8601'
+  jq -nr --argjson seconds "$seconds" --arg base "${2:-}" \
+    '(if $base == "" then now else ($base | fromdateiso8601) end) + $seconds | todateiso8601'
 }
 
 pb_runtime_grade() {
@@ -111,4 +112,32 @@ pb_write_json() {
 pb_assert_json() {
   local file=$1 filter=$2 error=$3
   jq -e "$filter" "$file" >/dev/null || pb_fail "$error"
+}
+
+pb_require_command() {
+  command -v "$1" >/dev/null 2>&1 || pb_fail "required command not found: $1" 127
+}
+
+pb_require_environment() {
+  [[ -n "${!1:-}" ]] || pb_fail "required environment variable: $1" 64
+}
+
+pb_prepare_commands() {
+  if [[ -n "${PLATFORM_CHECK_BIN_DIR:-}" ]]; then
+    [[ -d "$PLATFORM_CHECK_BIN_DIR" ]] || pb_fail 'PLATFORM_CHECK_BIN_DIR must be a directory' 64
+    export PATH="$PLATFORM_CHECK_BIN_DIR:$PATH"
+  fi
+}
+
+pb_detail() { printf 'DETAIL: %s\n' "$*"; }
+
+pb_emit_pass() {
+  if [[ "${PLATFORM_CHECK_DETAIL_ONLY:-false}" == true ]]; then pb_detail "$*"; return; fi
+  local grade
+  grade=$(pb_runtime_grade)
+  if [[ "$grade" == STATIC ]]; then
+    printf 'PASS: [STATIC] SIMULATED_CLOUD_CONTRACT %s\n' "$*"
+  else
+    printf 'PASS: [%s] %s\n' "$grade" "$*"
+  fi
 }

@@ -1,5 +1,89 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+(
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$root/tests/helpers/dev-capture-environment.sh"
+tmp_dir=$(mktemp -d)
+trap 'rm -rf -- "$tmp_dir"' EXIT
+setup_capture_environment "$tmp_dir"
+
+output=$(run_slo_fixture "$root" "$tmp_dir" "$tmp_dir/slo.json")
+grep -Fq '[STATIC] SIMULATED_CLOUD_CONTRACT' <<<"$output"
+jq -e '.evidenceGrade == "STATIC" and .status == "PASS"' "$tmp_dir/slo.json" >/dev/null
+
+jq . "$tmp_dir/alert-delivery.json" >"$tmp_dir/alert-delivery-valid.json"
+export PLATFORM_FAKE_CLOUD_LOG="$tmp_dir/invalid-timestamp-cloud.log"
+for timestamp_case in \
+  'invalid-calendar|2020-02-30T00:00:00Z' \
+  'fractional|2020-03-01T00:00:00.123Z' \
+  'offset|2020-03-01T09:00:00+09:00' \
+  'future|2026-09-03T10:31:00Z'; do
+  IFS='|' read -r label value <<<"$timestamp_case"
+  : >"$PLATFORM_FAKE_CLOUD_LOG"
+  jq --arg value "$value" '.observedAt=$value' "$tmp_dir/alert-delivery-valid.json" >"$tmp_dir/alert-delivery.json"
+  if run_slo_fixture "$root" "$tmp_dir" "$tmp_dir/invalid-$label.json" >/dev/null 2>&1; then
+    echo "alert delivery $label observedAt must be rejected" >&2
+    exit 1
+  fi
+  [[ ! -e "$tmp_dir/invalid-$label.json" ]]
+  [[ ! -s "$PLATFORM_FAKE_CLOUD_LOG" ]] || {
+    echo "alert delivery $label observedAt must fail before cloud queries" >&2
+    exit 1
+  }
+done
+unset PLATFORM_FAKE_CLOUD_LOG
+jq . "$tmp_dir/alert-delivery-valid.json" >"$tmp_dir/alert-delivery.json"
+
+if FAKE_SNS_PENDING=true run_slo_fixture "$root" "$tmp_dir" "$tmp_dir/pending.json" >/dev/null 2>&1; then
+  echo 'PendingConfirmation must be routing-only evidence, not delivery proof' >&2
+  exit 1
+fi
+[[ ! -e "$tmp_dir/pending.json" ]]
+
+if FAKE_SNS_WRONG_SOURCE=true run_slo_fixture "$root" "$tmp_dir" "$tmp_dir/wrong-source.json" >/dev/null 2>&1; then
+  echo 'SNS policy for another AMP workspace/account must not prove delivery authorization' >&2
+  exit 1
+fi
+[[ ! -e "$tmp_dir/wrong-source.json" ]]
+
+jq '.resolved.delivered=false' "$tmp_dir/alert-delivery.json" >"$tmp_dir/incomplete-delivery.json"
+mv "$tmp_dir/incomplete-delivery.json" "$tmp_dir/alert-delivery.json"
+if run_slo_fixture "$root" "$tmp_dir" "$tmp_dir/incomplete.json" >/dev/null 2>&1; then
+  echo 'Firing-only evidence must not prove resolved delivery' >&2
+  exit 1
+fi
+
+echo 'PASS: AMP alerting requires active definitions, confirmed SNS, and Firing/Resolved delivery'
+
+)
+(
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$root/tests/helpers/dev-capture-environment.sh"
+tmp_dir=$(mktemp -d)
+trap 'rm -rf -- "$tmp_dir"' EXIT
+setup_capture_environment "$tmp_dir"
+
+run_slo_fixture "$root" "$tmp_dir" "$tmp_dir/slo.json" >/dev/null
+
+if FAKE_K6_BAD=true run_slo_fixture "$root" "$tmp_dir" "$tmp_dir/unbounded.json" >/dev/null 2>&1; then
+  echo 'k6 evidence without an explicit compute-cost boundary must fail' >&2
+  exit 1
+fi
+[[ ! -e "$tmp_dir/unbounded.json" ]]
+
+echo 'PASS: Ch16 k6 controller and run carry readiness, duration, rate, and cost boundaries'
+
+)
+
+(
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 fixtures="$root/tests/fixtures"
@@ -33,7 +117,7 @@ chmod +x "$tmp_dir/bin/kubectl" "$tmp_dir/bin/aws"
 run_ch15_runtime() {
   local image_repository=$1 output=$2
   PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_CHECK_NOW="$now" AWS_PROFILE=mini-commerce \
-    bash "$root/scripts/platform-check.sh" ch15 \
+    bash "$root/scripts/capture-dev-evidence.sh" deployment \
       mini-commerce-dev app-dev sample-app-dev play-builder/mini-commerce \
       0123456789abcdef0123456789abcdef01234567 "$image_repository" \
       sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
@@ -46,7 +130,7 @@ expect_ch15_rejected() {
   local label=$1 filter=$2 candidate
   candidate="$tmp_dir/ch15-$label.json"
   jq "$filter" "$fixtures/dev-deployment-valid.json" >"$candidate"
-  if bash "$root/scripts/platform-check.sh" ch15 --validate-evidence \
+  if bash "$root/scripts/capture-dev-evidence.sh" deployment --validate-evidence \
     "$candidate" "$now" >/dev/null 2>&1; then
     echo "invalid Ch15 evidence accepted: $label" >&2
     exit 1
@@ -57,17 +141,32 @@ expect_ch16_rejected() {
   local label=$1 filter=$2 candidate
   candidate="$tmp_dir/ch16-$label.json"
   jq "$filter" "$fixtures/dev-slo-valid.json" >"$candidate"
-  if bash "$root/scripts/platform-check.sh" ch16 --validate-evidence \
+  if bash "$root/scripts/capture-dev-evidence.sh" slo --validate-evidence \
     "$fixtures/dev-deployment-valid.json" "$candidate" "$now" >/dev/null 2>&1; then
     echo "invalid Ch16 evidence accepted: $label" >&2
     exit 1
   fi
 }
 
-bash "$root/scripts/platform-check.sh" ch15 --validate-evidence \
+bash "$root/scripts/capture-dev-evidence.sh" deployment --validate-evidence \
   "$fixtures/dev-deployment-valid.json" "$now" >/dev/null
-bash "$root/scripts/platform-check.sh" ch16 --validate-evidence \
+bash "$root/scripts/capture-dev-evidence.sh" slo --validate-evidence \
   "$fixtures/dev-deployment-valid.json" "$fixtures/dev-slo-valid.json" "$now" >/dev/null
+
+# File parsing must not claim a cloud run, even when the artifact claims runtime grade.
+validation_output=$(bash "$root/scripts/capture-dev-evidence.sh" deployment --validate-evidence "$fixtures/dev-deployment-valid.json" "$now")
+[[ "$validation_output" == 'PASS: [STATIC]'* ]] || { echo 'schema validation claimed runtime execution' >&2; exit 1; }
+
+# Resolve aliases before protecting the GitOps handoff path; reject ambiguous outputs.
+mkdir -p "$tmp_dir/argocd-gitops/evidence/dev" "$tmp_dir/output-directory"
+printf 'sentinel\n' >"$tmp_dir/argocd-gitops/evidence/dev/deployment.json"
+ln -s "$tmp_dir/argocd-gitops/evidence/dev/deployment.json" "$tmp_dir/output-link"
+for rejected in "$tmp_dir/output-link" "$tmp_dir/output-directory" "$tmp_dir/argocd-gitops/evidence/dev/../dev/deployment.json"; do
+  if run_ch15_runtime 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/mini-commerce "$rejected" >/dev/null 2>&1; then
+    echo 'ambiguous or protected output was accepted' >&2; exit 1
+  fi
+done
+[[ $(cat "$tmp_dir/argocd-gitops/evidence/dev/deployment.json") == sentinel ]]
 
 runtime_output="$tmp_dir/ch15-runtime.json"
 run_ch15_runtime \
@@ -106,7 +205,7 @@ fi
 }
 
 for invalid in dev-deployment-static.json dev-deployment-unhealthy.json; do
-  if bash "$root/scripts/platform-check.sh" ch15 --validate-evidence \
+  if bash "$root/scripts/capture-dev-evidence.sh" deployment --validate-evidence \
     "$fixtures/$invalid" "$now" >/dev/null 2>&1; then
     echo "invalid Ch15 evidence accepted: $invalid" >&2
     exit 1
@@ -114,7 +213,7 @@ for invalid in dev-deployment-static.json dev-deployment-unhealthy.json; do
 done
 
 for invalid in dev-slo-static.json dev-slo-failed.json dev-slo-identity-mismatch.json dev-slo-expired.json; do
-  if bash "$root/scripts/platform-check.sh" ch16 --validate-evidence \
+  if bash "$root/scripts/capture-dev-evidence.sh" slo --validate-evidence \
     "$fixtures/dev-deployment-valid.json" "$fixtures/$invalid" "$now" >/dev/null 2>&1; then
     echo "invalid Ch16 evidence accepted: $invalid" >&2
     exit 1
@@ -144,7 +243,7 @@ expect_ch15_rejected observed-at-invalid-calendar '.observedAt = "2026-02-31T00:
 two_character_ecr="$tmp_dir/ch15-ecr-two-character.json"
 jq '.image.repository = "123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/ab"' \
   "$fixtures/dev-deployment-valid.json" >"$two_character_ecr"
-bash "$root/scripts/platform-check.sh" ch15 --validate-evidence \
+bash "$root/scripts/capture-dev-evidence.sh" deployment --validate-evidence \
   "$two_character_ecr" "$now" >/dev/null
 
 for cluster_length in 1 100; do
@@ -156,9 +255,9 @@ for cluster_length in 1 100; do
     "$fixtures/dev-deployment-valid.json" >"$deployment"
   jq --arg arn "$cluster_arn" '.clusterArn = $arn' \
     "$fixtures/dev-slo-valid.json" >"$slo"
-  bash "$root/scripts/platform-check.sh" ch15 --validate-evidence \
+  bash "$root/scripts/capture-dev-evidence.sh" deployment --validate-evidence \
     "$deployment" "$now" >/dev/null
-  bash "$root/scripts/platform-check.sh" ch16 --validate-evidence \
+  bash "$root/scripts/capture-dev-evidence.sh" slo --validate-evidence \
     "$deployment" "$slo" "$now" >/dev/null
 done
 
@@ -170,10 +269,12 @@ jq '.observedAt = "2026-02-28T00:00:00Z"' \
   "$fixtures/dev-deployment-valid.json" >"$deployment_february"
 jq '.observedAt = "2026-02-28T00:10:00Z" | .expiresAt = "2026-02-31T00:00:00Z"' \
   "$fixtures/dev-slo-valid.json" >"$slo_invalid_expiry"
-if bash "$root/scripts/platform-check.sh" ch16 --validate-evidence \
+if bash "$root/scripts/capture-dev-evidence.sh" slo --validate-evidence \
   "$deployment_february" "$slo_invalid_expiry" "2026-02-28T00:30:00Z" >/dev/null 2>&1; then
   echo 'invalid Ch16 evidence accepted: expires-at-invalid-calendar' >&2
   exit 1
 fi
 
 echo 'PASS: Ch15/Ch16 runtime evidence handoff contract'
+
+)

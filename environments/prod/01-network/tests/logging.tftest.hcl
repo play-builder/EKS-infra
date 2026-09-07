@@ -59,3 +59,11 @@ run "prod_cannot_disable_flow_logs" {
   variables { enable_vpc_flow_logs = false }
   expect_failures = [var.enable_vpc_flow_logs]
 }
+
+run "production_identity_tags_are_forwarded" {
+  command = plan
+  assert {
+    condition     = output.logging_contract.platform_tags.PlatformInstanceId == var.platform_instance_id && output.logging_contract.platform_tags.Owner == var.owner && output.logging_contract.platform_tags.CostCenter == var.cost_center && output.logging_contract.platform_tags.Environment == "prod"
+    error_message = "Production network must publish its selected ownership identity."
+  }
+}

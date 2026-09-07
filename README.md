@@ -7,8 +7,8 @@ Terraform state, VPC CIDR, Argo CD instance, AMP workspace가 분리됩니다.
 현재 플랫폼은 Mini Commerce의 business/management 포트 분리, Istio native Rollouts,
 독립 Prod RDS·복구, 보호 백업 및 FinOps 계약을 사용합니다. 전체 운영 경계와 준비 순서는
 [enterprise integration](docs/runbooks/enterprise-integration.md)에 있습니다.
-아래 `sample-app` 이름과 `chNN` CLI는 기존 배포를 위한 호환 인터페이스입니다. 신규
-`mini-commerce` 배포에 legacy 실행 예시를 그대로 적용하지 않습니다.
+운영 명령은 아래 목적별 진입점을 사용합니다. 챕터 판정과 수료 도구는 교육 워크스페이스의
+`course/tooling/`에서 관리하며 이 저장소의 배포·CI에 필요하지 않습니다.
 
 Shared identity는 전용 계정의 Terraform-owned GitHub OIDC provider와 기존 account-wide provider를
 구분합니다. 기존 provider는 삭제하지 않고 external mode로 참조하며, ECR lifecycle 변경 전에는
@@ -69,34 +69,40 @@ required reviewer와 self-review 차단을 설정합니다. Plan role은 state �
 CI는 Git에 없는 로컬 tfvars를 읽지 않습니다. plan/drift 입력의 계정·region·bucket 결속과
 비공개 파일 처리는 [CI 입력 계약](docs/runbooks/enterprise-integration.md#scheduled-read-only-drift)을 확인합니다.
 
-## 0. 공통 GitHub OIDC와 ECR
+## 0. Network 계정의 GitHub OIDC와 ECR
+
+저장소 루트에서 Network 계정의 AWS profile과 해당 계정의 state bucket을 선택합니다.
+`environments/network/02-registry/terraform.tfvars.example`을 같은 위치의
+`terraform.tfvars`로 복사하고 Organization ID, GitHub owner/repository 숫자 ID를 설정합니다.
+계정에 GitHub OIDC provider가 이미 있으면 `external` mode와 기존 ARN을 사용합니다.
 
 ```bash
-cd terraform/iam-github-oidc
-cp terraform.tfvars.example terraform.tfvars
-```
-
-`terraform.tfvars`에서 GitHub owner/repository subject를 실제 값으로 교체한 다음 실행합니다.
-
-```bash
-terraform init -reconfigure \
+terraform -chdir=environments/network/02-registry init -reconfigure \
   -backend-config="bucket=$STATE_BUCKET_NAME" \
-  -backend-config="key=shared/iam-github-oidc/terraform.tfstate" \
+  -backend-config="key=network/02-registry/terraform.tfstate" \
   -backend-config="region=$AWS_REGION" \
   -backend-config="encrypt=true" \
   -backend-config="use_lockfile=true"
-terraform plan -out=tfplan
-terraform apply tfplan
-terraform output
+terraform -chdir=environments/network/02-registry plan -out=tfplan
 ```
 
-정상 결과에서 다음 값을 기록합니다.
+계획의 account/region과 변경 대상을 검토한 뒤 같은 root에서 저장한 plan을 적용합니다.
 
-- `sample_app_push_role_arn` → sample-app의 `AWS_ROLE_ARN` variable
-- `sample_app_attest_verify_role_arn` → application의 `AWS_ATTEST_VERIFY_ROLE_ARN` variable
-- `mini_commerce_repositories.image` → 신규 Mini Commerce GitOps values의 `image.repository`
-- `sample_app_ecr_repository_url` → legacy sample-app image repository; 신규 image 주소와 구분
-- `infra_role_arn` → 기존 infra role의 호환 output; 별도 plan/apply/drift role 생성자가 아님
+```bash
+terraform -chdir=environments/network/02-registry apply tfplan
+terraform -chdir=environments/network/02-registry output
+```
+
+- `image_push_role_arn` → 앱의 `AWS_ROLE_ARN`
+- `attest_verify_role_arn` → 앱의 `AWS_ATTEST_VERIFY_ROLE_ARN`
+- `image_repository_url` → 앱 이미지 발행 및 GitOps `image.repository`
+- `chart_repository_url` → chart 발행·소비 위치
+- `image_repository_arn` → 플랫폼의 sigstore ECR 권한 입력
+
+이 root는 앱 artifact 발행 권한을 만듭니다. Dev 인프라 실행 identity는
+`environments/dev/bootstrap/ci-identity`의 별도 root에서 구성합니다.
+기존 state가 있으면 실제 backend key를 그대로 사용하며 위 새 설치 예시로 바꾸지 않습니다.
+전체 계정·root 입력은 [운영 통합 안내](docs/runbooks/enterprise-integration.md)를 따릅니다.
 
 ## 1. dev 클러스터
 
@@ -211,10 +217,10 @@ kubectl -n app-dev get deploy,pod,hpa,externalsecret,gateway,httproute
 - `ExternalSecret`의 `Ready=True`
 - `Gateway`의 `Programmed=True`
 - Argo CD Application `Synced/Healthy`
-- sample-app `/version`의 digest 앞 12자리가 GitOps values와 일치
+- mini-commerce `/version`의 digest 앞 12자리가 GitOps values와 일치
 - AMP에서 `http_requests_total{namespace="app-dev"}` 조회 가능
 
-DEV_READY의 workflow identity는 sample-app의 canonical `ci` workflow에 결속합니다. `runId`는
+DEV_READY의 workflow identity는 mini-commerce의 canonical `ci` workflow에 결속합니다. `runId`는
 숫자로 파싱하지 않고 digit string으로 보존하며, `runUrl`의 마지막 run ID와 일치해야 합니다.
 `runUrl`은 `https://github.com/<owner>/mini-commerce/actions/runs/<runId>` 형식이어야
 합니다. `githubId`도 digit string이며 attestation URL은 같은 repository의 `attestations/<digits>`로
@@ -244,12 +250,12 @@ Dev 배포 및 SLO runtime evidence는 EKS-infra가 호출자가 지정한 임�
 fixture/fake CLI가 활성화된 실행은 항상 `STATIC`이고 promotion input으로 사용할 수 없습니다.
 
 ```bash
-bash scripts/platform-check.sh ch15 <context> <namespace> <application> \
+bash scripts/capture-dev-evidence.sh deployment <context> <namespace> <application> \
   <source-repository> <source-sha> <image-repository> <image-digest> \
   <gitops-revision> <cluster-arn> <region> --output <temporary-path>
 
 ALERT_DELIVERY_EVIDENCE=<firing-and-resolved.json> \
-bash scripts/platform-check.sh ch16 <ch15-evidence> <context> <k6-namespace> \
+bash scripts/capture-dev-evidence.sh slo <deployment-evidence> <context> <k6-namespace> \
   <testrun> <amp-workspace-id> <sns-topic-arn> <region> --output <temporary-path>
 ```
 
@@ -286,21 +292,24 @@ GitOps revision, stable Rollout revision/hash, 100% route, EKS ARN/Region을 결
 `argocd-gitops/evidence/prod/baseline.json`에 기록합니다. 두 schema나 output을 서로 대신 사용하지
 않습니다.
 
-## 4. Stateful runtime 검증과 legacy 호환
+## 4. Dev runtime와 데이터 검증
 
-아래 명령은 legacy sample-app의 Dev PostgreSQL 경로를 위한 호환 검사입니다.
-GitOps의 해당 `stateful-values.yaml`을 활성화하고 Argo CD 동기화가 끝난 뒤 consolidated checker로
-StorageClass, PVC, PostgreSQL, migration Job, application Pod, 상품·재고·멱등 주문 API를 함께 확인합니다.
+`core`는 Dev Deployment, node, Application, ExternalSecret의 현재 상태를 확인합니다.
+`stateful`은 분리된 Dev DB chart와 migration을 활성화한 뒤 실행하며 StorageClass, PVC,
+PostgreSQL, Job, Pod와 상품·재고 API를 확인하고 검증용 멱등 주문을 생성합니다.
 
 ```bash
-bash scripts/platform-check.sh stateful mini-commerce-dev app-dev https://sample-app.dev.example.com
+bash scripts/dev-ready-check.sh core mini-commerce-dev app-dev
+bash scripts/dev-ready-check.sh stateful mini-commerce-dev app-dev https://mini-commerce.dev.example.com
 ```
 
-정상 종료는 `PASS: Stateful Mini Commerce...`이고, 상품 수와 첫 SKU, 상품 1번의 재고가 함께
-출력됩니다. 이 검증은 secret 값을 출력하지 않습니다. 단일 replica PostgreSQL은 schema migration과
-rollback을 검증하는 비운영 구성으로, 운영 HA 구성으로 간주하지 않습니다. 신규 Mini Commerce는
-분리된 Dev DB chart와 Prod RDS 경로를 사용합니다. 현재 앱의 schema `002` 호환성과 별도
-복구 경계는 [RDS runbook](docs/runbooks/enterprise-integration.md)과 GitOps의 data cutover runbook을 따릅니다.
+정상 결과는 `PASS: [CLOUD_RUNTIME] Dev ... readiness verified.`입니다. fake CLI 실행은
+`STATIC`으로 표시합니다. 단일 replica Dev PostgreSQL 검사는 Prod RDS HA·복구를 증명하지
+않습니다. 실제 schema와 복구 경계는 [RDS 운영 경로](docs/runbooks/enterprise-integration.md)를 따릅니다.
+
+Secret 회전 검증은 `dev-ready-check.sh secret-freshness <context> <namespace> <externalsecret>
+<rollout> <runtime-secret-id> <version-id> <previous-pod-uid>`로 수행합니다. 공급자 version,
+ExternalSecret refresh와 Pod 교체가 일치해야 통과하며 비밀값은 출력하지 않습니다.
 
 ## GitHub governance state
 
@@ -443,3 +452,5 @@ terraform -chdir=<root> validate
 
 이 정적 검증은 AWS apply, Gateway `Programmed`, AMP ingestion, 실제 Canary 성공을 증명하지
 않습니다. 해당 항목은 위의 `DEV_READY`와 prod runtime 명령으로 별도 확인합니다.
+
+운영 테스트 실행 방법과 검증 한계는 [테스트 안내](docs/testing.md)를 참고하십시오.

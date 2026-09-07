@@ -260,12 +260,12 @@ fi
 [[ ! -s "$tmp_dir/mutations.log" && ! -s "$tmp_dir/kubectl.log" && ! -s "$tmp_dir/aws.log" ]]
 
 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  bash "$root/scripts/platform-check.sh" ch26 --final-cleanup "${common[@]}"
+  bash "$root/scripts/final-cleanup.sh" "${common[@]}"
 [[ ! -s "$tmp_dir/mutations.log" && ! -e "$tmp_dir/evidence/generated-residual.json" ]]
 
 set +e
 PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutations.log" \
-  bash "$root/scripts/platform-check.sh" ch26 --execute "${common[@]}" \
+  bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 >/dev/null 2>&1
 status=$?
 set -e
@@ -279,7 +279,7 @@ PLATFORM_CHECK_BIN_DIR="$tmp_dir/bin" PLATFORM_FAKE_MUTATION_LOG="$tmp_dir/mutat
 PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir/aws.log" \
 PLATFORM_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" PLATFORM_FAKE_KUBECTL_FAIL=true \
 AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 OWNER_ID=playbuilder \
-  bash "$root/scripts/platform-check.sh" ch26 --execute "${common[@]}" \
+  bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder \
     >/dev/null 2>&1
 status=$?
@@ -295,7 +295,7 @@ PLATFORM_FAKE_KUBECTL_LOG="$tmp_dir/kubectl.log" PLATFORM_FAKE_AWS_LOG="$tmp_dir
 PLATFORM_EKS_DELETED_SENTINEL="$tmp_dir/eks-deleted" PLATFORM_CLEANUP_STAGE_LOG="$tmp_dir/stages.log" \
 PLATFORM_FAKE_REPO_ROOT="$root" PLATFORM_FAKE_PLAN_JSON_DIR="$tmp_dir/plan-json" \
 AWS_PROFILE=mini-commerce AWS_REGION=ap-northeast-2 OWNER_ID=playbuilder \
-  bash "$root/scripts/platform-check.sh" ch26 --execute "${common[@]}" \
+  bash "$root/scripts/final-cleanup.sh" --execute "${common[@]}" \
     --confirm-account-id 123456789012 --confirm-region ap-northeast-2 --confirm-owner-id playbuilder
 
 jq -e '.evidenceGrade == "STATIC" and .status == "PASS" and .unapprovedPlatformOwned.total == 0' \

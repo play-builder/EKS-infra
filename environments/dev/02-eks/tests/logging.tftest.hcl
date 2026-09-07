@@ -114,3 +114,20 @@ run "different_provider_account_is_rejected" {
   }
   expect_failures = [terraform_data.logging_identity]
 }
+
+run "explicit_backend_bucket_is_used_by_every_state_consumer" {
+  command = plan
+  variables { state_bucket_name = "alternate-reviewed-state-bucket" }
+  assert {
+    condition     = data.terraform_remote_state.network.config.bucket == var.state_bucket_name
+    error_message = "Every remote state must use the selected backend bucket."
+  }
+}
+
+run "cluster_identity_is_inherited_from_network" {
+  command = plan
+  assert {
+    condition     = output.cluster_name == data.terraform_remote_state.network.outputs.eks_cluster_name
+    error_message = "The EKS cluster must preserve the network producer identity."
+  }
+}

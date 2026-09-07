@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-setup_ch16_fake_environment() {
+setup_capture_environment() {
   local target=$1
   mkdir -p "$target/bin"
 
@@ -68,11 +68,11 @@ EOF
 EOF
 }
 
-run_ch16_fixture() {
+run_slo_fixture() {
   local root=$1 target=$2 output=$3
   AWS_PROFILE=mini-commerce PLATFORM_CHECK_BIN_DIR="$target/bin" PLATFORM_CHECK_NOW="2026-09-03T10:30:00Z" \
     ALERT_DELIVERY_EVIDENCE="$target/alert-delivery.json" \
-    bash "$root/scripts/platform-check.sh" ch16 \
+    bash "$root/scripts/capture-dev-evidence.sh" slo \
     "$root/tests/fixtures/dev-deployment-static.json" mini-commerce-dev k6-operator-system platform-baseline \
     ws-test arn:aws:sns:ap-northeast-2:123456789012:mini-commerce-alerts ap-northeast-2 --output "$output"
 }
