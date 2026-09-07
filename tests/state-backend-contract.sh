@@ -56,16 +56,20 @@ done
   exit 1
 }
 
-shared_identity_example="$root/terraform/iam-github-oidc/terraform.tfvars.example"
-shared_state_bucket_count=$(awk '
-  /^state_bucket_arns[[:space:]]*=/ { in_list = 1; next }
-  in_list && /arn:aws:s3:::/ { count++ }
-  in_list && /^]/ { print count + 0; exit }
-' "$shared_identity_example")
+ci_identity_example="$root/environments/dev/bootstrap/ci-identity/terraform.tfvars.example"
+ci_identity_bucket_count=$(awk '/^state_bucket_name[[:space:]]*=/ { count++ } END { print count + 0 }' "$ci_identity_example")
 
-[[ "$shared_state_bucket_count" -eq 1 ]] || {
-  echo "shared identity example must bind the infrastructure role to exactly one backend bucket; found $shared_state_bucket_count" >&2
+[[ "$ci_identity_bucket_count" -eq 1 ]] || {
+  echo "dev ci-identity example must bind the infrastructure role to exactly one backend bucket; found $ci_identity_bucket_count" >&2
   exit 1
 }
+
+if awk '/^variable "state_bucket_name"[[:space:]]*\{/ { in_variable = 1 } in_variable && /^[[:space:]]*default[[:space:]]*=/ { exit 2 } in_variable && /^}/ { in_variable = 0 }' \
+  "$root/environments/dev/bootstrap/ci-identity/variables.tf"; then
+  :
+else
+  echo 'dev ci-identity must declare required state_bucket_name without a default' >&2
+  exit 1
+fi
 
 echo 'PASS: all downstream remote states require the explicit state bucket input'
