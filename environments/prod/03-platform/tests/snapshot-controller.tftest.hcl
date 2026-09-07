@@ -39,7 +39,7 @@ variables {
   state_bucket_name               = "mini-commerce-prod-state"
   acm_domain_name                 = "example.com"
   hosted_zone_id                  = "Z0123456789"
-  enable_platform_resources         = false
+  enable_platform_resources       = false
   enable_gateway_api              = false
   enable_ebs_csi_driver           = false
   enable_alb_controller           = false

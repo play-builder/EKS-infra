@@ -46,7 +46,7 @@ variables {
   acm_domain_name                 = "dev.example.com"
   hosted_zone_id                  = "Z0123456789"
   enable_gateway_api              = false
-  enable_pb_storage_class     = false
+  enable_pb_storage_class         = false
   enable_ebs_csi_driver           = false
   enable_alb_controller           = false
   enable_external_dns             = false

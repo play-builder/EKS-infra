@@ -54,7 +54,7 @@ jobs:
           [[ -n "$DRIFT_ROLE" ]] || { echo DRIFT_INPUTS_REQUIRED >&2; exit 64; }
           python3 scripts/lib/project-terraform-inputs.py drift
           echo 'created=true' >> "$GITHUB_OUTPUT"
-      - uses: aws-actions/configure-aws-credentials@a03048d87541d1d235d23a5528890a34d9a8747a
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: ${{ secrets.TERRAFORM_DRIFT_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
