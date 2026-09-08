@@ -177,144 +177,28 @@ EKS는 한 minor씩 올리고 control plane → add-on compatibility → node gr
 
 ## 제거와 비용
 
-Guarded cleanup은 개별 Application, Gateway, PVC를 직접 삭제하거나 각 Terraform root에서 raw
-destroy하지 않습니다. `OWNER_ID`, `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`,
-`PROJECT_NAME`를 설정합니다. 각 allowlisted root의 binary `terraform plan -destroy -out` 결과를
-`terraform show`로 검토하고 exact path와 SHA-256을 `playbuilder.saved-destroy-plans/v1` manifest에
-결속합니다. raw plan JSON은 보관하지 않으며 이 `SAVED_DESTROY_PLAN_MANIFEST`와 cloud inventory로
-preflight를 먼저 실행합니다.
+핵심 요약: 앱 종료와 인프라 폐기는 별도 승인 작업이다. root별 Terraform plan으로 범위를 확인한다.
+
+1. Argo CD 자동 sync를 동결하고 업무 트래픽·배치·외부 쓰기를 중지한다.
+2. RDS backup/PITR, S3/KMS, Secret, PVC/PV/snapshot 보존 여부와 소유 계정을 확인한다.
+3. 앱을 먼저 제거하고 controller·로드밸런서·volume attachment 종료를 확인한다.
+4. root별 `terraform plan -destroy -out=destroy.tfplan`을 검토한다. 검토한 binary plan만 적용한다.
+5. EKS/VPC 제거 후 ECR·NAT·EBS·snapshot·RDS·backup의 잔여 비용을 AWS에서 확인한다.
+
+전체 계정을 묶은 자동 teardown은 제공하지 않는다. 보존 리소스를 삭제하려면 별도 데이터 폐기 승인이 필요하다.
+
+## EKS와 노드 변경
+
+핵심 요약: Terraform plan과 EKS 지원 버전을 확인하고, 실제 node 상태와 rollout 결과를 확인한다.
 
 ```bash
-bash scripts/cleanup-preflight.sh \
-  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST" \
-  --inventory-source "$LIVE_OWNERSHIP_INPUT" \
-  --inventory-output evidence/cleanup/ownership-inventory.json \
-  --retain-template evidence/cleanup/retain-decisions.json \
-  --preflight-output "$CLEANUP_PREFLIGHT_EVIDENCE"
+kubectl get nodes -o wide
+kubectl get pods -A --field-selector=status.phase!=Running
+kubectl get pdb -A
 ```
 
-`evidence/cleanup/retain-decisions.json`의 retained/shared 항목만 승인합니다. `DELETE` 권한을
-추가하거나 identity가 다른 기존 evidence를 덮어쓰지 않습니다. 결정이 맞으면 `status`를
-`APPROVED`로, `approvedAt`을 현재 canonical UTC seconds로 바꾸고 파일 권한 `0600`을 유지합니다.
+업그레이드는 지원되는 minor 순서대로 진행한다. EKS upgrade insight, addon 호환성, 노드 AMI release, AZ별 여유 용량과 PDB를 확인한다. drain을 강제로 우회하지 않는다.
 
-다음으로 두 cluster의 load, Chaos, recovery, migration writer가 모두 0인지 live API로 확인해
-canonical evidence를 생성합니다. optional k6/Chaos CRD가 없으면 empty로 처리되지만 API query
-오류는 fail closed입니다.
-
-```bash
-bash scripts/capture-in-flight-zero.sh \
-  --dev-context "$DEV_KUBE_CONTEXT" \
-  --prod-context "$PROD_KUBE_CONTEXT" \
-  --dev-cluster-name "$DEV_CLUSTER_NAME" \
-  --prod-cluster-name "$PROD_CLUSTER_NAME"
-```
-
-두 cluster API가 모두 접근 가능한 동안 `argocd-gitops` 저장소에서 freeze evidence를 먼저
-수집합니다.
-
-```bash
-cd "$ARGO_REPO"
-AWS_REGION="$AWS_REGION" DEV_CLUSTER_NAME="$DEV_CLUSTER_NAME" PROD_CLUSTER_NAME="$PROD_CLUSTER_NAME" \
-  bash scripts/capture-cleanup-evidence.sh freeze \
-    --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
-```
-
-검토된 cleanup commit을 manual full Sync/prune하고 workload와 writer 제거를 확인한 뒤 removal
-evidence를 수집합니다.
-
-```bash
-bash scripts/capture-cleanup-evidence.sh removal --eks-repo-root "$EKS_REPO_ROOT" \
-  --dev-context "$DEV_KUBE_CONTEXT" --prod-context "$PROD_KUBE_CONTEXT"
-```
-
-EKS 저장소로 돌아와 동일한 evidence 집합으로 dry-run을 먼저 실행합니다. `--execute`와 세
-confirmation을 추가한 두 번째 호출만 실제 제거를 허용합니다.
-
-`$SAVED_DESTROY_PLAN_MANIFEST`는 운영자가 검토한 binary path/SHA256와 layer 순서를 결속합니다.
-기존 `--saved-plan-dir` 계약은 완료 파일 제거·실패 후 교체·crash-safe 재개를 지원하는 manifest와
-progress registry로 대체되었습니다. 이 별도 운영자 cleanup 승인을 GitHub protected-apply 승인으로
-간주하지 않습니다. 일반 CI source/account/backend/approval/FinOps gate는 변경되지 않았습니다.
-
-```bash
-cd "$EKS_REPO_ROOT"
-cleanup_args=(
-  --saved-plan-manifest "$SAVED_DESTROY_PLAN_MANIFEST"
-  --apply-progress evidence/cleanup/saved-plan-progress.json
-  --inventory evidence/cleanup/ownership-inventory.json
-  --retain-decisions evidence/cleanup/retain-decisions.json
-  --preflight-evidence "$CLEANUP_PREFLIGHT_EVIDENCE"
-  --in-flight-evidence evidence/cleanup/in-flight-zero.json
-  --gitops-freeze-evidence "$ARGO_REPO/evidence/cleanup/freeze.json"
-  --gitops-removal-evidence "$ARGO_REPO/evidence/cleanup/removal.json"
-  --dev-context "$DEV_KUBE_CONTEXT"
-  --prod-context "$PROD_KUBE_CONTEXT"
-  --kubernetes-pre-destroy-output evidence/cleanup/kubernetes-pre-destroy.json
-  --residual-output evidence/cleanup/residual.json
-)
-
-bash scripts/final-cleanup.sh "${cleanup_args[@]}"
-bash scripts/final-cleanup.sh --execute "${cleanup_args[@]}" \
-  --confirm-account-id "$AWS_ACCOUNT_ID" \
-  --confirm-region "$AWS_REGION" \
-  --confirm-owner-id "$OWNER_ID"
-```
-
-`final-cleanup.sh`는 모든 identity, time, digest 검증과 Kubernetes pre-destroy 관찰을 첫 mutation
-전에 끝낸 뒤 다음 allowlist의 검토된 saved plan만 `terraform apply <saved-plan>`으로 실행합니다.
-각 성공 layer/path/digest는 권한 `0600`의 `playbuilder.saved-destroy-progress/v2`에 먼저 기록되고 적용된
-binary plan은 즉시 삭제됩니다. progress는 원본과 모든 reviewed replacement path/digest를 등록합니다.
-중간 실패 후에는 기록된 성공 prefix만 skip합니다. in-flight 결과가 불확실하면 같은 plan을 자동
-재시도하지 않으며, 현재 state에서 새 plan을 생성·review해야 합니다. replacement가 delete-only이면
-적용하고 no-change이면 `RECOVERED_NO_CHANGES`로 기록합니다. 모든 remaining plan의 semantic preflight가
-통과해야 새 manifest에 원자적으로 rebind하며, terminal completion에서는 등록된 모든 binary plan을
-제거합니다.
-
-- `environments/prod/04-workloads/argocd`
-- `environments/dev/04-workloads/argocd`
-- `environments/prod/03-platform`
-- `environments/dev/03-platform`
-- `environments/prod/02-eks`
-- `environments/dev/02-eks`
-- `environments/prod/01-network`
-- `environments/dev/01-network`
-
-EKS 삭제 전 `evidence/cleanup/kubernetes-pre-destroy.json`, 삭제 후 AWS/Terraform API만 사용하는
-`evidence/cleanup/residual.json`을 원자적으로 기록합니다. Gateway가 만든 ALB·target group 또는
-미승인 billable residual이 남으면 완료 evidence를 생성하지 않습니다.
-
-NAT Gateway, EKS control plane, EC2 node, ALB, AMP는 실행 시간 동안 비용이 발생합니다.
-ECR은 `force_delete=false`, Secrets Manager는 recovery window를 사용하므로 별도 정리가 필요할
-수 있습니다.
-## EKS lifecycle gates
-
-CoreDNS and kube-proxy belong to the 02-eks managed-addons module. VPC CNI stays in
-cluster, EBS CSI and snapshot-controller stay in 03-platform. Supply regional AWS
-verified pins and MNG release explicitly; example values do not claim AWS availability.
-Pinning an existing MNG release may roll nodes. Rollback requires a supported newer
-release or blue/green MNG, not an assumed AMI downgrade.
-
-Run `bash scripts/eks-upgrade-preflight.sh CLUSTER REGION FROM TO NODEGROUP RELEASE OUTPUT`
-from the operator path with a kubeconfig pointing at that cluster. It refreshes
-upgrade insights with a bounded wait, reads every returned insight, nodes, PDBs,
-all installed add-ons (including the five required ones), target-version compatibility and six controller families, and rejects missing/unknown data.
-The new capture uses `platform.eks-upgrade-preflight/v2`; older snapshots must be recaptured. Controller Ready counts are current-version observations, not proof of third-party support for the target Kubernetes version.
-It performs no upgrade. PDBs with zero allowed disruption block this conservative
-gate. Fixture parsing is local verification only; AWS pins and rollout remain unverified.
-## Managed-node capacity and user-run drill
-
-Prod requires enabled Cluster Autoscaler. The 9.59.0 chart defaults to Kubernetes
-1.35; the exact 1.36 image override is conditionally compatible until cloud runtime
-verification. Capacity includes stable/canary, HPA maximum, surge, platform reserve
-and per-AZ IP headroom. Match it to actual MNG limits before deployment.
-
-`bash scripts/mng-autoscaler-drill.sh CLUSTER REGION NODEGROUP PAUSE_IMAGE_AT_DIGEST REPLICAS OUTPUT`
-creates up to 50 labelled pause replicas, waits at most 20 minutes for pending to
-new MNG node to Ready, deletes its unique namespace in cleanup, then waits at most
-40 minutes for natural scale-in. It never changes desiredSize or deletes nodes.
-Interrupt/failure cleanup removes only that unique namespace. Initial unhealthy
-PDBs, no observed pending state, no node growth, or no node removal fail the drill.
-Run on approved spare capacity: requests are 500m CPU and 64Mi per Pod and may
-temporarily incur node cost. Local observation tests do not prove actual scaling.
 ## Argo HA, SSO and secret bootstrap
 
 The 04-workloads/argocd roots move the existing Helm address to module.argocd with
@@ -335,7 +219,6 @@ on-deployed. PagerDuty v2 maps platform-prod through serviceKeys to the secret
 reference; successful deployment goes to Slack/platform-deployments. See
 [official service format](https://argo-cd.readthedocs.io/en/stable/operator-manual/notifications/services/pagerduty_v2/).
 
-`bash scripts/argocd-ha-check.sh CLUSTER REGION READONLY_GROUP ADMIN_GROUP OUTPUT`
 checks production replica/node/AZ distribution, PDBs, projected-secret metadata
 hashes and RBAC. It never records Secret data. Static render and this read-only
 collector do not prove an interactive corporate OIDC login; record that separately.

@@ -24,7 +24,7 @@ variable "alert_owner" {
 
 variable "runbook_url" {
   type    = string
-  default = "https://github.com/play-builder/EKS-infra/blob/main/docs/runbooks/amp-slo.md"
+  default = "https://github.com/play-builder/EKS-infra/blob/main/docs/runbook.md"
   validation {
     condition     = can(regex("^https://[^ ]+$", var.runbook_url))
     error_message = "Use the actual HTTPS operator runbook URL."

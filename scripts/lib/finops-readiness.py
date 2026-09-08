@@ -223,7 +223,7 @@ def runtime_clients(args):
         import boto3
         from botocore.config import Config
     except ImportError as error:
-        raise ValueError("install scripts/requirements-amp-slo.txt in an isolated venv for runtime collection") from error
+        raise ValueError("install scripts/requirements-finops.txt in an isolated venv for runtime collection") from error
     session = boto3.Session(profile_name=args.profile, region_name="us-east-1")
     config = Config(ignore_configured_endpoint_urls=True, retries={"mode": "standard", "max_attempts": 3}, connect_timeout=10, read_timeout=30)
     if args.role_arn:

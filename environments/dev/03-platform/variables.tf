@@ -261,7 +261,7 @@ variable "amp_alert_owner" {
 
 variable "amp_runbook_url" {
   type    = string
-  default = "https://github.com/play-builder/EKS-infra/blob/main/docs/runbooks/amp-slo.md"
+  default = "https://github.com/play-builder/EKS-infra/blob/main/docs/runbook.md"
 }
 
 variable "slo" {

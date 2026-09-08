@@ -22,7 +22,7 @@ Budget은 월 USD 금액과 `LinkedAccount + PlatformInstanceId` 필터를 사�
 terraform -chdir=environments/prod/00-finops output -json finops > /private/tmp/finops-contract.json
 chmod 600 /private/tmp/finops-contract.json
 python3 -m venv /private/tmp/finops-venv
-/private/tmp/finops-venv/bin/pip install -r scripts/requirements-amp-slo.txt
+/private/tmp/finops-venv/bin/pip install -r scripts/requirements-finops.txt
 ```
 
 컬렉터는 기존 공통 AWS SDK requirements를 재사용한다. AWS CLI의 내장 Python에 설치하지 않는다. wrapper는 `python3 -I`로 실행하므로 활성 venv 또는 아래 PATH 선택이 필요하다.
@@ -43,17 +43,9 @@ bash scripts/finops-readiness-check.sh collect \
   --output /private/tmp/finops-readiness.json
 ```
 
-`AWS_ACCOUNT_ID`와 `AWS_REGION`은 workload 대상이다. billing role 입력을 사용하는 운영자는 `--profile` 대신 `--role-arn`을 사용한다. preflight에서도 `FINOPS_BILLING_PROFILE` 대신 `FINOPS_BILLING_ROLE_ARN`을 설정한다. 이때 기본 AWS 자격증명이 기존 management-account role을 AssumeRole할 수 있어야 한다. collector는 받은 임시 자격증명을 메모리에서만 사용하고 계정 일치를 STS로 다시 확인한다.
+`AWS_ACCOUNT_ID`와 `AWS_REGION`은 workload 대상이다. billing role 입력을 사용하는 운영자는 `--profile` 대신 `--role-arn`을 사용한다. saved-plan에서도 `FINOPS_BILLING_PROFILE` 대신 `FINOPS_BILLING_ROLE_ARN`을 설정한다. 이때 기본 AWS 자격증명이 기존 management-account role을 AssumeRole할 수 있어야 한다. collector는 받은 임시 자격증명을 메모리에서만 사용하고 계정 일치를 STS로 다시 확인한다.
 
-Production estimate 명령의 기존 7개 positional 인자는 유지한다. 위 환경변수와 `OWNER_ID`, workload의 `AWS_ACCOUNT_ID`, `AWS_REGION`, `AWS_PROFILE`을 설정하고 실행한다.
-
-```bash
-bash scripts/prod-preflight.sh \
-  dev-deployment.json dev-slo.json dev-ready.json \
-  design-decision.json eks-plan-summary.json capacity-input.json estimate-decision.json
-```
-
-이 명령은 기존 readiness 파일을 신뢰하여 재사용하지 않고 FinOps API를 새로 수집한 뒤 EC2 용량을 조회한다. standalone 수집 결과는 검토용이며 preflight의 입력 GO 토큰이 아니다. 예산 API나 Organizations 읽기가 거부되면 출력 GO를 만들지 않는다.
+Saved-plan 생성/검증은 이 수집 결과를 현재 계정·계약과 결속한다. 실행 경로는 [FinOps saved plan](finops-saved-plan.md)을 따른다.
 
 ## 증거와 게이트
 
@@ -69,8 +61,6 @@ bash scripts/prod-preflight.sh \
 
 `platform.finops-readiness/v1`은 workload/billing 계정·Region, 플랫폼 ID, 관측 시각, 계약 파일 SHA-256, 원시 응답 SHA-256, collector 소스 SHA-256을 묶는다. 실제 조회 결과는 `CLOUD_RUNTIME` **구성 관측 범위**이고, 로컬 `fixture` 모드는 항상 `LOCAL_VERIFIED`다. fixture/사용자가 쓴 `true` 플래그는 runtime/delivery 검증으로 승격되지 않는다. runtime 모드는 command double, 임의 endpoint 환경변수, replay observations를 거부한다. JSON 증거 자체는 서명되지 않았으므로 생산 환경에서는 실행 주체·로그·아티팩트 무결성을 별도 신뢰 경계에서 보존해야 한다.
 
-기존 design은 `playbuilder.prod-preflight/v1` 그대로다. estimate 생산자와 bootstrap 소비자는 `playbuilder.prod-preflight/v2`를 사용하며 v1 estimate를 거부한다. v2는 `finops` 객체와 `bindings.finopsContractSha256`를 추가했다. bootstrap 실행 시 동일 `FINOPS_CONTRACT_JSON`과 `PLATFORM_INSTANCE_ID`를 제공한다. FinOps 증거는 15분 이내 관측이어야 하므로 기존 estimate TTL보다 일찍 재수집이 필요할 수 있다.
-
 ## 실패와 운영
 
 핵심 요약: 거부·누락·중복·판별 불가능 응답은 닫힌 상태로 실패한다. 범용 IAM 정책 시뮬레이터를 구현하지 않았으므로 지원하는 정책 형태 밖의 조건은 SNS/KMS 소유자 검토가 필요하다. 강제 GO 옵션은 없다.
@@ -84,6 +74,5 @@ bash scripts/prod-preflight.sh \
 - 실패하면 stderr의 단계와 원본 계정/Region/실제 리소스 상태를 확인한다. 원시 응답의 endpoint/email은 출력하지 않는다. 출력 경로가 이전 실행 파일을 포함하면 exit code를 먼저 확인하고 실패 실행의 결과로 재사용하지 않는다.
 - workload cleanup 및 retained billable resource 결정을 마칠 때까지 FinOps 리소스를 보존한다. root 제거는 Budget/monitor/subscription만 제거하며 외부 SNS/KMS와 retained 리소스의 비용은 남는다. 롤백은 승인된 Terraform 저장 계획으로 수행하고 외부 topic policy를 덮어쓰지 않는다.
 
-검증 명령: `python3 -B tests/finops_readiness_test.py`, `bash tests/prod-preflight-contract.sh`, `bash tests/prod-bootstrap-contract.sh`. 이 테스트들은 로컬 계약만 검증하며 **LIVE_NOT_VERIFIED**다.
 
 근거: [Budget SNS/KMS](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-sns-policy.html), [Anomaly SNS/KMS](https://docs.aws.amazon.com/cost-management/latest/userguide/ad-SNS.html), [Anomaly subscription API](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_AnomalySubscription.html), [Cost allocation tag API](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_ListCostAllocationTags.html), [Cost usage API와 DataUnavailableException](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html).

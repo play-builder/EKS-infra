@@ -30,15 +30,10 @@ validates address movement; it never authorizes policy changes or replacements.
    The final typed module can reject old broad operator permissions; if so, stop
    and obtain a separately reviewed transitional configuration. Do not weaken its
    validation, fabricate a no-op plan or combine the two stages to bypass this gate.
-5. Save terraform show -json output for the **old state before migration** and
-   the actual **post-address-migration saved plan** from the rehearsal. Run
-   bash scripts/access-entry-review.sh state-show.json mapping.json saved-plan.json.
-   It requires the complete planned entry/association target set to match the
-   mapping, preserving old principal, cluster, policy and scope. Planned policy/scope
-   must equal both the old state and mapping (namespace order does not matter).
-   It rejects missing/unrelated targets, incomplete pairs, duplicate addresses,
-   any policy/scope changes, in-place access updates and access create/delete. An old no-op plan or
-   a plan without `planned_values` is not evidence of the proposed migration.
+5. Compare `terraform show -json` from the old state and the saved address-migration
+   plan. Check the complete AccessEntry/association mapping, unchanged principal,
+   cluster, policy and scope, and the absence of create/delete/replace actions.
+   Review the actual planned values; a no-op plan from before migration is insufficient.
 6. Review namespace permissions and run live kubectl auth can-i checks per principal
    before closing the existing session. Preserve backup until the rollback window ends.
 
@@ -55,8 +50,7 @@ the desired namespace privileges and any temporary access gap. AccessEntry
 creation/deletion/replacement remains prohibited. Keep an independent tested
 break-glass session, explicitly approve the separate plan and rollback procedure,
 then verify `kubectl auth can-i` per principal after the user-run change.
-This migration helper deliberately rejects that replacement plan and does not
-approve or execute Stage 2. Do not remove its create/delete guard to proceed.
+Stage 1 review does not approve the replacements in Stage 2; review them separately.
 
 State validation is STATIC and does not perform a migration. Address-stage recovery
 uses the backed-up exact state and prior configuration under operator approval.
