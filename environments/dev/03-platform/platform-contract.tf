@@ -138,7 +138,6 @@ module "external_secrets_reader_irsa" {
   namespace            = local.application_namespace
   service_account_name = var.external_secrets_reader_service_account
 
-  create_service_account = false
 
   iam_policy_statements = [
     {
@@ -167,7 +166,6 @@ module "rollouts_amp_irsa" {
   namespace            = "argo-rollouts"
   service_account_name = var.rollouts_service_account
 
-  create_service_account = false
 
   iam_policy_statements = [
     {

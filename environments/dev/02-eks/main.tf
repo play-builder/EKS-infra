@@ -155,7 +155,6 @@ module "bastion" {
 
   ssh_cidr_blocks = var.bastion_ssh_cidr_blocks
 
-  private_key_path = "private-key/${var.bastion_instance_keypair}.pem"
 
   tags = local.common_tags
 }

@@ -2,13 +2,14 @@
 
 Enterprise root/state/IAM wiring과 보존 리소스 정리는
 [enterprise integration runbook](runbooks/enterprise-integration.md)을 따릅니다.
-FinOps management와 protected backup은 별도 operator lane이며, native Istio Rollouts가
-기존 Gateway API traffic plugin을 대체합니다. 일반 AWS LBC ingress는 유지됩니다.
+FinOps management와 protected backup은 별도 operator lane입니다. AWS LBC가 Gateway API로
+내부 ALB를 만들고 Istio ingress로 전달하며, Rollouts는 Istio VirtualService의 가중치를 관리합니다.
 
 ## 핵심 요약
 
-적용은 `01 → 02 → 03 → 04` 순서로 수행합니다. 제거는 raw `terraform destroy`나 개별
-Kubernetes 리소스 삭제가 아니라 아래 guarded cleanup만 사용합니다.
+적용은 `01 → 02 → 03 → 04` 순서로 수행합니다. Prod DB는 platform 출력 준비 후 별도
+`03-database` root에서 구성합니다. 제거할 때는 위 retained-resource cleanup 절차에 따라
+리소스별 보존 여부와 삭제 plan을 검토합니다. 전체 teardown 실행기는 제공하지 않습니다.
 장애 대응 전에는 AWS identity, kube context, 대상 environment를 먼저 확인합니다.
 
 이 저장소에서 지원하는 `ap-northeast-2` 또는 `us-east-1` 중 클러스터를 만든 Region을 사용합니다.
@@ -67,7 +68,7 @@ terraform -chdir=environments/dev/04-workloads/argocd output
 `environments/prod/01-network` requires `production_nat_topology = "per_az"`: each selected AZ has its
 own NAT Gateway and private route table. The module also delivers `ALL` VPC Flow Logs to
 `/aws/vpc/<name>/flow-logs`; retain the log group and delivery role during incident investigation. The
-optional log-group KMS key is supplied only after the central log-key layer is available.
+log-group KMS key is owned by the network root's log-key module.
 
 ## Private EKS operator access
 
@@ -108,8 +109,8 @@ aws eks describe-nodegroup \
 ## Gateway가 Programmed되지 않을 때
 
 ```bash
-kubectl --context mini-commerce-dev describe gateway sample-app -n app-dev
-kubectl --context mini-commerce-dev describe httproute sample-app -n app-dev
+kubectl --context mini-commerce-dev describe gateways.gateway.networking.k8s.io mini-commerce-mesh -n istio-system
+kubectl --context mini-commerce-dev describe httproutes.gateway.networking.k8s.io mini-commerce-mesh -n istio-system
 kubectl --context mini-commerce-dev -n kube-system logs \
   deploy/aws-load-balancer-controller --since=15m
 ```

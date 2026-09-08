@@ -145,9 +145,13 @@ variable "cluster_endpoint_public_access_cidrs" {
 }
 
 variable "enable_public_node_group" {
-  description = "Enable Public Node Group (NOT recommended for Production)"
+  description = "Legacy compatibility guard: production has only private node groups"
   type        = bool
   default     = false
+  validation {
+    condition     = !var.enable_public_node_group
+    error_message = "Production supports private node groups only; enable_public_node_group must remain false."
+  }
 }
 
 variable "enable_private_node_group" {

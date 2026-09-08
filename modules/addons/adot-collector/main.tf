@@ -75,6 +75,7 @@ resource "helm_release" "cert_manager" {
 resource "aws_eks_addon" "adot" {
   cluster_name                = var.eks_cluster_name
   addon_name                  = "adot"
+  addon_version               = var.addon_version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
@@ -87,7 +88,7 @@ resource "aws_eks_addon" "adot" {
 }
 
 resource "kubernetes_service_account_v1" "adot_collector" {
-  count = var.amp_workspace_endpoint != "" ? 1 : 0
+  count = var.enable_collection ? 1 : 0
 
   metadata {
     name      = "adot-collector"
@@ -101,7 +102,7 @@ resource "kubernetes_service_account_v1" "adot_collector" {
 }
 
 resource "kubernetes_cluster_role_v1" "adot_collector" {
-  count = var.amp_workspace_endpoint != "" ? 1 : 0
+  count = var.enable_collection ? 1 : 0
 
   metadata {
     name = "${var.eks_cluster_name}-adot-prometheus-reader"
@@ -120,7 +121,7 @@ resource "kubernetes_cluster_role_v1" "adot_collector" {
 }
 
 resource "kubernetes_cluster_role_binding_v1" "adot_collector" {
-  count = var.amp_workspace_endpoint != "" ? 1 : 0
+  count = var.enable_collection ? 1 : 0
 
   metadata {
     name = "${var.eks_cluster_name}-adot-prometheus-reader"
@@ -139,10 +140,18 @@ resource "kubernetes_cluster_role_binding_v1" "adot_collector" {
   }
 }
 
-resource "kubernetes_manifest" "otel_collector" {
-  count = var.amp_workspace_endpoint != "" ? 1 : 0
+# Forget the old provider address without deleting the existing collector.
+removed {
+  from = kubernetes_manifest.otel_collector
+  lifecycle { destroy = false }
+}
 
-  manifest = {
+# The add-on establishes its CRD during apply. kubectl does not require that
+# custom-resource schema to exist during the first Terraform plan.
+resource "kubectl_manifest" "otel_collector" {
+  count = var.enable_collection ? 1 : 0
+
+  yaml_body = yamlencode({
     apiVersion = "opentelemetry.io/v1beta1"
     kind       = "OpenTelemetryCollector"
     metadata = {
@@ -258,7 +267,7 @@ resource "kubernetes_manifest" "otel_collector" {
                     scheme   = "https"
                     tls_config = {
                       ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-                      insecure_skip_verify = true
+                      insecure_skip_verify = false
                     }
                     bearer_token_file     = "/var/run/secrets/kubernetes.io/serviceaccount/token"
                     kubernetes_sd_configs = [{ role = "node" }]
@@ -348,7 +357,11 @@ resource "kubernetes_manifest" "otel_collector" {
         }
       }
     }
-  }
+  })
+
+  server_side_apply = true
+  force_conflicts   = true
+  wait_for_rollout  = false
 
   depends_on = [
     aws_eks_addon.adot,

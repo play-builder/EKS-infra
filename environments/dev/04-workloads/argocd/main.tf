@@ -96,6 +96,7 @@ module "argocd" {
   environment       = var.environment
   region            = var.aws_region
   platform          = var.argocd_platform
+  chart_version     = var.argocd_chart_version
   tags              = merge(var.tags, local.workload_ownership)
   oidc_provider_arn = data.terraform_remote_state.eks.outputs.oidc_provider_arn
   oidc_provider     = data.terraform_remote_state.eks.outputs.oidc_provider
