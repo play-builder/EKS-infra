@@ -16,12 +16,6 @@ variable "authentication_providers" {
   }
 }
 
-variable "amp_workspace_id" {
-  description = "AMP workspace ID retained for caller compatibility; service-managed discovery uses IAM"
-  type        = string
-  default     = ""
-}
-
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

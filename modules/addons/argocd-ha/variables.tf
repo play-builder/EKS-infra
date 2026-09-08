@@ -1,3 +1,9 @@
+variable "chart_version" {
+  description = "Pinned Argo CD Helm chart version"
+  type        = string
+  default     = "10.4.3"
+}
+
 variable "name" { type = string }
 variable "environment" { type = string }
 variable "region" { type = string }

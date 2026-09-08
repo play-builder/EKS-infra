@@ -175,9 +175,13 @@ variable "tags" {
 
 # ADOT Collector
 variable "enable_adot_collector" {
-  description = "Enable ADOT Collector for metrics/logs collection (replaces Container Insights)"
+  description = "Enable ADOT metrics collection to AMP and optional traces to X-Ray"
   type        = bool
   default     = true
+  validation {
+    condition     = !var.enable_adot_collector || var.enable_amp
+    error_message = "This platform's ADOT collector requires enable_amp=true."
+  }
 }
 
 # Amazon Managed Service for Prometheus
@@ -480,3 +484,13 @@ variable "sigstore_controller_replicas" {
 variable "sigstore_ecr_repository_arns" { type = set(string) }
 variable "sigstore_api_server_cidrs" { type = set(string) }
 variable "sigstore_https_egress_cidrs" { type = set(string) }
+
+variable "adot_addon_version" {
+  description = "ADOT EKS add-on version verified for this Region and Kubernetes version; required when ADOT is enabled"
+  type        = string
+  default     = null
+  validation {
+    condition     = !var.enable_adot_collector || can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+-eksbuild\\.[0-9]+$", var.adot_addon_version))
+    error_message = "Set adot_addon_version from aws eks describe-addon-versions before enabling ADOT."
+  }
+}

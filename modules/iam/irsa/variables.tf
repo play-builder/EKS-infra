@@ -34,12 +34,6 @@ variable "iam_policy_statements" {
   }))
 }
 
-variable "create_service_account" {
-  description = "Whether to create Kubernetes Service Account (recommended false when using Helm)"
-  type        = bool
-  default     = false
-}
-
 variable "tags" {
   description = "Resource tags"
   type        = map(string)

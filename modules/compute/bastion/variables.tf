@@ -35,18 +35,6 @@ variable "ssh_cidr_blocks" {
   }
 }
 
-variable "private_key_path" {
-  description = "Path to private key for provisioning"
-  type        = string
-  default     = "private-key/eks-terraform-key.pem"
-}
-
-variable "enable_provisioners" {
-  description = "Enable provisioners (file, remote-exec)"
-  type        = bool
-  default     = false
-}
-
 variable "tags" {
   description = "Additional tags"
   type        = map(string)

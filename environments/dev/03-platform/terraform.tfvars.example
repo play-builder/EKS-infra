@@ -14,6 +14,8 @@ enable_external_dns   = true
 enable_metrics_server = true
 enable_amp            = true
 enable_adot_collector = true
+# Required: choose an exact compatible version using describe-addon-versions.
+adot_addon_version   = "REPLACE_WITH_VERIFIED_ADOT_ADDON_VERSION"
 enable_adot_xray      = false
 
 enable_external_secrets         = true

@@ -333,6 +333,9 @@ module "adot_collector" {
   source = "../../../modules/addons/adot-collector"
   count  = var.enable_adot_collector ? 1 : 0
 
+  addon_version     = var.adot_addon_version
+  enable_collection = var.enable_amp
+
   eks_cluster_name = local.eks_cluster_name
   aws_region       = var.aws_region
 
@@ -376,7 +379,6 @@ module "amg" {
   name                     = "${local.name}-grafana"
   authentication_providers = var.amg_authentication_providers
 
-  amp_workspace_id = var.enable_amp ? module.amp[0].workspace_id : ""
 
   tags = local.common_tags
 

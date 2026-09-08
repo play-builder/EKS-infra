@@ -73,6 +73,40 @@ Secret 회전은 ExternalSecret Ready, 실제 Secret version과 Pod 재시작/DB
 
 ## 적용과 되돌리기
 
+### ADOT 관리 주소와 설정 이전
+
+핵심 요약: collector의 namespace와 이름은 유지하며 Terraform provider의 관리 주소만 바꿉니다.
+이미 설치된 환경에서는 collector 삭제·재생성이 plan에 포함되지 않는지 확인합니다.
+
+- 기존 `module.adot_collector[0].kubernetes_manifest.otel_collector[0]`는
+  `removed { lifecycle { destroy = false } }`에 따라 state에서 관리 기록만 제거합니다.
+- 새 `module.adot_collector[0].kubectl_manifest.otel_collector[0]`가 동일한
+  `opentelemetry-operator-system/adot-collector-prometheus`를 server-side apply로 관리합니다.
+  `force_conflicts=true`는 기존 provider가 관리하던 선언 필드의 소유권을 이전하기 위한 설정입니다.
+- 변경 전후 CR UID가 동일한지, collector Pod가 정상인지, AMP에 새 sample이 들어오는지 확인합니다.
+  TLS 검증과 이미지 고정 변경으로 collector Pod rollout은 발생할 수 있습니다.
+- 기존 설치의 add-on 버전은 먼저 `aws eks describe-addon`으로 조회하고 호환성을 확인하여
+  `adot_addon_version`에 지정합니다. 다른 버전을 넣으면 의도한 upgrade인지 별도로 검토합니다.
+- 이전 코드로 되돌릴 때는 반대 방향의 state 관리 이전도 검토해야 합니다. Git revert만 적용하여
+  동일 CR을 두 provider가 동시에 관리하거나 삭제하도록 만들지 않습니다.
+
+[Terraform removed block](https://developer.hashicorp.com/terraform/language/block/removed)은
+실제 리소스를 삭제하지 않는 관리 해제를 지원합니다. 실제 state/CR 이전은 이 소스 검증에서 실행하지 않았습니다.
+
+### 미사용 입력 정리
+
+핵심 요약: private tfvars와 외부 module 호출에서도 삭제한 입력을 제거합니다. 실제 리소스 주소는
+ADOT 이전 항목 외에는 바꾸지 않습니다.
+
+`bastion.private_key_path`, `bastion.enable_provisioners`, `irsa.create_service_account`,
+`amg.amp_workspace_id`, `eks/cluster.cluster_creator_arn`, `operator-access.cluster_name`은
+동작에 사용되지 않던 module 입력입니다. 관리자 권한을 금지하는 기존 validation은 유지합니다.
+Prod `enable_public_node_group=true`는 명시적으로 거부합니다. Argo root의
+`argocd_chart_version`은 이제 실제 Helm release에 전달되므로 private override가 있었다면
+plan에서 차트 버전 변경 여부를 확인합니다.
+
+### 공통 적용 순서
+
 핵심 요약: 코드 검증 → CI 설정 → 검토 plan → 승인 apply → runtime 검증 순서로 진행합니다. 로컬 테스트와 모의 응답을 실제 배포 성공으로 기록하지 않습니다.
 
 1. 세 저장소의 새 브랜치를 PR로 검토하고 required check를 통과시킵니다.

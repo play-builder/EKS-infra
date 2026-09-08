@@ -23,7 +23,6 @@ module "irsa_role" {
   namespace            = var.namespace
   service_account_name = var.service_account_name
 
-  create_service_account = false
 
   iam_policy_statements = []
 

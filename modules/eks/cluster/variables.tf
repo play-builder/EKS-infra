@@ -187,11 +187,6 @@ variable "enable_cluster_creator_access" {
   }
 }
 
-variable "cluster_creator_arn" {
-  description = "IAM ARN of the cluster creator (user or role) for Access Entry"
-  type        = string
-  default     = ""
-}
 variable "environment" {
   type    = string
   default = "dev"

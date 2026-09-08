@@ -13,7 +13,6 @@ variable "trusted_sso_principal_arn" {
     error_message = "OPERATOR_ACCESS_ROLE_TRUST_INVALID"
   }
 }
-variable "cluster_name" { type = string }
 variable "ami_id" { type = string }
 
 variable "kubectl_version" {

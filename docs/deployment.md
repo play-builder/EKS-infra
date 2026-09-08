@@ -82,6 +82,28 @@ export AWS_REGION="ap-northeast-2"
 export STATE_BUCKET_NAME="replace-with-your-state-bucket"
 ```
 
+ADOT를 활성화할 때 `03-platform`의 `adot_addon_version`은 대상 Region과 EKS 버전에서
+실제로 지원되는 값으로 지정합니다. 기본 버전을 AWS가 자동 선택하도록 두지 않습니다.
+아래 조회에서 승인한 버전을 선택하여 해당 root의 private tfvars/CI 입력에 넣습니다.
+
+```bash
+aws eks describe-addon-versions --addon-name adot \
+  --kubernetes-version 1.36 --region "$AWS_REGION" \
+  --query 'addons[].addonVersions[].{version:addonVersion,compatibilities:compatibilities}'
+```
+
+`terraform.tfvars.example`의 `REPLACE_WITH_VERIFIED_ADOT_ADDON_VERSION`은 실제 버전이 아니며,
+그대로 사용하면 validation에서 거부됩니다. ADOT operator add-on 버전과 collector image 버전은
+서로 다른 입력입니다. collector는 `versions.lock.yaml`에 기록한 amd64/arm64 index digest로 고정했습니다.
+이 플랫폼에서 `enable_adot_collector=true`는 `enable_amp=true`를 요구합니다.
+[AWS add-on 설치 문서](https://aws-otel.github.io/docs/getting-started/adot-eks-add-on/installation/)
+
+collector 리소스 수는 plan 시점에 알려진 활성화 값으로 결정합니다. 새 AMP의 endpoint가
+apply 이후에 확정되어도 `count` 계산이 막히지 않습니다. collector CR은 add-on 설치가 끝난 뒤
+`kubectl_manifest`로 적용하므로 첫 plan에서 아직 없는 CRD schema를 요구하지 않습니다.
+이는 설치 순서에 대한 코드 보장이고, 실제 operator와 AMP 수집 성공은 별도로 확인합니다.
+
+
 `.github/workflows/terraform-validate.yml`은 선택한 root에서 계정별 GitHub environment를 결정합니다.
 Dev는 `dev-plan` → `dev`, Prod는 `production-plan` → `production`, Recovery는
 `recovery-plan` → `recovery`를 사용합니다. 각 environment에 해당 계정의

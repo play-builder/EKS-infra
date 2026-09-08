@@ -32,7 +32,7 @@ flowchart LR
   Proof --> DevGit[GitOps Dev values PR]
   DevGit --> Dev[Dev Argo CD Deployment]
   Dev --> Observe[Deployment and SLO evidence]
-  Ready --> Approval[Prod promotion review]
+  Observe --> Approval[Prod promotion review]
   Approval --> ProdGit[GitOps Prod values PR]
   ProdGit --> Prod[Prod Argo CD Rollout]
   Prod --> Analysis[Istio weights and AMP AnalysisRun]
