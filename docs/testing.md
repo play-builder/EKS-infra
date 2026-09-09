@@ -17,7 +17,7 @@ Terraform 1.16.0, TFLint 0.64.0, Conftest 0.69.0, Python 3.10+, Bash, jq, Git이
 | `tests/test_inputs.py` | 다른 계정·backend 입력, 경로 이탈, 기존 tfvars 덮어쓰기, 비밀값 출력 |
 | `tests/saved-plan.sh` | 승인자·source SHA·plan hash·환경이 다른 saved plan 사용 |
 | root/module `tests/*.tftest.hcl` | IAM 최소 권한, 암호화/보존, 네트워크 격리, RDS 복구 제약 |
-| `policy/terraform` | Terraform plan 정책 위반 |
+| `policy/terraform` | Rego 정책 자체의 회귀(`conftest verify` 단위 테스트); plan JSON에 정책을 적용하는 단계는 CI에 없다 |
 
 GitHub Actions는 `contract`, `format`, `lint`, `security`, `enterprise-static`, `validate` check 이름을 유지한다. `enterprise-static`은 native Terraform 테스트만 실행한다. `validate` matrix는 운영 root 전체의 backend 없는 validate를 수행한다. `security`는 Trivy와 Conftest다.
 
