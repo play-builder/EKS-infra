@@ -64,17 +64,12 @@ Apply the approved network saved plan, then refresh/plan EKS against its new out
 ## Checks and operational limits
 
 ```bash
-for environment in dev prod; do
-  for layer in 01-network 02-eks 03-platform; do
-    root="environments/$environment/$layer"
-    terraform -chdir="$root" init -backend=false -input=false
-    terraform -chdir="$root" validate
-    terraform -chdir="$root" test -filter=tests/logging.tftest.hcl
-  done
-done
+make test-terraform
+terraform -chdir=modules/networking/vpc init -backend=false -input=false
+terraform -chdir=modules/networking/vpc test -filter=tests/logging.tftest.hcl
 ```
 
-This executes mock-only Terraform tests and provider schema validation, including all six roots. It requires installed Terraform/provider dependencies; initialization may download providers. It never invokes AWS deployment, state migration or log-reading commands.
+`make test-terraform` initializes, validates and runs the native tests of every directory that still ships `tests/*.tftest.hcl` (the module suites plus the `environments/network/02-registry` and `environments/dev/bootstrap/ci-identity` roots); the environment workload roots no longer carry their own suites, so the VPC flow-log test above is the remaining logging-specific mock suite. Both commands are mock-only and require installed Terraform/provider dependencies; initialization may download providers. They never invoke AWS deployment, state migration or log-reading commands.
 
 Before operational acceptance, operators must confirm exact key policy access, IRSA STS exchange, arrival in all five groups, retention/KMS association, and WAF ALB association with approved test traffic. Check `AccessDenied`, group-name mismatch, missing imported groups, log delivery permissions and throttling when telemetry is absent. Sampling is disabled and WAF credential headers/query strings are redacted; application payload sanitation remains the application's responsibility. Never print credential-bearing logs as evidence.
 
