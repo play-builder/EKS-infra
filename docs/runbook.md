@@ -232,11 +232,15 @@ requires updating the reviewed egress list. This is not DNS-based egress enforce
 The vendored chart CRDs carry no policy instances. GitOps alone owns TrustRoot,
 ClusterImagePolicy and namespace opt-in; Dev warn/Prod enforce are GitOps inputs.
 
-Use sigstore-controller-check.sh for controller/CRD readiness. The admission
-preflight requires a pre-existing GitOps-owned dedicated drill namespace with
-opt-in, then submits two digest-pinned server-dry-run Pods. It verifies signed
-allow and Sigstore webhook unsigned deny. No Pods persist; scheduling/image-pull
-and application rollout are not tested by this admission check.
+Use `python3 scripts/lib/supply-chain-check.py controller <cluster> <region> <minimum-replicas> <output.json>`
+for controller/CRD readiness (it also checks that every cosign-system webhook is
+fail-closed). The admission preflight,
+`python3 scripts/lib/supply-chain-check.py admission <cluster> <region> <sigstore-drill-namespace> <signed-image@sha256:...> <unsigned-image@sha256:...> <output.json>`,
+requires a pre-existing GitOps-owned dedicated drill namespace (`sigstore-drill-*` or
+`admission-drill-*`) with the `policy.sigstore.dev/include=true` opt-in, then submits two
+digest-pinned server-dry-run Pods. It verifies signed allow and Sigstore webhook unsigned
+deny. No Pods persist; scheduling/image-pull and application rollout are not tested by this
+admission check.
 
 ecr-scanning-status-check.sh validates actual regional registry rules and image
 scan identity/status; ACTIVE/COMPLETE does not mean vulnerability-free. Scanning
