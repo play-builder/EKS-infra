@@ -262,7 +262,7 @@ Prod 승격은 성공한 앱 CI의 run/attempt와 Dev digest를 선택하고 승
 
 ## GitHub governance state
 
-`terraform/github-governance`는 기존 `argocd-gitops` repository를 declarative import한 뒤 다음
+`environments/network/03-github-governance`는 기존 `argocd-gitops` repository를 declarative import한 뒤 다음
 delivery 설정과 Ruleset을 함께 관리합니다.
 
 - auto-merge와 squash merge 활성화
